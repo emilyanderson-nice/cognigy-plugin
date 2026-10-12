@@ -60,6 +60,14 @@ import { existsSync, realpathSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 import { runNpm } from "./install/npmRunner.js";
+import { CognigyApiClient } from "./api/client.js";
+import { runProfileCommand } from "./profiles/profileCli.js";
+import { loadProfilesFromSystem } from "./profiles/profiles.js";
+import {
+  removeProfile,
+  setDefaultProfile,
+  upsertProfile,
+} from "./profiles/profilesStore.js";
 
 const PKG = "@cognigy/plugin-engine";
 
@@ -910,8 +918,13 @@ export function parseSubcommand(raw: string[]): {
   return { sub: "install", rest: raw };
 }
 
+/** Removes a single leading "setup" token (the `npx … setup` spelling). */
+export function stripSetupToken(argv: string[]): string[] {
+  return argv[0] === "setup" ? argv.slice(1) : argv.slice();
+}
+
 async function main(): Promise<void> {
-  const raw = process.argv.slice(2).filter((a) => a !== "setup");
+  const raw = stripSetupToken(process.argv.slice(2));
   const { sub, rest } = parseSubcommand(raw);
   switch (sub) {
     case "install":
@@ -922,9 +935,30 @@ async function main(): Promise<void> {
       return runUpdate();
     case "uninstall":
       return runUninstall(rest);
+    case "profile":
+      process.exitCode = await runProfileCommand(rest, {
+        out: (text) => void process.stdout.write(text),
+        err: (text) => void process.stderr.write(text),
+        isTTY: Boolean(process.stdin.isTTY),
+        ask,
+        askHidden,
+        env: process.env,
+        loadProfiles: () => loadProfilesFromSystem(),
+        store: { upsertProfile, removeProfile, setDefaultProfile },
+        createGetter: (p) =>
+          new CognigyApiClient({
+            baseUrl: p.apiBaseUrl,
+            apiKey: p.apiKey,
+            auditAttribution: false,
+            maxRetries: 0,
+            timeoutMs: 10000,
+            quiet: true,
+          }),
+      });
+      return;
     default:
       process.stderr.write(
-        `Unknown command '${sub}'. Use: install | status | update | uninstall.\n`,
+        `Unknown command '${sub}'. Use: install | status | update | uninstall | profile.\n`,
       );
       process.exit(1);
   }
