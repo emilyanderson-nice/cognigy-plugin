@@ -3,7 +3,12 @@
  * under "profiles" / "defaultProfile", next to the legacy flat string map.
  */
 import { readFileSync } from "fs";
-import { USER_CONFIG_FILE } from "../userConfigFile.js";
+import {
+  isPlainObject,
+  parseConfigText,
+  RESERVED_KEYS,
+  USER_CONFIG_FILE,
+} from "../userConfigFile.js";
 
 export interface RawFileProfile {
   apiBaseUrl: string;
@@ -33,11 +38,7 @@ const OPTIONAL_KEYS = [
   "versionHint",
 ] as const;
 
-const RESERVED_NAMES = new Set(["__proto__", "constructor", "prototype"]);
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
-}
+const RESERVED_NAMES = RESERVED_KEYS;
 
 /** A usable profile, or the (secret-free) reason the entry is malformed. */
 function toRawProfile(v: unknown): RawFileProfile | string {
@@ -60,8 +61,7 @@ export function readUserProfilesFile(
 ): ProfilesFile {
   const result: ProfilesFile = { profiles: {}, problems: [] };
   try {
-    const text = readFileSync(path, "utf-8").replace(/^\uFEFF/, "");
-    const parsed: unknown = JSON.parse(text);
+    const parsed = parseConfigText(readFileSync(path, "utf-8"));
     if (!isPlainObject(parsed)) return result;
     if (typeof parsed.defaultProfile === "string") {
       result.defaultProfile = parsed.defaultProfile;

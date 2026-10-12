@@ -54,7 +54,7 @@ export interface LoadProfilesOptions {
 const ENV_PROFILE_RE =
   /^COGNIGY_PROFILE_(.+)_(API_BASE_URL|API_KEY|ENDPOINT_BASE_URL|WEBCHAT_BASE_URL|STATIC_FILES_BASE_URL|PLATFORM_VERSION)$/i;
 
-interface RawFields {
+export interface RawFields {
   apiBaseUrl?: string;
   apiKey?: string;
   endpointBaseUrl?: string;
@@ -75,8 +75,10 @@ const ENV_FIELD: Record<string, keyof RawFields> = {
 const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 /** Lowercase, underscores to hyphens: the canonical profile name. */
-const normalizeName = (name: string): string =>
+export const normalizeName = (name: string): string =>
   name.toLowerCase().replace(/_/g, "-");
+
+export const isValidProfileName = (name: string): boolean => NAME_RE.test(name);
 
 function assertUrl(field: string, value: string): void {
   let protocol: string | undefined;
@@ -113,7 +115,8 @@ function protectKey(profile: Profile): Profile {
   return profile;
 }
 
-function build(name: string, raw: RawFields, source: ProfileSource): Profile {
+/** Throws ProfileConfigError (never quoting secret values) for an unusable profile. */
+export function validateProfileFields(name: string, raw: RawFields): void {
   if (!NAME_RE.test(name)) {
     throw new ProfileConfigError(
       `Invalid profile name "${name}": use lowercase letters, digits and hyphens, starting with a letter or digit.`,
@@ -143,6 +146,10 @@ function build(name: string, raw: RawFields, source: ProfileSource): Profile {
       );
     }
   }
+}
+
+function build(name: string, raw: RawFields, source: ProfileSource): Profile {
+  validateProfileFields(name, raw);
   const apiBaseUrl = normalizeApiBaseUrl(raw.apiBaseUrl as string);
   return protectKey({
     name,
@@ -319,7 +326,7 @@ export function loadProfilesFromSystem(deps: SystemDeps = {}): ProfileSet {
   });
 }
 
-function hostOf(url: string): string {
+export function hostOf(url: string): string {
   try {
     return new URL(url).host;
   } catch {
