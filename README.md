@@ -96,6 +96,7 @@ The installer doubles as a manager:
 npx -y -p @cognigy/plugin-engine@latest cognigy-setup status      # what's installed, per client, + latest available
 npx -y -p @cognigy/plugin-engine@latest cognigy-setup update      # pull the latest where it isn't automatic
 npx -y -p @cognigy/plugin-engine@latest cognigy-setup uninstall   # remove from every client (--client narrows it; --purge also clears ~/.cognigy-plugin)
+npx -y -p @cognigy/plugin-engine@latest cognigy-setup profile list # manage several Cognigy environments, see docs/install/multiple-environments.md
 ```
 
 Beyond the MCP tools, the plugin ships **skills** and **agents** that surface the workflows automatically:
