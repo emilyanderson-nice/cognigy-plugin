@@ -1,0 +1,94 @@
+{
+  "probedAt": "2026-10-12T19:07:53.611Z",
+  "profile": "v2",
+  "host": "api-trial-us.cognigy.ai",
+  "declaredVersion": "v2",
+  "method": "GET",
+  "path": "/v2.0/aiagents",
+  "query": {
+    "projectId": "<objectId>",
+    "limit": "25"
+  },
+  "status": 200,
+  "ms": 239,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "transfer-encoding": "<present>",
+    "connection": "<present>",
+    "access-control-allow-credentials": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-embedder-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "expect-ct": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "set-cookie": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "api--ffd894c5-677e-4f2f-a917-12e5efc7540a",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-robots-tag": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "1.1 2c3647ef49160329b5e0eb6fc7545c36.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "items": {
+      "_array": 1,
+      "_item": {
+        "_id": "<objectId>",
+        "name": "<string:4>",
+        "description": "<string:487>",
+        "referenceId": "<uuid>",
+        "image": "<string:16>",
+        "imageOptimizedFormat": "boolean",
+        "safetySettings": {
+          "avoidHarmfulContent": "boolean",
+          "avoidUngroundedContent": "boolean",
+          "avoidCopyrightInfringements": "boolean",
+          "preventJailbreakAndManipulation": "boolean"
+        },
+        "instructions": "<string:629>",
+        "contactProfilesOption": "<string:4>",
+        "contactProfilesSelected": {
+          "_array": 0,
+          "_item": null
+        },
+        "speakingStyle": {
+          "completeness": "<string:8>",
+          "formality": "<string:8>"
+        },
+        "voiceConfigs": {
+          "ttsVoice": "<string:0>",
+          "ttsLanguage": "<string:0>",
+          "ttsVendor": "<string:4>",
+          "ttsModel": "<string:0>",
+          "ttsLabel": "<string:0>",
+          "ttsDisableCache": "boolean"
+        },
+        "enableVoiceConfigs": "boolean",
+        "enableAutoLanguageDetection": "boolean",
+        "organisationReference": "<objectId>",
+        "projectReference": "<objectId>",
+        "createdAt": "number",
+        "createdBy": "<objectId>",
+        "lastChanged": "number",
+        "lastChangedBy": "<objectId>"
+      }
+    },
+    "total": "number",
+    "previousCursor": "null",
+    "nextCursor": "null"
+  }
+}

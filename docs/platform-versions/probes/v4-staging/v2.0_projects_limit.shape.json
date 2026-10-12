@@ -1,0 +1,65 @@
+{
+  "probedAt": "2026-10-12T19:07:56.611Z",
+  "profile": "v4-staging",
+  "host": "api-staging-v4.cognigy.ai",
+  "declaredVersion": "v4",
+  "method": "GET",
+  "path": "/v2.0/projects",
+  "query": {
+    "limit": "25"
+  },
+  "status": 200,
+  "ms": 549,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "<present>",
+    "connection": "<present>",
+    "access-control-allow-credentials": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-embedder-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "expect-ct": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "set-cookie": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "api--8c967b1d-9d5d-483c-bcd9-ce19a445cd8d",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-robots-tag": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "1.1 8737c23b0b0fc96ccfb222abb7ac4aa6.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "items": {
+      "_array": 1,
+      "_item": {
+        "_id": "<objectId>",
+        "name": "<string:12>",
+        "color": "<string:5>",
+        "primaryLocaleReference": "<objectId>",
+        "handoverConfiguration": {},
+        "createdAt": "number",
+        "createdBy": "<objectId>",
+        "lastChanged": "number",
+        "lastChangedBy": "<objectId>",
+        "lastChangedByDisplayName": "<string:14>"
+      }
+    },
+    "total": "number",
+    "previousCursor": "null",
+    "nextCursor": "null"
+  }
+}
