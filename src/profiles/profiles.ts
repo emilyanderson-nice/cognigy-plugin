@@ -11,6 +11,7 @@ import {
   normalizeApiBaseUrl,
 } from "../hosts.js";
 import { usableEnv } from "../placeholders.js";
+import { resolveDefinitions, type Definition } from "./precedence.js";
 import {
   readUserProfilesFile,
   type ProfileProblem,
@@ -247,8 +248,11 @@ export function loadProfiles(options: LoadProfilesOptions = {}): ProfileSet {
   const env = options.env ?? {};
   const legacyFile = options.legacyFile ?? {};
   const fileProfiles = options.fileProfiles ?? { profiles: {}, problems: [] };
-  const byName = new Map<string, Profile>();
-  const problems: ProfileProblem[] = [...(fileProfiles.problems ?? [])];
+  // Every definition is recorded with its source; precedence decides later.
+  const definitions: Definition[] = (fileProfiles.problems ?? []).map((p) => ({
+    ...p,
+    source: "file-profile" as const,
+  }));
 
   const attempt = (
     name: string,
@@ -256,35 +260,29 @@ export function loadProfiles(options: LoadProfilesOptions = {}): ProfileSet {
     source: ProfileSource,
   ) => {
     try {
-      byName.set(name, build(name, raw(), source));
+      definitions.push({ name, source, profile: build(name, raw(), source) });
     } catch (err) {
-      problems.push({ name, reason: (err as Error).message });
+      definitions.push({ name, source, reason: (err as Error).message });
     }
   };
 
   const legacy = legacyFields(env, legacyFile);
   if (legacy) attempt("default", () => legacy.raw, legacy.source);
 
-  for (const [rawName, raw] of Object.entries(fileProfiles.profiles)) {
-    const name = rawName;
-    // A file profile named "default" never displaces a legacy env pair.
-    if (name === "default" && byName.get(name)?.source === "legacy-env") {
-      continue;
-    }
+  for (const [name, raw] of Object.entries(fileProfiles.profiles)) {
     attempt(name, () => fileFields(raw), "file-profile");
   }
 
   const fromEnv = envProfiles(env);
-  problems.push(...fromEnv.problems);
+  for (const p of fromEnv.problems) {
+    definitions.push({ ...p, source: "env-profile" });
+  }
   const collided = new Set(fromEnv.problems.map((p) => p.name));
   for (const [name, raw] of fromEnv.found) {
-    if (collided.has(name)) {
-      byName.delete(name);
-      continue;
-    }
-    attempt(name, () => raw, "env-profile");
+    if (!collided.has(name)) attempt(name, () => raw, "env-profile");
   }
 
+  const { profiles: byName, problems } = resolveDefinitions(definitions);
   const byNameAsc = (a: { name: string }, b: { name: string }) =>
     a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   const profiles = [...byName.values()].sort(byNameAsc);
