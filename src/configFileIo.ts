@@ -33,7 +33,17 @@ export interface LockOptions {
   staleMs?: number;
   sleep?: (ms: number) => void;
   now?: () => number;
+  /** Test seam: each member defaults to the real `fs` function. */
+  fs?: {
+    openSync?: typeof openSync;
+    closeSync?: typeof closeSync;
+    statSync?: typeof statSync;
+    rmSync?: typeof rmSync;
+  };
 }
+
+const LOCK_CONTENTION_CODES = new Set(["EEXIST", "EPERM", "EBUSY", "EACCES"]);
+const PERMISSION_ATTEMPTS = 3;
 
 export interface PermissionOptions {
   platform?: NodeJS.Platform;
@@ -151,29 +161,61 @@ export function acquireLock(
   const staleMs = options.staleMs ?? 30000;
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? defaultSleep;
+  const open = options.fs?.openSync ?? openSync;
+  const close = options.fs?.closeSync ?? closeSync;
+  const stat = options.fs?.statSync ?? statSync;
+  const remove = options.fs?.rmSync ?? rmSync;
+  const dirName = basename(dirname(lockPath));
   const started = now();
+  let permissionFailures = 0;
+  let immediateRetried = false;
+  let staleRemovalFailed = false;
   for (;;) {
+    let openCode: string | undefined;
     try {
-      closeSync(openSync(lockPath, "wx", 0o600));
+      close(open(lockPath, "wx", 0o600));
       return () => rmSync(lockPath, { force: true });
     } catch (err) {
-      if (
-        !["EEXIST", "EPERM", "EBUSY", "EACCES"].includes(errCode(err) ?? "")
-      ) {
-        throw ioError(`lock ${basename(dirname(lockPath))}`, err);
+      openCode = errCode(err);
+      if (!LOCK_CONTENTION_CODES.has(openCode ?? "")) {
+        throw ioError(`lock ${dirName}`, err);
       }
     }
+    let lockMtime: number | undefined;
     try {
-      if (now() - statSync(lockPath).mtimeMs > staleMs) {
-        rmSync(lockPath, { force: true });
+      lockMtime = stat(lockPath).mtimeMs;
+    } catch {
+      lockMtime = undefined; // No lock file is there to inspect.
+    }
+    if (lockMtime === undefined) {
+      if (openCode === "EACCES" || openCode === "EPERM") {
+        // Nothing holds the lock: the folder itself refuses us.
+        if (++permissionFailures >= PERMISSION_ATTEMPTS) {
+          throw new Error(
+            `Could not create the lock file because of a permission error (${openCode}) in the credentials folder "${dirName}". Check that the folder is writable.`,
+          );
+        }
+      } else if (!immediateRetried) {
+        immediateRetried = true; // The holder released it between our attempts.
         continue;
       }
-    } catch {
-      continue; // The holder released it between our attempts.
+    } else if (now() - lockMtime > staleMs) {
+      try {
+        remove(lockPath, { force: true });
+        if (!immediateRetried) {
+          immediateRetried = true;
+          continue;
+        }
+      } catch {
+        staleRemovalFailed = true;
+      }
     }
+    immediateRetried = false;
     if (now() - started >= timeoutMs) {
       throw new Error(
-        `Another process is updating the credentials file; please retry in a moment. A stale lock clears itself after ${Math.round(staleMs / 1000)} seconds.`,
+        staleRemovalFailed
+          ? `The stale lock file "${basename(lockPath)}" could not be removed (permission or in use); check the folder permissions or remove it manually.`
+          : `Another process is updating the credentials file; please retry in a moment. A stale lock clears itself after ${Math.round(staleMs / 1000)} seconds.`,
       );
     }
     sleep(25);
