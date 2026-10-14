@@ -91,6 +91,15 @@ export function formatCheckLine(profile: Profile, result: CheckResult): string {
   return `${result.ok ? "ok" : "FAIL"}  ${name}  ${apiHost}  ${result.detail}\n`;
 }
 
+/** Distinct unusable names with their first reason, in name order. */
+function unusableByName(
+  problems: ReadonlyArray<{ name: string; reason: string }>,
+): Array<[string, string]> {
+  const first = new Map<string, string>();
+  for (const p of problems) if (!first.has(p.name)) first.set(p.name, p.reason);
+  return [...first].sort(([a], [b]) => a.localeCompare(b));
+}
+
 export async function runTest(
   tokens: string[],
   deps: ProfileCliDeps,
@@ -108,7 +117,7 @@ export async function runTest(
   let targets: Profile[];
   if (all) {
     targets = set.profiles.slice().sort((a, b) => a.name.localeCompare(b.name));
-    if (targets.length === 0) {
+    if (targets.length === 0 && set.problems.length === 0) {
       deps.err("No environments are configured.\n");
       return 1;
     }
@@ -132,8 +141,14 @@ export async function runTest(
     if (!result.ok) failed++;
     deps.out(formatCheckLine(profile, result));
   }
+  const unusable = all ? unusableByName(set.problems) : [];
+  for (const [name, reason] of unusable) {
+    deps.out(`FAIL  ${name}  -  unusable: ${reason}\n`);
+    failed++;
+  }
   if (failed > 0) {
-    deps.out(`${failed} of ${targets.length} environments failed\n`);
+    const total = targets.length + unusable.length;
+    deps.out(`${failed} of ${total} environments failed\n`);
     return 2;
   }
   return 0;

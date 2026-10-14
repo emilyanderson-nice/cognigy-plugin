@@ -9,7 +9,7 @@ One install can hold several Cognigy environments (for example a classic `api-tr
 ```
 cognigy-setup profile add v4-staging --api-base-url https://staging-v4.cognigy.ai --api-key-env MY_V4_KEY
 cognigy-setup profile list
-cognigy-setup profile test --all          # GET check + detected platform release, per environment
+cognigy-setup profile test --all          # GET/release checks; unusable profiles also count as failures
 cognigy-setup profile show v4-staging     # hosts and key length, never the key
 cognigy-setup profile default v4-staging  # or: default --clear
 cognigy-setup profile remove v4-staging --yes
