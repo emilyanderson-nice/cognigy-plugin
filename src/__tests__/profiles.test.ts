@@ -187,7 +187,7 @@ describe("Rule 1: legacy single environment", () => {
     );
   });
 
-  it("env wins per field and file fills the gap: env URL + file key => legacy-file", () => {
+  it("env wins per field and file fills the gap: env URL + file key => legacy-env", () => {
     const set = loadProfiles({
       env: { COGNIGY_API_BASE_URL: "https://api-env.cognigy.ai" },
       legacyFile: {
@@ -198,14 +198,14 @@ describe("Rule 1: legacy single environment", () => {
     const p = only(set, "default");
     eq(
       [p.source, p.apiBaseUrl, p.apiKey],
-      ["legacy-file", "https://api-env.cognigy.ai", "test-key-file"],
+      ["legacy-env", "https://api-env.cognigy.ai", "test-key-file"],
       "loadProfiles(env URL only + file pair)",
-      "R1: per-field precedence; source is legacy-env only when BOTH came from env",
-      "Take the URL from env, the key from the file, and label the source legacy-file.",
+      "R1: per-field precedence; source is legacy-env when EITHER value came from env",
+      "Take the URL from env, the key from the file, and label the source legacy-env.",
     );
   });
 
-  it("env wins per field: env key + file URL => legacy-file", () => {
+  it("env wins per field: env key + file URL => legacy-env", () => {
     const set = loadProfiles({
       env: { COGNIGY_API_KEY: "test-key-env" },
       legacyFile: {
@@ -216,9 +216,9 @@ describe("Rule 1: legacy single environment", () => {
     const p = only(set, "default");
     eq(
       [p.source, p.apiBaseUrl, p.apiKey],
-      ["legacy-file", URL_DEV, "test-key-env"],
+      ["legacy-env", URL_DEV, "test-key-env"],
       "loadProfiles(env key only + file pair)",
-      "R1: env value wins per field",
+      "R1: env value wins per field; any env-supplied field makes the source legacy-env",
       "Use the env key even though the file also has one.",
     );
   });
@@ -901,11 +901,6 @@ describe("Rules 5, D and C: precedence, normalisation and default selection", ()
         COGNIGY_API_KEY: "test-key-legacy",
       },
     ],
-    [
-      "mixed legacy (env URL + file key, source legacy-file)",
-      { COGNIGY_API_BASE_URL: "https://api-legacy.cognigy.ai" },
-      { COGNIGY_API_KEY: "test-key-legacy" },
-    ],
   ])(
     "a file profile named 'default' replaces %s",
     (_label, env, legacyFile) => {
@@ -1308,7 +1303,7 @@ describe("Rule 7: unexpanded placeholders are unset", () => {
     ["${user_config.api_key}"],
     ["${}"],
   ])(
-    "legacy env key %j is treated as unset (file fills it, source legacy-file)",
+    "legacy env key %j is treated as unset (file fills it; URL still from env => legacy-env)",
     (placeholder) => {
       const set = loadProfiles({
         env: { COGNIGY_API_BASE_URL: URL_DEV, COGNIGY_API_KEY: placeholder },
@@ -1317,7 +1312,7 @@ describe("Rule 7: unexpanded placeholders are unset", () => {
       const p = only(set, "default");
       eq(
         [p.apiKey, p.source],
-        ["test-key-file", "legacy-file"],
+        ["test-key-file", "legacy-env"],
         `legacy env key ${JSON.stringify(placeholder)}`,
         "R7: an entirely ${...} value is unset",
         "Ignore placeholders so the file value is used.",

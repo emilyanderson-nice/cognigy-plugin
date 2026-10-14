@@ -27,7 +27,7 @@ Give the key with the hidden prompt (default in a terminal), `--api-key-env VAR`
 | Config file          | `profiles` in `~/.cognigy-plugin/config.json`, written by `profile add`                       | yes                     |
 | Single environment   | `COGNIGY_API_BASE_URL` + `COGNIGY_API_KEY` (env or config file) becomes the profile `default` | no                      |
 
-If the same name is defined twice, the environment-variable definition wins over the config file. A config-file profile named `default` replaces the legacy flat keys from the config file, but never `COGNIGY_API_*` environment variables.
+If the same name is defined twice, the environment-variable definition wins over the config file. A config-file profile named `default` replaces the legacy flat keys from the config file, but never `COGNIGY_API_*` environment variables; this also applies when only one of the URL or key is set in the environment and the other is read from the config file.
 
 Optional per-profile settings: `_ENDPOINT_BASE_URL`, `_WEBCHAT_BASE_URL`, `_STATIC_FILES_BASE_URL` (derived from the API host when omitted) and `_PLATFORM_VERSION`, an informational hint only. The platform release is detected from the environment itself (`profile test` prints it); later releases will use it to choose behaviour.
 

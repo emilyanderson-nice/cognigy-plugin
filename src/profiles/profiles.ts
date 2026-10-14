@@ -185,7 +185,7 @@ function legacyFields(
     staticFilesBaseUrl: pick("COGNIGY_STATIC_FILES_BASE_URL"),
   };
   if (!raw.apiBaseUrl || !raw.apiKey) return undefined;
-  return { raw, source: envUrl && envKey ? "legacy-env" : "legacy-file" };
+  return { raw, source: envUrl || envKey ? "legacy-env" : "legacy-file" };
 }
 
 /** Env profile settings by normalised name, plus the spellings that produced them. */
