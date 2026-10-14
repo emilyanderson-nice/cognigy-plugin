@@ -5,6 +5,14 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { readUserConfigFile, USER_CONFIG_FILE } from "./userConfigFile.js";
+import {
+  deriveEndpointBaseUrl,
+  deriveStaticFilesBaseUrl,
+  deriveWebchatBaseUrl,
+  hostDerivationFailed,
+  normalizeApiBaseUrl,
+} from "./hosts.js";
+import { placeholderHint, usableEnv } from "./placeholders.js";
 
 export interface Config {
   apiBaseUrl: string;
@@ -41,133 +49,6 @@ function getPackageVersion(): string {
 }
 
 const PACKAGE_VERSION = getPackageVersion();
-
-/**
- * Normalise the API base URL so it always points to the API host.
- * Users may supply the bare UI URL (e.g. https://dev.cognigy.ai) instead of the
- * API URL (https://api-dev.cognigy.ai).  We detect this and prepend "api-".
- */
-function normalizeApiBaseUrl(raw: string): string {
-  try {
-    const url = new URL(raw);
-    if (
-      !url.hostname.startsWith("api-") &&
-      url.hostname.endsWith(".cognigy.ai")
-    ) {
-      url.hostname = `api-${url.hostname}`;
-      return url.toString().replace(/\/+$/, "");
-    }
-  } catch {
-    // fall through
-  }
-  return raw.replace(/\/+$/, "");
-}
-
-/**
- * The "api" word of a Cognigy API hostname, wherever a deployment puts it:
- * a leading segment ("api-dev.cognigy.ai"), a segment after a tenant prefix
- * ("cognigy-api-na1.nicecxone.com"), or a whole DNS label ("api.test", the
- * shape a local cluster uses because its hostnames have no environment
- * suffix to hang a hyphen on). The lookbehind/lookahead keep "myapi-dev" and
- * "rapid.example" untouched — "api" must be bounded on both sides.
- */
-const API_HOST_SEGMENT = /(^|-)api(?=[-.])/;
-
-/**
- * Derive a sibling base URL from the API base URL by swapping the "api"
- * segment of the hostname for another one (e.g. "endpoint", "static"):
- * api-dev.cognigy.ai -> endpoint-dev.cognigy.ai,
- * cognigy-api-na1.nicecxone.com -> cognigy-endpoint-na1.nicecxone.com,
- * api.test -> endpoint.test. A hostname with no such segment is returned as
- * is — callers must then rely on the explicit COGNIGY_*_BASE_URL overrides.
- */
-function deriveHostBaseUrl(apiBaseUrl: string, replacement: string): string {
-  try {
-    const url = new URL(apiBaseUrl);
-    url.hostname = url.hostname.replace(API_HOST_SEGMENT, `$1${replacement}`);
-    // `host`, not `hostname`: a local cluster often listens on a non-default
-    // port, and the sibling services sit behind the same ingress port.
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    // Not a parseable URL: fall back to a host-scoped replace on the
-    // scheme://host portion only, leaving any path/query untouched.
-    const schemeMatch = apiBaseUrl.match(/^([a-z]+:\/\/)([^/?#]*)(.*)$/i);
-    if (!schemeMatch) return apiBaseUrl;
-    const [, scheme, host, rest] = schemeMatch;
-    return `${scheme}${host.replace(API_HOST_SEGMENT, `$1${replacement}`)}${rest}`;
-  }
-}
-
-/** True when derivation found no "api" segment to swap. */
-function hostDerivationFailed(apiBaseUrl: string): boolean {
-  try {
-    return !API_HOST_SEGMENT.test(new URL(apiBaseUrl).hostname);
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Derive the endpoint base URL from the API base URL.
- * Pattern: https://api-{env}.cognigy.ai -> https://endpoint-{env}.cognigy.ai
- */
-function deriveEndpointBaseUrl(apiBaseUrl: string): string {
-  return deriveHostBaseUrl(apiBaseUrl, "endpoint");
-}
-
-/**
- * Derive the static-files base URL from the API base URL.
- * Pattern: https://api-{env}.cognigy.ai -> https://static-{env}.cognigy.ai
- */
-function deriveStaticFilesBaseUrl(apiBaseUrl: string): string {
-  return deriveHostBaseUrl(apiBaseUrl, "static");
-}
-
-/**
- * Derive the webchat demo base URL from the API base URL.
- * Pattern: https://api-{env}.cognigy.ai -> https://webchat-{env}.cognigy.ai
- */
-function deriveWebchatBaseUrl(apiBaseUrl: string): string {
-  return deriveHostBaseUrl(apiBaseUrl, "webchat");
-}
-
-/**
- * True for a value that is nothing but an unexpanded `${...}` placeholder.
- *
- * `userConfig` is a Claude Code extension to the plugin manifest: Claude Code
- * prompts for the values and substitutes them into `mcpServers.*.env`. Hosts
- * that only implement the portable subset (VS Code / Copilot, Kiro, …) copy
- * the manifest text through verbatim, so the engine receives the literal
- * "${user_config.cognigy_api_key}". Those strings are non-empty, which means
- * that without this check they (a) reach axios as a real base URL and fail with
- * ERR_INVALID_URL, and (b) shadow the on-disk fallback written by the setup CLI.
- *
- * Deliberately anchored to the whole (trimmed) value: a real API key or URL is
- * never entirely wrapped in `${…}`, so this cannot discard a genuine credential.
- */
-function isUnexpandedPlaceholder(value: string): boolean {
-  const trimmed = value.trim();
-  return trimmed.startsWith("${") && trimmed.endsWith("}");
-}
-
-/** An env value, or undefined when absent or an unexpanded placeholder. */
-function usableEnv(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  return isUnexpandedPlaceholder(value) ? undefined : value;
-}
-
-/**
- * Extra sentence for the "not set" errors when the host handed us a
- * placeholder. Without it the message reads as "not set" to someone looking
- * straight at a manifest that plainly does set it.
- */
-function placeholderHint(raw: string | undefined): string {
-  if (!raw || !isUnexpandedPlaceholder(raw)) return "";
-  return (
-    ` This host did not substitute the plugin manifest placeholder ${raw.trim()} ` +
-    `(it does not support userConfig), so the value never arrived.`
-  );
-}
 
 const VALID_LOG_LEVELS = new Set<string>(["debug", "info", "warn", "error"]);
 

@@ -1,0 +1,67 @@
+{
+  "probedAt": "2026-10-12T19:07:54.647Z",
+  "profile": "v2",
+  "host": "api-trial-us.cognigy.ai",
+  "declaredVersion": "v2",
+  "method": "GET",
+  "path": "/v2.0/connections",
+  "query": {
+    "projectId": "<objectId>",
+    "limit": "25"
+  },
+  "status": 200,
+  "ms": 252,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "transfer-encoding": "<present>",
+    "connection": "<present>",
+    "access-control-allow-credentials": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-embedder-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "expect-ct": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "set-cookie": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "api--3b86ba78-d7ff-4260-b4eb-5cf855013bda",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-robots-tag": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "1.1 2c3647ef49160329b5e0eb6fc7545c36.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "items": {
+      "_array": 3,
+      "_item": {
+        "_id": "<objectId>",
+        "referenceId": "<uuid>",
+        "name": "<string:15>",
+        "extension": "<string:20>",
+        "type": "http_apiKeyXKey",
+        "isDeprecated": "boolean",
+        "resourceLevel": "<string:7>",
+        "createdAt": "number",
+        "lastChanged": "number",
+        "createdBy": "<objectId>",
+        "lastChangedBy": "<objectId>"
+      }
+    },
+    "total": "number",
+    "previousCursor": "null",
+    "nextCursor": "null"
+  }
+}

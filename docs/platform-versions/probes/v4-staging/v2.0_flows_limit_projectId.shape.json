@@ -1,0 +1,66 @@
+{
+  "probedAt": "2026-10-12T19:07:58.205Z",
+  "profile": "v4-staging",
+  "host": "api-staging-v4.cognigy.ai",
+  "declaredVersion": "v4",
+  "method": "GET",
+  "path": "/v2.0/flows",
+  "query": {
+    "projectId": "<objectId>",
+    "limit": "25"
+  },
+  "status": 200,
+  "ms": 521,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "<present>",
+    "connection": "<present>",
+    "access-control-allow-credentials": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-embedder-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "expect-ct": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "set-cookie": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "api--508347ff-4c5b-4f4c-a4de-29713d6e763e",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-robots-tag": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "1.1 8737c23b0b0fc96ccfb222abb7ac4aa6.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "items": {
+      "_array": 2,
+      "_item": {
+        "_id": "<objectId>",
+        "referenceId": "<uuid>",
+        "name": "<string:28>",
+        "createdAt": "number",
+        "lastChanged": "number",
+        "createdBy": "<objectId>",
+        "lastChangedBy": "<objectId>",
+        "isTrainingOutOfDate": "boolean",
+        "description": "<string:0>",
+        "kind": "conversation"
+      }
+    },
+    "total": "number",
+    "previousCursor": "null",
+    "nextCursor": "null"
+  }
+}
