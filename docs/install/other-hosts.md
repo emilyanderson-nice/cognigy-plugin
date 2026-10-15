@@ -79,6 +79,6 @@ There is nothing host-specific to undo, so `--client other-hosts` on its own onl
 
 Your Node is probably from nvm, fnm, or volta, whose `bin` directory is added by your shell profile — which a GUI-launched host need not have sourced. Either quit the host completely and relaunch it from a terminal, or replace `npx` in the MCP entry with an absolute path — find it with `which npx` on macOS/Linux, `where npx` on Windows.
 
-**`COGNIGY_API_KEY is not set` — but the manifest sets it**
+**Tool calls answer "No Cognigy environment is configured" — but the manifest sets the credentials**
 
-The host passed the placeholder through unexpanded and there is no credentials file. Run the installer with `--client other-hosts`; the error message names the placeholder it received when this is the cause.
+The host passed the placeholder (`${user_config.…}`) through unexpanded and there is no credentials file, so the server sees no environment. It still starts, and every tool call explains how to add one. Run the installer with `--client other-hosts`, or `cognigy-setup profile add`.
