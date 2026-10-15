@@ -11,6 +11,7 @@ import {
   normalizeApiBaseUrl,
 } from "../hosts.js";
 import { usableEnv } from "../placeholders.js";
+import { ProfileConfigError } from "./errors.js";
 import { resolveDefinitions, type Definition } from "./precedence.js";
 import {
   readUserProfilesFile,
@@ -42,9 +43,7 @@ export interface ProfileSet {
   problems: ProfileProblem[];
 }
 
-export class ProfileConfigError extends Error {
-  override name = "ProfileConfigError";
-}
+export { ProfileConfigError };
 
 export interface LoadProfilesOptions {
   env?: NodeJS.ProcessEnv;
@@ -313,14 +312,21 @@ export interface SystemDeps {
   env?: NodeJS.ProcessEnv;
   readLegacyFile?: () => Record<string, string>;
   readProfilesFile?: () => ProfilesFile;
+  /** Fail closed: unreadable or malformed files throw instead of reading as empty. */
+  strict?: boolean;
 }
 
 /** Loads profiles from process.env and the user's config file on disk. */
 export function loadProfilesFromSystem(deps: SystemDeps = {}): ProfileSet {
+  const options = { strict: deps.strict === true };
   return loadProfiles({
     env: deps.env ?? process.env,
-    legacyFile: (deps.readLegacyFile ?? readUserConfigFile)(),
-    fileProfiles: (deps.readProfilesFile ?? readUserProfilesFile)(),
+    legacyFile: (
+      deps.readLegacyFile ?? (() => readUserConfigFile(undefined, options))
+    )(),
+    fileProfiles: (
+      deps.readProfilesFile ?? (() => readUserProfilesFile(undefined, options))
+    )(),
   });
 }
 

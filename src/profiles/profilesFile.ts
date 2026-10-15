@@ -6,7 +6,9 @@ import { readFileSync } from "fs";
 import {
   isPlainObject,
   parseConfigText,
+  readStrict,
   RESERVED_KEYS,
+  type ReadOptions,
   USER_CONFIG_FILE,
 } from "../userConfigFile.js";
 
@@ -56,27 +58,40 @@ function toRawProfile(v: unknown): RawFileProfile | string {
 }
 
 /** Reads the profiles section; absent or unreadable files yield no profiles. */
-export function readUserProfilesFile(
-  path: string = USER_CONFIG_FILE,
-): ProfilesFile {
-  const result: ProfilesFile = { profiles: {}, problems: [] };
-  try {
-    const parsed = parseConfigText(readFileSync(path, "utf-8"));
-    if (!isPlainObject(parsed)) return result;
-    if (typeof parsed.defaultProfile === "string") {
-      result.defaultProfile = parsed.defaultProfile;
-    }
-    if (isPlainObject(parsed.profiles)) {
-      for (const [name, raw] of Object.entries(parsed.profiles)) {
-        if (RESERVED_NAMES.has(name)) continue;
-        const profile = toRawProfile(raw);
-        if (typeof profile === "string") {
-          result.problems.push({ name, reason: profile });
-        } else {
-          result.profiles[name] = profile;
-        }
+function collect(parsed: Record<string, unknown>, result: ProfilesFile): void {
+  if (typeof parsed.defaultProfile === "string") {
+    result.defaultProfile = parsed.defaultProfile;
+  }
+  if (isPlainObject(parsed.profiles)) {
+    for (const [name, raw] of Object.entries(parsed.profiles)) {
+      if (RESERVED_NAMES.has(name)) continue;
+      const profile = toRawProfile(raw);
+      if (typeof profile === "string") {
+        result.problems.push({ name, reason: profile });
+      } else {
+        result.profiles[name] = profile;
       }
     }
+  }
+}
+
+/**
+ * Reads the profiles section. By default an absent or unreadable file yields
+ * no profiles; with `strict`, only an absent file does and anything else throws.
+ */
+export function readUserProfilesFile(
+  path: string = USER_CONFIG_FILE,
+  options: ReadOptions = {},
+): ProfilesFile {
+  const result: ProfilesFile = { profiles: {}, problems: [] };
+  if (options.strict) {
+    const raw = readStrict(path);
+    if (raw.state === "ok") collect(raw.data, result);
+    return result;
+  }
+  try {
+    const parsed = parseConfigText(readFileSync(path, "utf-8"));
+    if (isPlainObject(parsed)) collect(parsed, result);
   } catch {
     // Missing or malformed: behave as if no profiles were configured.
   }
