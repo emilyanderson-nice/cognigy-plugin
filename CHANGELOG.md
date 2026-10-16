@@ -1,3 +1,10 @@
+## 1.22.0-pb.4 (2026-10-16)
+
+### Features
+
+* **environments:** show the session's environment in the Claude Code status line — the server writes `~/.cognigy-plugin/sessions/<claude pid>.json` (pin, source, host, last-used environment, configured count; never keys) at boot, on pin changes and when the last-used environment changes, removes it on shutdown, and installs `~/.cognigy-plugin/statusline-segment.sh`, which prints `cognigy:<name>` / `cognigy:unpinned (last <name>)`; `COGNIGY_SESSION_STATE=0` opts out, `COGNIGY_SESSION_KEY` names the file
+* **environments:** "Default Cognigy profile" plugin setting in Claude Code (`cognigy_profile`, passed as `COGNIGY_DEFAULT_PROFILE`) pins each new session; `COGNIGY_ENVIRONMENT` overrides it, a bad value warns and fails pin-reliant calls with `pin_invalid`, and `list_environments` reports source `plugin-settings`. The API URL and key settings are no longer required, since profiles can supply credentials
+
 ## 1.22.0-pb.3 (2026-10-16)
 
 ### Features
