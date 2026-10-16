@@ -13,6 +13,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -213,6 +214,13 @@ export function createSessionState(
     },
     remove() {
       try {
+        // After a plugin reload the new server has already rewritten this
+        // file for the same session; only remove it while it's still ours.
+        if (!existsSync(file)) return;
+        const owner = (
+          JSON.parse(readFileSync(file, "utf8")) as { pid?: unknown }
+        ).pid;
+        if (owner !== undefined && owner !== pid) return;
         rmSync(file, { force: true });
       } catch (err) {
         log("Session state file not removed", { error: messageOf(err) });
