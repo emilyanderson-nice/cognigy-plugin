@@ -3615,7 +3615,16 @@ export class ToolHandlers {
         // the endpoint host differs from the API host and may be excluded by
         // NO_PROXY independently.
         ...getProxyAxiosOptions(endpointUrl!),
-        beforeRedirect: applyProxyToRedirect,
+        // The host guard vetted only the first URL; a 307 keeps the body, so
+        // a hop to another host would carry the message off this environment.
+        beforeRedirect: (options: Record<string, unknown>) => {
+          if (options.host !== new URL(targetUrl).host) {
+            throw new Error(
+              "talk_to_agent refused a redirect to another host; the message was not sent there.",
+            );
+          }
+          applyProxyToRedirect(options);
+        },
       });
 
       let agentResponse = response.data.text || "";
