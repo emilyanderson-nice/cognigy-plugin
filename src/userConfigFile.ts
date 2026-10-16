@@ -132,7 +132,19 @@ export function readUserConfigFile(
   path: string = USER_CONFIG_FILE,
   options: ReadOptions = {},
 ): UserConfigFile {
-  const raw = options.strict ? readStrict(path) : readRaw(path);
+  return legacyFieldsOf(readUserConfigRaw(path, options));
+}
+
+/** One read of the file; with `strict`, as readStrict, otherwise as readRaw. */
+export function readUserConfigRaw(
+  path: string = USER_CONFIG_FILE,
+  options: ReadOptions = {},
+): RawRead {
+  return options.strict ? readStrict(path) : readRaw(path);
+}
+
+/** The legacy flat string map of an already-read file. */
+export function legacyFieldsOf(raw: RawRead): UserConfigFile {
   const out: UserConfigFile = {};
   if (raw.state !== "ok") return out;
   for (const [k, v] of Object.entries(raw.data)) {

@@ -2,12 +2,11 @@
  * Named profiles stored in the user config file (~/.cognigy-plugin/config.json)
  * under "profiles" / "defaultProfile", next to the legacy flat string map.
  */
-import { readFileSync } from "fs";
 import {
   isPlainObject,
-  parseConfigText,
-  readStrict,
   RESERVED_KEYS,
+  readUserConfigRaw,
+  type RawRead,
   type ReadOptions,
   USER_CONFIG_FILE,
 } from "../userConfigFile.js";
@@ -83,17 +82,12 @@ export function readUserProfilesFile(
   path: string = USER_CONFIG_FILE,
   options: ReadOptions = {},
 ): ProfilesFile {
+  return profilesOf(readUserConfigRaw(path, options));
+}
+
+/** The profiles section of an already-read file. */
+export function profilesOf(raw: RawRead): ProfilesFile {
   const result: ProfilesFile = { profiles: {}, problems: [] };
-  if (options.strict) {
-    const raw = readStrict(path);
-    if (raw.state === "ok") collect(raw.data, result);
-    return result;
-  }
-  try {
-    const parsed = parseConfigText(readFileSync(path, "utf-8"));
-    if (isPlainObject(parsed)) collect(parsed, result);
-  } catch {
-    // Missing or malformed: behave as if no profiles were configured.
-  }
+  if (raw.state === "ok") collect(raw.data, result);
   return result;
 }
