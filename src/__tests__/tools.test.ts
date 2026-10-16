@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { Readable } from "stream";
+import { pathToFileURL } from "url";
 import { CognigyApiClient } from "../api/client.js";
 import { ToolHandlers } from "../tools/handlers.js";
 
@@ -4277,10 +4278,10 @@ describe("ToolHandlers v2", () => {
       });
 
       expect(result.savedTo).toBe(join(dir, "exports.zip"));
-      expect(result.savedToUri).toBe(`file://${result.savedTo}`);
+      expect(result.savedToUri).toBe(pathToFileURL(result.savedTo).href);
       expect(result.savedFileName).toBe("exports.zip");
       expect(result.savedDirectory).toBe(dir);
-      expect(result.savedDirectoryUri).toBe(`file://${dir}`);
+      expect(result.savedDirectoryUri).toBe(pathToFileURL(dir).href);
       expect(result.openArchiveUri).toBe(result.savedToUri);
       expect(result.openContainingFolderPath).toBe(dir);
       expect(result.openContainingFolderUri).toBe(result.savedDirectoryUri);
