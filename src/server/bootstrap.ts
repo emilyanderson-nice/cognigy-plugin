@@ -17,6 +17,14 @@ import {
   LIST_ENVIRONMENTS_TOOL,
 } from "../environments/listEnvironments.js";
 import {
+  PIN_ENV_VAR,
+  USE_ENVIRONMENT_TOOL,
+  applyLaunchPin,
+  createSessionPin,
+  createUseEnvironment,
+  type SessionPin,
+} from "../environments/sessionPin.js";
+import {
   loadProfilesFromSystem,
   type Profile,
   type ProfileSet,
@@ -43,6 +51,7 @@ export interface ServerParts {
   registry: EnvironmentRegistry;
   dispatcher: Dispatcher;
   rateLimiter: RateLimiter;
+  pin: SessionPin;
   /** Boot-time warnings, evaluated from a fresh snapshot on each call. */
   startupNotices(): string[];
 }
@@ -59,6 +68,15 @@ export function buildServerParts(deps: BootstrapDeps = {}): ServerParts {
       createRuntimeFactory({ auditAttribution: settings.auditAttribution }),
   });
   const rateLimiter = new RateLimiter(settings.rateLimit);
+  const pin = createSessionPin();
+  const pinWarning = applyLaunchPin(registry, pin, env[PIN_ENV_VAR]);
+  const launchPin = pin.get();
+  if (launchPin) {
+    logger.info("Session pinned to environment", {
+      environment: launchPin.name,
+      source: launchPin.source,
+    });
+  }
 
   // One detector per runtime object: a rebuilt runtime gets a fresh one.
   const detectors = new WeakMap<
@@ -82,21 +100,30 @@ export function buildServerParts(deps: BootstrapDeps = {}): ServerParts {
     logger,
     runWithTask,
     taskContext: () => ({ taskId: getTaskId(), sessionId: getSessionId() }),
-    listEnvironments: createListEnvironments({ registry, detectRelease }),
+    listEnvironments: createListEnvironments({ registry, detectRelease, pin }),
     listEnvironmentsTool: LIST_ENVIRONMENTS_TOOL,
+    session: {
+      pin,
+      tool: USE_ENVIRONMENT_TOOL,
+      use: createUseEnvironment({ registry, pin }),
+    },
   });
   const startupNotices = (): string[] => {
+    const pinNotices =
+      pinWarning !== undefined && pin.rejected() ? [pinWarning] : [];
     const snap = registry.snapshot();
     if (snap.loadError !== undefined) {
       return [
         `Environment configuration could not be loaded: ${snap.loadError}`,
+        ...pinNotices,
       ];
     }
     return snap.configuredNames.length === 0
       ? [
           'No Cognigy environment is configured; tool calls will fail until one is added. Run "cognigy-setup profile add".',
+          ...pinNotices,
         ]
-      : [];
+      : pinNotices;
   };
-  return { settings, registry, dispatcher, rateLimiter, startupNotices };
+  return { settings, registry, dispatcher, rateLimiter, pin, startupNotices };
 }

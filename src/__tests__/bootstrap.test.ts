@@ -32,25 +32,28 @@ afterEach(() => {
 });
 
 describe("buildServerParts: tool surface", () => {
-  it("lists every real tool plus list_environments, each real tool gaining the environment enum", () => {
+  it("lists every real tool plus list_environments and use_environment, each real tool gaining the environment enum", () => {
     const { parts } = rig(two());
     const listed = parts.dispatcher.listTools();
     eq(
       listed.map((t) => t.name).sort(),
       [
-        ...realNames.filter((n) => n !== "list_environments"),
+        ...realNames.filter(
+          (n) => n !== "list_environments" && n !== "use_environment",
+        ),
         "list_environments",
+        "use_environment",
       ].sort(),
       "bootstrap::tool_names",
-      "Rule: the dispatcher serves the real definitions plus list_environments",
-      "Serve exactly the exported tool definitions and add list_environments.",
+      "Rule: the dispatcher serves the real definitions plus list_environments and use_environment",
+      "Serve exactly the exported tool definitions and add list_environments and use_environment.",
     );
     eq(
       listed.length,
-      tools.length + 1,
+      tools.length + 2,
       "bootstrap::tool_count",
-      "Rule: final tool count is the real count plus one",
-      "Add exactly one tool to the real definitions.",
+      "Rule: final tool count is the real count plus two",
+      "Add exactly two tools to the real definitions.",
     );
     for (const def of tools) {
       const t = listed.find((x) => x.name === def.name);
@@ -79,7 +82,7 @@ describe("buildServerParts: tool surface", () => {
     const listed = parts.dispatcher.listTools();
     eq(
       listed.length,
-      tools.length + 1,
+      tools.length + 2,
       "bootstrap::zero_tool_count",
       "Rule: with no environments listTools still serves all tools",
       "Do not require credentials to list tools.",

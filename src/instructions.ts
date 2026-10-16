@@ -18,11 +18,15 @@ TOOL TYPE SELECTION (create_tool):
 
 ENVIRONMENTS:
 - This plugin can be connected to several Cognigy environments (for example classic and v4, or staging and production). Every tool accepts an optional \`environment\` argument naming the environment the call runs against; call list_environments to see the configured ones.
-- When more than one environment is configured, \`environment\` is required on every call except list_environments. Keep it constant within a task.
+- When more than one environment is configured, \`environment\` is required on every call except list_environments and use_environment, unless the session is pinned. Keep it constant within a task.
+- A session can be pinned to one environment (use_environment, or COGNIGY_ENVIRONMENT at launch; list_environments shows the pin). When the session is pinned, do not pass \`environment\` (or pass the pinned name).
+- When the user names a tenant or profile, call use_environment once at the start of the task.
+- Switch the pin only when the user asks, and say so.
 - When more than one environment exists, confirm the target environment with the user before any destructive operation (delete, restore, overwrite).
+- Even when the session is pinned, confirm the target environment with the user by name before any destructive operation (delete, snapshot restore, overwrite).
 - Ids, endpoint URLs, and package and snapshot references belong to one environment and must not be reused in another.
 - The default marker (\`isDefault\`) in list_environments output is not consent to use that environment: still ask or confirm with the user.
-- Use the same environment for every step of a multi-step task that builds resources (agent creation, knowledge, tools, packages, snapshots, voice, webchat); pass it on every call.
+- Use the same environment for every step of a multi-step task that builds resources (agent creation, knowledge, tools, packages, snapshots, voice, webchat); pass it on every call unless the session is pinned.
 - If it is unclear which environment is meant, ask the user instead of guessing.
 
 DOCUMENTATION LOOKUP:
