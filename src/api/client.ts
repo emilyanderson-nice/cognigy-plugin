@@ -7,6 +7,7 @@ import axios, {
 } from "axios";
 import FormData from "form-data";
 import { logger } from "../utils/logger.js";
+import { redactKey } from "../utils/redact.js";
 import {
   applyProxyToRedirect,
   getProxyAxiosOptions,
@@ -242,8 +243,8 @@ export class CognigyApiClient {
 
         log.error("API Response Error", {
           status: status || "N/A",
-          message,
-          traceId,
+          message: this.redact(message),
+          traceId: this.redact(traceId),
           url: config?.url,
         });
 
@@ -252,15 +253,26 @@ export class CognigyApiClient {
     );
   }
 
+  /**
+   * Strips this client's own key from upstream text. An error body can echo
+   * the key, and every caller that logs the rejected error (ToolHandlers'
+   * "Tool call failed" and its warnings) would otherwise log it verbatim.
+   */
+  private redact<T>(value: T): T {
+    return (
+      typeof value === "string" ? redactKey(value, this.apiKey) : value
+    ) as T;
+  }
+
   private formatError(error: AxiosError): Error {
     const data = error.response?.data as any;
     if (data) {
       const message =
         data.detail || data.title || describeUnexpectedBody(data, error);
-      const enhancedError = new Error(message);
+      const enhancedError = new Error(this.redact(message));
       (enhancedError as any).status = data.status || error.response?.status;
-      (enhancedError as any).code = data.code;
-      (enhancedError as any).traceId = data.traceId;
+      (enhancedError as any).code = this.redact(data.code);
+      (enhancedError as any).traceId = this.redact(data.traceId);
       (enhancedError as any).details = data.details;
       return enhancedError;
     }
