@@ -60,7 +60,13 @@ const CREDS = {
 describe("resolveDesktopConfigPath", () => {
   it("resolves the macOS path", () => {
     expect(resolveDesktopConfigPath("darwin", {}, "/Users/x")).toBe(
-      "/Users/x/Library/Application Support/Claude/claude_desktop_config.json",
+      join(
+        "/Users/x",
+        "Library",
+        "Application Support",
+        "Claude",
+        "claude_desktop_config.json",
+      ),
     );
   });
 
@@ -82,7 +88,12 @@ describe("resolveDesktopConfigPath", () => {
 
   it("resolves the Linux path", () => {
     expect(resolveDesktopConfigPath("linux", {}, "/home/x")).toBe(
-      "/home/x/.config/claude-desktop/claude_desktop_config.json",
+      join(
+        "/home/x",
+        ".config",
+        "claude-desktop",
+        "claude_desktop_config.json",
+      ),
     );
   });
 });
@@ -280,7 +291,10 @@ describe("writeDesktopLauncher", () => {
     const dir = freshDir();
     const file = writeDesktopLauncher(dir);
     expect(readFileSync(file, "utf8")).toBe(DESKTOP_LAUNCHER_SOURCE);
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX mode bits; production protects the file with icacls there.
+    if (process.platform !== "win32") {
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+    }
   });
 
   it("emits a launcher that reserves stdout and imports the engine entry", () => {
