@@ -16,7 +16,7 @@ You have the Cognigy MCP tools (`list_resources`, `create_ai_agent`, `setup_llm`
    - Only as a last resort, `setup_llm` — and ask the user for provider/model/credentials (apiKey for most providers; AWS access keys or a role ARN for awsBedrock). **Never hallucinate keys, connection URLs, or credentials.** Connections are project-scoped; never pass a cross-project `connectionId`.
 3. **Create the agent.** `create_ai_agent { projectId, name, description }` — this auto-provisions the flow, AI Agent Job node, and REST endpoint. Do not create those separately.
 4. **Test (only with a confirmed working LLM).** `talk_to_agent { endpointUrl, message }`. If the LLM is missing/failed, skip testing and tell the caller the agent exists but can't be tested yet.
-5. **Refine.** `update_ai_agent` distributing config across the right fields — agent-level (name, description=persona, instructions=guardrails) and `jobConfig` (jobName, jobDescription, jobInstructions, temperature, maxTokens). Do not dump everything into `description`.
+5. **Refine.** `update_ai_agent`, writing each field the way the `agent-prompts` skill lays out: persona in `description`, communication and guardrails in `instructions`, scope in `jobDescription`, flow, tool use and handover in `jobInstructions`. Number only real sequences; each rule in one place.
 6. **Iterate** steps 4–5 until the behavior matches the request.
 
 ## Rules
@@ -24,5 +24,5 @@ You have the Cognigy MCP tools (`list_resources`, `create_ai_agent`, `setup_llm`
 - LLM before `talk_to_agent`, always. No working LLM → no test.
 - All custom logic belongs INSIDE tools (`create_tool`), never as standalone nodes before the AI Agent Job node — that causes loops.
 - Reuse an existing LLM + connection via packages before `setup_llm`.
-- Consult the `agent-creation` skill for the full field reference when refining.
+- Consult the `agent-creation` skill for the field reference and the `agent-prompts` skill for how to write the prompt fields.
 - Your final message is a report to the main thread: return the agent id, the endpoint URL from `create_ai_agent` (never a `/test/` URL — talk_to_agent runs in test mode internally), LLM status, and a one-line test result. Be terse.

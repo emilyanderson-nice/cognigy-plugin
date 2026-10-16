@@ -24,6 +24,7 @@ Rule of thumb: each tool in an agent flow should have a unique `toolId`. If you 
 `parameters` is a JSON Schema string that Cognigy passes VERBATIM to the LLM provider. create_tool / update_tool validate it and reject violations, because a broken schema either fails every conversation turn with a provider 400 (strict models) or is silently dropped (the tool is called with no arguments). The contract:
 
 - Top level: `{"type":"object","properties":{...},"required":[...]}` — `required` is mandatory (use `[]` if nothing is required).
+- The tool `description` says what the tool does, when to use it and when not to, in 1-3 sentences. Each parameter description says what the value is and its format ("Order number, 8 digits"). The agent-prompts skill has the writing rules.
 - EVERY property needs `"type"` AND `"description"`. Allowed types: `string`, `number`, `integer`, `boolean`, `object`, `array`, `null`.
 - `array` properties need `"items"`. Nested objects with `"properties"` also need their own `"required"`.
 - `"additionalProperties": false` is injected automatically at every object level.
@@ -41,7 +42,7 @@ toolType: "tool",
 name: "Fetch Weather",
 config: {
 toolId: "fetch_weather",
-description: "Fetches current weather for a city",
+description: "Gets the current weather for a city. Use when the user asks about weather, temperature or rain right now. Not for forecasts beyond today.",
 parameters: '{"type":"object","properties":{"city":{"type":"string","description":"City to fetch the weather for"}},"required":["city"]}',
 toolResponseValue: "{{JSON.stringify(input.result)}}"
 }
@@ -62,7 +63,7 @@ name: "Search FAQ",
 config: {
 knowledgeStoreId: "507f1f77bcf86cd799439011",
 toolId: "search_faq",
-description: "Search the FAQ knowledge base"
+description: "Searches the FAQ articles. Use for questions about policies, shipping, returns and opening hours. Not for a specific order; use get_order."
 }
 }
 ```
@@ -76,7 +77,7 @@ toolType: "send_email",
 name: "Send Email",
 config: {
 toolId: "send_email",
-description: "Send an email to support",
+description: "Emails the support team a summary of the case. Use only after the customer agrees to a follow-up by email.",
 recipient: "support@example.com"
 }
 }
@@ -178,7 +179,7 @@ toolType: "http",
 name: "Get Weather",
 config: {
 toolId: "get_weather",
-description: "Fetches current weather for a location",
+description: "Gets the current weather for a city. Use when the user asks about weather right now. Not for forecasts beyond today.",
 parameters: '{"type":"object","properties":{"city":{"type":"string","description":"City to fetch the weather for"}},"required":["city"]}',
 url: "https://api.weather.com/v1/current?q={{input.aiAgent.toolArgs.city}}",
 method: "GET",
@@ -197,7 +198,7 @@ toolType: "http",
 name: "Create Order",
 config: {
 toolId: "create_order",
-description: "Creates a new order in the order management system",
+description: "Places a new order in the order system. Use only after the customer has confirmed the items and the customer ID. Not for changing an existing order.",
 parameters: '{"type":"object","properties":{"items":{"type":"array","description":"Ordered items","items":{"type":"string","description":"SKU of one item"}},"customerId":{"type":"string","description":"Customer identifier"}},"required":["items","customerId"]}',
 url: "https://api.example.com/orders",
 method: "POST",
@@ -268,7 +269,7 @@ create_tool {
   name: "Check Order Status",
   config: {
     toolId: "check_order_status",
-    description: "Looks up the status of a customer order",
+    description: "Looks up an order's status and delivery date by order number. Use when the customer asks where an order is or when it arrives. Not for returns.",
     parameters: '{"type":"object","properties":{"orderId":{"type":"string","description":"Order number to look up"}},"required":["orderId"]}'
   }
 }
