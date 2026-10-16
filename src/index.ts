@@ -7,102 +7,38 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { loadConfig } from "./config.js";
-import { CognigyApiClient } from "./api/client.js";
-import { ToolHandlers } from "./tools/handlers.js";
-import { tools } from "./tools/definitions.js";
+import { loadRuntimeSettings } from "./runtimeSettings.js";
+import { buildServerParts } from "./server/bootstrap.js";
 import { SERVER_INSTRUCTIONS } from "./instructions.js";
 import { logger } from "./utils/logger.js";
-import { RateLimiter } from "./utils/rateLimiter.js";
-import { getSessionId, getTaskId, runWithTask } from "./utils/actorContext.js";
-import { logProxyConfiguration } from "./utils/proxy.js";
 
 async function main() {
   try {
-    const config = loadConfig();
-    logger.setLevel(config.logLevel);
+    const settings = loadRuntimeSettings();
+    logger.setLevel(settings.logLevel);
     logger.info("Starting NiCE Cognigy Plugin", {
-      name: config.serverName,
-      version: config.serverVersion,
+      name: settings.serverName,
+      version: settings.serverVersion,
     });
-    logProxyConfiguration(config.apiBaseUrl);
 
-    const apiClient = new CognigyApiClient({
-      baseUrl: config.apiBaseUrl,
-      apiKey: config.apiKey,
-      auditAttribution: config.auditAttribution,
-    });
-    const toolHandlers = new ToolHandlers(
-      apiClient,
-      config.endpointBaseUrl,
-      config.webchatBaseUrl,
-      config.staticFilesBaseUrl,
-    );
-    const rateLimiter = new RateLimiter(config.rateLimit);
+    const { dispatcher, rateLimiter, startupNotices } = buildServerParts();
+    for (const notice of startupNotices()) logger.warn(notice);
 
     const server = new Server(
-      { name: config.serverName, version: config.serverVersion },
+      { name: settings.serverName, version: settings.serverVersion },
       {
         capabilities: { tools: {} },
         instructions: SERVER_INSTRUCTIONS,
       },
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: dispatcher.listTools(),
+    }));
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
-
-      const rateLimitKey = config.apiKey.substring(0, 10);
-      if (!rateLimiter.check(rateLimitKey)) {
-        // Logged with the tool name: a rejected call never reaches the
-        // `Tool call received` line below, so without this a throttling
-        // incident would leave no trace of which tool was being hammered.
-        logger.warn(`Tool call rate limited: ${name}`);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ error: "Rate limit exceeded" }),
-            },
-          ],
-        };
-      }
-
-      // One task id per tool call, shared by every Cognigy API request the
-      // call fans out to, so the audit events of a single tool call group
-      // together. Logged so a local log line can be matched to an audit event.
-      return runWithTask(async () => {
-        logger.info(`Tool call received: ${name}`, {
-          taskId: getTaskId(),
-          sessionId: getSessionId(),
-        });
-        try {
-          const result = await toolHandlers.handleToolCall(name, args || {});
-          return {
-            content: [{ type: "text" as const, text: JSON.stringify(result) }],
-          };
-        } catch (error: any) {
-          logger.error("Tool execution error", {
-            tool: name,
-            error: error.message,
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error: error.message,
-                  status: error.status,
-                  code: error.code,
-                  traceId: error.traceId,
-                }),
-              },
-            ],
-            isError: true,
-          };
-        }
-      });
+      return { ...(await dispatcher.callTool(name, args || {})) };
     });
 
     const transport = new StdioServerTransport();

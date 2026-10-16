@@ -11,6 +11,9 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { readUserConfigFile, writeUserConfigFile } from "../userConfigFile.js";
 
+// POSIX permission modes do not exist on Windows (ACLs are tested elsewhere).
+const posixIt = process.platform === "win32" ? it.skip : it;
+
 const tmpDirs: string[] = [];
 function freshDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "cognigy-cfg-"));
@@ -41,14 +44,14 @@ describe("writeUserConfigFile", () => {
     });
   });
 
-  it("creates the file owner-only (0600)", () => {
+  posixIt("creates the file owner-only (0600)", () => {
     const dir = freshDir();
     const file = writeUserConfigFile({ COGNIGY_API_KEY: "secret" }, dir);
     // Low 9 permission bits should be rw for owner only.
     expect(statSync(file).mode & 0o777).toBe(0o600);
   });
 
-  it("re-tightens permissions when overwriting an existing file", () => {
+  posixIt("re-tightens permissions when overwriting an existing file", () => {
     const dir = freshDir();
     const file = join(dir, "config.json");
     writeFileSync(file, "{}", { mode: 0o644 });
@@ -56,7 +59,7 @@ describe("writeUserConfigFile", () => {
     expect(statSync(file).mode & 0o777).toBe(0o600);
   });
 
-  it("re-tightens a pre-existing directory to 0700", () => {
+  posixIt("re-tightens a pre-existing directory to 0700", () => {
     const parent = freshDir();
     const dir = join(parent, "cfg");
     mkdirSync(dir, { mode: 0o755 });

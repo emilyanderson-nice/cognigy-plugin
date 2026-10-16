@@ -14,6 +14,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { mkdtempSync, rmSync } from "fs";
+import { tmpdir } from "os";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ENTRY = join(REPO_ROOT, "src", "index.ts");
@@ -24,17 +26,31 @@ const EXIT_TIMEOUT_MS = 15000;
 const TEST_TIMEOUT_MS = 60000;
 
 const children: ChildProcessWithoutNullStreams[] = [];
+// Fresh HOME per server so it can never read the real ~/.cognigy-plugin.
+const tempHomes: string[] = [];
+
+/** The parent's environment minus every COGNIGY_* variable (profiles included). */
+function inheritedEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !/^COGNIGY_/i.test(k)),
+  );
+}
 
 /** Spawn the server and resolve once it reports a successful start. */
 async function startServer(): Promise<ChildProcessWithoutNullStreams> {
   // `--import tsx` rather than tsx's CLI: the CLI spawns a grandchild, which a
   // kill on the direct child would not reap — leaking the very orphan
   // processes these tests exist to prevent.
+  const home = mkdtempSync(join(tmpdir(), "cognigy-lifecycle-home-"));
+  tempHomes.push(home);
   const child = spawn(process.execPath, ["--import", "tsx", ENTRY], {
     cwd: REPO_ROOT,
     env: {
-      ...process.env,
-      // No request is ever made; these only have to satisfy loadConfig().
+      ...inheritedEnv(),
+      HOME: home,
+      USERPROFILE: home,
+      // No request is ever made; these configure the legacy single environment
+      // (named `default`) so the server has something to start with.
       COGNIGY_API_BASE_URL: "https://api-trial.cognigy.ai",
       COGNIGY_API_KEY: "lifecycle-test-key",
       LOG_LEVEL: "info",
@@ -99,6 +115,9 @@ afterEach(async () => {
       await dead;
     }),
   );
+  for (const home of tempHomes.splice(0)) {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 describe("server lifecycle", () => {

@@ -38,7 +38,7 @@ Credentials do **not** go into any `mcp_config.json` (shared, hand-edited, paste
 
 ## Tools — few tools, many operations
 
-18 tools, each often a multi-operation dispatcher (e.g. `manage_flow_nodes { operation }`, `manage_knowledge`, `manage_packages`). Prefer extending an existing tool over adding one. Each tool spans:
+20 tools, each often a multi-operation dispatcher (e.g. `manage_flow_nodes { operation }`, `manage_knowledge`, `manage_packages`). Prefer extending an existing tool over adding one. Each tool spans:
 
 | File                        | Role                                                                            |
 | --------------------------- | ------------------------------------------------------------------------------- |
@@ -63,6 +63,14 @@ Workflow guidance lives only as plugin skills `plugin/skills/<id>/SKILL.md` (han
 - `src/config.ts` `loadConfig()` reads env `COGNIGY_API_BASE_URL` + `COGNIGY_API_KEY` (both required). `normalizeApiBaseUrl` rewrites `*.cognigy.ai` → `api-*.cognigy.ai`.
 - `src/api/client.ts` `CognigyApiClient` wraps axios; `get/post/patch/delete` return `response.data` (HAL body). Retries on 429 / 5xx.
 - Base URL has no `/new` prefix; the server mounts the modern router at both `/new` and root, so `/v2.0/...` and `/new/v2.0/...` hit the same handlers.
+
+## Environments (multi-profile routing)
+
+- `src/index.ts` is thin wiring. `buildServerParts()` (`src/server/bootstrap.ts`) builds the settings (`src/runtimeSettings.ts`, the non-credential half of `loadConfig`), an `EnvironmentRegistry` (`src/environments/registry.ts`) and a `Dispatcher` (`src/server/dispatch.ts`). `loadConfig()` is no longer used at boot, and the server starts with zero environments configured (it warns and answers every call with how to add one).
+- The registry re-reads profiles on every ListTools/CallTool (`loadProfilesFromSystem({ strict: true })`, which fails closed when the credential file is unreadable or corrupt instead of silently seeing fewer environments) and caches one `{ client, handlers }` runtime per profile (`src/server/runtimeFactory.ts`). `ToolHandlers` keeps per-session state (the backup gate), so it is one instance per environment; editing an environment's URL or key rebuilds its runtime and resets that state.
+- The dispatcher injects an optional `environment` property into every tool schema (a clone; never `required`, the registry enforces it), strips it before dispatch, requires it when two or more environments are configured (never falls back to a default), rate-limits per environment name after resolving it, adds `_environment: { name, host }` to results as a sibling of `_hints`, rejects a `talk_to_agent` `endpointUrl` whose host is not the environment's endpoint host, and redacts the key from error text. `list_environments` (`src/environments/listEnvironments.ts`) lists environments and, with `check: true`, detects each platform release.
+- Behaviour differences between platform releases are detected from the environment's own OpenAPI (`src/profiles/release.ts`), not from a version label; findings are in `docs/platform-versions/`.
+- Tests that spawn the server must point `HOME`/`USERPROFILE` at a temp dir: the server reads the user's config file.
 
 ## Audit-event attribution (cross-repo contract)
 

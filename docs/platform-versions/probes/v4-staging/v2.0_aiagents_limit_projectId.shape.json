@@ -1,0 +1,95 @@
+{
+  "probedAt": "2026-10-12T19:07:57.681Z",
+  "profile": "v4-staging",
+  "host": "api-staging-v4.cognigy.ai",
+  "declaredVersion": "v4",
+  "method": "GET",
+  "path": "/v2.0/aiagents",
+  "query": {
+    "projectId": "<objectId>",
+    "limit": "25"
+  },
+  "status": 200,
+  "ms": 550,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "transfer-encoding": "<present>",
+    "connection": "<present>",
+    "access-control-allow-credentials": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-embedder-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "expect-ct": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "set-cookie": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "api--9725f08b-78db-49e4-8e99-06dcd99dd7b1",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-robots-tag": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "1.1 8737c23b0b0fc96ccfb222abb7ac4aa6.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "items": {
+      "_array": 1,
+      "_item": {
+        "_id": "<objectId>",
+        "name": "<string:4>",
+        "description": "<string:651>",
+        "referenceId": "<uuid>",
+        "image": "<string:16>",
+        "imageOptimizedFormat": "boolean",
+        "safetySettings": {
+          "avoidHarmfulContent": "boolean",
+          "avoidUngroundedContent": "boolean",
+          "avoidCopyrightInfringements": "boolean",
+          "preventJailbreakAndManipulation": "boolean"
+        },
+        "instructions": "<string:989>",
+        "contactProfilesOption": "<string:15>",
+        "contactProfilesSelected": {
+          "_array": 0,
+          "_item": null
+        },
+        "knowledgeReferenceId": "<uuid>",
+        "speakingStyle": {
+          "formality": "<string:8>",
+          "completeness": "<string:8>"
+        },
+        "voiceConfigs": {
+          "ttsVoice": "<string:0>",
+          "ttsLanguage": "<string:0>",
+          "ttsVendor": "<string:4>",
+          "ttsModel": "<string:0>",
+          "ttsLabel": "<string:0>",
+          "ttsDisableCache": "boolean"
+        },
+        "enableVoiceConfigs": "boolean",
+        "enableAutoLanguageDetection": "boolean",
+        "organisationReference": "<objectId>",
+        "projectReference": "<objectId>",
+        "createdAt": "number",
+        "createdBy": "<objectId>",
+        "lastChanged": "number",
+        "lastChangedBy": "<objectId>"
+      }
+    },
+    "total": "number",
+    "previousCursor": "null",
+    "nextCursor": "null"
+  }
+}

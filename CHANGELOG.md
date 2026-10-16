@@ -1,3 +1,15 @@
+## 1.22.0-pb.2 (2026-10-16)
+
+### Features
+
+* **environments:** named environment profiles and per-call `environment` routing — one MCP server serves every configured Cognigy environment, each tool takes an optional `environment` argument (required once two or more are configured), results carry an `_environment` marker, `list_environments` lists them, and `talk_to_agent` endpoint URLs are host-guarded per environment. By Emily Anderson ([emilyanderson-nice/cognigy-plugin#1](https://github.com/emilyanderson-nice/cognigy-plugin/pull/1), [emilyanderson-nice/cognigy-plugin#2](https://github.com/emilyanderson-nice/cognigy-plugin/pull/2))
+
+### Bug Fixes
+
+* **api:** redact the API key from client error logs and rejected errors, so an upstream error body that echoes the key no longer reaches the "API Response Error" or "Tool call failed" logs ([6e0f59f](https://github.com/pb-crackers/cognigy-plugin/commit/6e0f59f))
+* **talk_to_agent:** refuse redirects that leave the endpoint host, so one environment's endpoint cannot forward the message body to another host ([98abedd](https://github.com/pb-crackers/cognigy-plugin/commit/98abedd))
+* **profiles:** derive legacy fields and named profiles from one read of the credential file, so a replace during loading cannot yield a mixed snapshot ([cd72e2f](https://github.com/pb-crackers/cognigy-plugin/commit/cd72e2f))
+
 ## [1.22.0](https://github.com/Cognigy/cognigy-plugin/compare/v1.21.0...v1.22.0) (2026-10-09)
 
 ### Features

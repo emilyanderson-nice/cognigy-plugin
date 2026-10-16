@@ -7,6 +7,7 @@ import axios, {
 } from "axios";
 import FormData from "form-data";
 import { logger } from "../utils/logger.js";
+import { redactKey } from "../utils/redact.js";
 import {
   applyProxyToRedirect,
   getProxyAxiosOptions,
@@ -27,9 +28,17 @@ export interface CognigyApiClientConfig {
    * off for anyone who does not want the plugin named in their audit log.
    */
   auditAttribution?: boolean;
+  /** Retries after a retryable failure (default 3). */
+  maxRetries?: number;
+  /** Per-request timeout in milliseconds (default 30000). */
+  timeoutMs?: number;
+  /** Suppress the client's own logging (default false). */
+  quiet?: boolean;
 }
 
 const MAX_RETRIES = 3;
+const noop = (): void => undefined;
+const QUIET_LOGGER = { debug: noop, info: noop, warn: noop, error: noop };
 const RETRY_BASE_MS = 500;
 
 const RETRYABLE_NETWORK_CODES = new Set([
@@ -151,13 +160,15 @@ export class CognigyApiClient {
   constructor(config: CognigyApiClientConfig) {
     this.apiKey = config.apiKey;
     this.auditAttribution = config.auditAttribution !== false;
+    const maxRetries = config.maxRetries ?? MAX_RETRIES;
+    const log = config.quiet ? QUIET_LOGGER : logger;
     this.client = axios.create({
       baseURL: config.baseUrl,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      timeout: 30000,
+      timeout: config.timeoutMs ?? 30000,
       // Axios' own proxy handling never opens a CONNECT tunnel; the request
       // interceptor below attaches real tunnelling agents instead.
       proxy: false,
@@ -189,20 +200,20 @@ export class CognigyApiClient {
             reqConfig.headers[ACTOR_CONTEXT_HEADER] = actorContext;
           }
         }
-        logger.debug(
+        log.debug(
           `API Request: ${reqConfig.method?.toUpperCase()} ${reqConfig.url}`,
         );
         return reqConfig;
       },
       (error) => {
-        logger.error("API Request Error", { error: error.message });
+        log.error("API Request Error", { error: error.message });
         return Promise.reject(error);
       },
     );
 
     this.client.interceptors.response.use(
       (response) => {
-        logger.debug(`API Response: ${response.status} ${response.config.url}`);
+        log.debug(`API Response: ${response.status} ${response.config.url}`);
         return response;
       },
       async (error: AxiosError) => {
@@ -213,10 +224,10 @@ export class CognigyApiClient {
 
         if (config && isRetryable(error)) {
           config._retryCount = (config._retryCount ?? 0) + 1;
-          if (config._retryCount <= MAX_RETRIES) {
+          if (config._retryCount <= maxRetries) {
             const delay = RETRY_BASE_MS * Math.pow(2, config._retryCount - 1);
-            logger.warn(
-              `Retrying request (${config._retryCount}/${MAX_RETRIES}) after ${delay}ms`,
+            log.warn(
+              `Retrying request (${config._retryCount}/${maxRetries}) after ${delay}ms`,
               {
                 status,
                 url: config.url,
@@ -230,10 +241,10 @@ export class CognigyApiClient {
         const message = (error.response?.data as any)?.detail || error.message;
         const traceId = (error.response?.data as any)?.traceId;
 
-        logger.error("API Response Error", {
+        log.error("API Response Error", {
           status: status || "N/A",
-          message,
-          traceId,
+          message: this.redact(message),
+          traceId: this.redact(traceId),
           url: config?.url,
         });
 
@@ -242,15 +253,26 @@ export class CognigyApiClient {
     );
   }
 
+  /**
+   * Strips this client's own key from upstream text. An error body can echo
+   * the key, and every caller that logs the rejected error (ToolHandlers'
+   * "Tool call failed" and its warnings) would otherwise log it verbatim.
+   */
+  private redact<T>(value: T): T {
+    return (
+      typeof value === "string" ? redactKey(value, this.apiKey) : value
+    ) as T;
+  }
+
   private formatError(error: AxiosError): Error {
     const data = error.response?.data as any;
     if (data) {
       const message =
         data.detail || data.title || describeUnexpectedBody(data, error);
-      const enhancedError = new Error(message);
+      const enhancedError = new Error(this.redact(message));
       (enhancedError as any).status = data.status || error.response?.status;
-      (enhancedError as any).code = data.code;
-      (enhancedError as any).traceId = data.traceId;
+      (enhancedError as any).code = this.redact(data.code);
+      (enhancedError as any).traceId = this.redact(data.traceId);
       (enhancedError as any).details = data.details;
       return enhancedError;
     }
