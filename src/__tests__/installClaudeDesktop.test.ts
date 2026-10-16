@@ -66,7 +66,10 @@ describe("installClaudeDesktop", () => {
       join(FAKE_HOME, "desktop-launch.mjs"),
     ]);
     expect(cfg.mcpServers.Cognigy.env.COGNIGY_API_KEY).toBe("secret-key");
-    expect(statSync(configPath).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX mode bits; production protects the file with icacls there.
+    if (process.platform !== "win32") {
+      expect(statSync(configPath).mode & 0o777).toBe(0o600);
+    }
     expect(result.backupPath).toBeUndefined();
   });
 
