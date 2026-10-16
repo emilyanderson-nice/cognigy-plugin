@@ -132,7 +132,22 @@ export function readUserConfigFile(
   path: string = USER_CONFIG_FILE,
   options: ReadOptions = {},
 ): UserConfigFile {
-  const raw = options.strict ? readStrict(path) : readRaw(path);
+  return legacyFromRaw(readConfigRaw(path, options));
+}
+
+/**
+ * Reads and parses the file once. Callers that need several sections derive
+ * them all from this one result so they never mix two versions of the file.
+ */
+export function readConfigRaw(
+  path: string = USER_CONFIG_FILE,
+  options: ReadOptions = {},
+): RawRead {
+  return options.strict ? readStrict(path) : readRaw(path);
+}
+
+/** The legacy flat string fields of a parsed file; anything unusable is empty. */
+export function legacyFromRaw(raw: RawRead): UserConfigFile {
   const out: UserConfigFile = {};
   if (raw.state !== "ok") return out;
   for (const [k, v] of Object.entries(raw.data)) {

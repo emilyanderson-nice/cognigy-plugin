@@ -3,7 +3,11 @@ import { inspect } from "util";
  * Named environment profiles. Sources, in precedence order are decided in
  * loadProfiles(); nothing here touches the network.
  */
-import { readUserConfigFile } from "../userConfigFile.js";
+import {
+  legacyFromRaw,
+  readConfigRaw,
+  type RawRead,
+} from "../userConfigFile.js";
 import {
   deriveEndpointBaseUrl,
   deriveStaticFilesBaseUrl,
@@ -14,7 +18,7 @@ import { usableEnv } from "../placeholders.js";
 import { ProfileConfigError } from "./errors.js";
 import { resolveDefinitions, type Definition } from "./precedence.js";
 import {
-  readUserProfilesFile,
+  profilesFromRaw,
   type ProfileProblem,
   type ProfilesFile,
 } from "./profilesFile.js";
@@ -319,14 +323,19 @@ export interface SystemDeps {
 /** Loads profiles from process.env and the user's config file on disk. */
 export function loadProfilesFromSystem(deps: SystemDeps = {}): ProfileSet {
   const options = { strict: deps.strict === true };
+  // One read per call: both sections come from the same document, so a file
+  // replaced mid-load can never yield a snapshot that never existed on disk.
+  // Injected readers are still honoured, and the file is untouched if both are.
+  let raw: RawRead | undefined;
+  const shared = () => (raw ??= readConfigRaw(undefined, options));
   return loadProfiles({
     env: deps.env ?? process.env,
-    legacyFile: (
-      deps.readLegacyFile ?? (() => readUserConfigFile(undefined, options))
-    )(),
-    fileProfiles: (
-      deps.readProfilesFile ?? (() => readUserProfilesFile(undefined, options))
-    )(),
+    legacyFile: deps.readLegacyFile
+      ? deps.readLegacyFile()
+      : legacyFromRaw(shared()),
+    fileProfiles: deps.readProfilesFile
+      ? deps.readProfilesFile()
+      : profilesFromRaw(shared()),
   });
 }
 
