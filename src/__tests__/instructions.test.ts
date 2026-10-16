@@ -146,6 +146,49 @@ describe("SERVER_INSTRUCTIONS environments guidance (G6)", () => {
   });
 });
 
+describe("SERVER_INSTRUCTIONS session pin guidance", () => {
+  it("says a pinned session needs no environment argument", () => {
+    expectSentence(
+      "pinned_no_arg",
+      "when the session is pinned, do not pass `environment` (or pass the pinned name)",
+      /pinned/i,
+      /`environment`/,
+      /(do not|don't|omit|no need)/i,
+    );
+  });
+
+  it("says to call use_environment once at the start when the user names a tenant or profile", () => {
+    expectSentence(
+      "use_once",
+      "call use_environment once at the start when the user names a tenant/profile",
+      /use_environment/,
+      /once/i,
+      /(tenant|profile)/i,
+    );
+  });
+
+  it("says to switch the pin only when the user asks, and to say so", () => {
+    expectSentence(
+      "switch_on_request",
+      "switch only when the user asks and say so",
+      /switch/i,
+      /user asks/i,
+      /say so|tell the user/i,
+    );
+  });
+
+  it("says destructive operations are still confirmed by name even when pinned", () => {
+    expectSentence(
+      "confirm_when_pinned",
+      "confirm the target environment by name before destructive operations even when pinned",
+      /confirm/i,
+      /destructive/i,
+      /pinned/i,
+      /by name/i,
+    );
+  });
+});
+
 describe("SERVER_INSTRUCTIONS existing content", () => {
   it.each([
     "NiCE Cognigy Plugin — builds and iteratively improves LLM-powered AI Agents.",

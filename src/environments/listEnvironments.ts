@@ -1,17 +1,19 @@
 /**
  * The `list_environments` tool: read-only, secret-free view of the configured
  * environments. With `check: true` it also reports each environment's detected
- * platform release (in parallel, each bounded by a timeout).
+ * platform release (in parallel, each bounded by a timeout). With a session
+ * pin it also marks the pinned environment and where the pin came from.
  */
 import type { ToolDefinition } from "../server/dispatch.js";
 import { describeProfile, type Profile } from "../profiles/profiles.js";
 import type { ReleaseInfo } from "../profiles/release.js";
 import type { EnvironmentRegistry } from "./registry.js";
+import type { SessionPin } from "./sessionPin.js";
 
 export const LIST_ENVIRONMENTS_TOOL: ToolDefinition = {
   name: "list_environments",
   description:
-    "List the configured Cognigy environments (name, hosts, default, problems). " +
+    "List the configured Cognigy environments (name, hosts, default, pinned, problems). " +
     "Pass check: true to also detect each environment's platform release. " +
     "Read-only; never returns API keys.",
   inputSchema: {
@@ -31,6 +33,7 @@ export interface ListEnvironmentsDeps {
   registry: EnvironmentRegistry;
   detectRelease(profile: Profile): Promise<ReleaseInfo>;
   timeoutMs?: number;
+  pin?: SessionPin;
 }
 
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -76,6 +79,8 @@ export function createListEnvironments(
     const profiles = [...snap.profiles].sort((a, b) =>
       a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
     );
+    const pin = deps.pin?.get();
+    const rejected = deps.pin?.rejected();
     const releases =
       args?.check === true
         ? await Promise.all(profiles.map((p) => detectWithTimeout(deps, p)))
@@ -85,12 +90,16 @@ export function createListEnvironments(
         ...describeProfile(p),
         editable: p.source === "file-profile",
         isDefault: p.name === snap.defaultName,
+        ...(deps.pin ? { pinned: p.name === pin?.name } : {}),
         ...(releases[i] ?? {}),
       })),
       problems: snap.problems,
       default: snap.defaultName ?? null,
       configured: snap.configuredNames.length,
-      environmentArgumentRequired: snap.configuredNames.length >= 2,
+      environmentArgumentRequired:
+        snap.configuredNames.length >= 2 && pin === undefined,
+      ...(deps.pin ? { pin: pin ?? null } : {}),
+      ...(rejected ? { pinRejected: rejected } : {}),
       ...(snap.loadError !== undefined ? { loadError: snap.loadError } : {}),
     };
   };

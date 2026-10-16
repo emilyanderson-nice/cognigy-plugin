@@ -1,3 +1,9 @@
+## 1.22.0-pb.3 (2026-10-16)
+
+### Features
+
+* **environments:** pin a session to one environment — `COGNIGY_ENVIRONMENT=<name>` at launch or the new `use_environment` tool (`{ name }` / `{ clear: true }`); calls without `environment` go to the pin, an explicit argument still wins, a pin that stops resolving fails closed, and `list_environments` marks the pinned environment and its source
+
 ## 1.22.0-pb.2 (2026-10-16)
 
 ### Features

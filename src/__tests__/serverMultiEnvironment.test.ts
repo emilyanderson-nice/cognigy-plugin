@@ -64,10 +64,10 @@ describe("scenario 1: two environments via env vars", () => {
     );
     eq(
       names.length,
-      tools.length + 1,
+      tools.length + 2,
       "mcp::tool_count",
-      "Rule: real tools plus list_environments",
-      "Serve every real tool and exactly one extra.",
+      "Rule: real tools plus list_environments and use_environment",
+      "Serve every real tool and exactly two extras.",
     );
     for (const def of tools) {
       const t = listed.find((x) => x.name === def.name);
@@ -152,6 +152,40 @@ describe("scenario 1: two environments via env vars", () => {
   });
 });
 
+describe("scenario 1b: session pinned at launch with COGNIGY_ENVIRONMENT", () => {
+  let s: McpServer;
+  beforeAll(async () => {
+    s = await boot({
+      env: {
+        ...profileEnv("A", "api-a", KEY_A),
+        ...profileEnv("B", "api-b", KEY_B),
+        COGNIGY_ENVIRONMENT: "B",
+      },
+    });
+  }, TIMEOUT);
+
+  it("list_environments reports the launch pin", async () => {
+    const { body } = await s.callToolJson("list_environments");
+    expect(body.pin).toEqual({ name: "b", source: "COGNIGY_ENVIRONMENT" });
+    expect(body.environmentArgumentRequired).toBe(false);
+  });
+
+  it("use_environment switches the pin; clear restores the required argument", async () => {
+    const pinned = await s.callToolJson("use_environment", { name: "a" });
+    expect(pinned.body.pinned).toEqual({
+      name: "a",
+      host: "api-a.invalid",
+      source: "use_environment",
+    });
+    const cleared = await s.callToolJson("use_environment", { clear: true });
+    expect(cleared.body).toEqual({ pinned: null, cleared: "a" });
+    const { result, body } = await s.callToolJson("list_resources", {});
+    expect([result.isError, body.code]).toEqual([true, "ambiguous"]);
+    const all = JSON.stringify([pinned, cleared]) + s.stderr();
+    expect(all.includes(KEY_A) || all.includes(KEY_B)).toBe(false);
+  });
+});
+
 describe("scenario 2: legacy single environment", () => {
   let s: McpServer;
   beforeAll(async () => {
@@ -207,7 +241,7 @@ describe("scenario 3: zero environments", () => {
     const listed = await s.listTools();
     eq(
       listed.length,
-      tools.length + 1,
+      tools.length + 2,
       "mcp::zero_tools",
       "Rule: tools/list works with no credentials",
       "Serve tools without any configured environment.",

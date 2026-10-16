@@ -104,7 +104,7 @@ Cognigy uses two ID formats — see [ARCHITECTURE.md](ARCHITECTURE.md#id-formats
 
 **"Rate limit exceeded"** — wait for the window to reset, or increase `RATE_LIMIT_MAX_REQUESTS` in your env config. The limit is counted per environment.
 
-**"ambiguous" / "unknown" environment errors** — with two or more environments configured, every tool call must name one with the `environment` argument. Run `list_environments` to see the names. See [multiple-environments.md](install/multiple-environments.md).
+**"ambiguous" / "unknown" environment errors** — with two or more environments configured, every tool call must name one with the `environment` argument. Run `list_environments` to see the names, or pin the session with `use_environment` (or `COGNIGY_ENVIRONMENT`). A `pin_invalid` error means `COGNIGY_ENVIRONMENT` names no usable environment. See [multiple-environments.md](install/multiple-environments.md).
 
 **Agent returns no response / empty output** — check that an LLM resource exists in the project (`list_resources` with `resourceType: llm_model`). The agent cannot generate responses without one.
 
