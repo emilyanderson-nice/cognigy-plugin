@@ -112,6 +112,12 @@ d("statusline-segment.sh", () => {
         ).toBe("cognigy:prod");
       });
 
+      it("a plugin-settings pin prints its name", () => {
+        expect(
+          run(home({ pinned: "edj", pinSource: "plugin-settings" }), {}, noJq),
+        ).toBe("cognigy:edj");
+      });
+
       it("unpinned with two or more configured -> cognigy:unpinned", () => {
         expect(run(home({}), {}, noJq)).toBe("cognigy:unpinned");
       });

@@ -17,7 +17,6 @@ import {
   LIST_ENVIRONMENTS_TOOL,
 } from "../environments/listEnvironments.js";
 import {
-  PIN_ENV_VAR,
   USE_ENVIRONMENT_TOOL,
   applyLaunchPin,
   createSessionPin,
@@ -81,7 +80,7 @@ export function buildServerParts(deps: BootstrapDeps = {}): ServerParts {
   });
   const rateLimiter = new RateLimiter(settings.rateLimit);
   const pin = createSessionPin();
-  const pinWarning = applyLaunchPin(registry, pin, env[PIN_ENV_VAR]);
+  const pinWarning = applyLaunchPin(registry, pin, env);
   const launchPin = pin.get();
   if (launchPin) {
     logger.info("Session pinned to environment", {

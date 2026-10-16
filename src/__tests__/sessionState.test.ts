@@ -333,6 +333,16 @@ describe("bootstrap wiring", () => {
     });
   });
 
+  it("a plugin-settings launch pin is recorded with that source", () => {
+    const home = tempHome();
+    boot(home, { COGNIGY_DEFAULT_PROFILE: "b" });
+    expect(readState(home)).toMatchObject({
+      pinned: "b",
+      pinSource: "plugin-settings",
+      host: "api-b.cognigy.ai",
+    });
+  });
+
   it("use_environment set and clear rewrite the file", async () => {
     const home = tempHome();
     const r = boot(home);

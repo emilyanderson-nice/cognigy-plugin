@@ -16,14 +16,22 @@
       "title": "Cognigy API base URL",
       "description": "Your Cognigy instance API URL. Use https://api-trial.cognigy.ai if you are on the trial.",
       "default": "https://api-trial.cognigy.ai",
-      "required": true
+      "required": false
     },
     "cognigy_api_key": {
       "type": "string",
       "title": "Cognigy API key",
       "description": "Find it in Cognigy.AI → User Menu → My Profile → API Keys.",
       "sensitive": true,
-      "required": true
+      "required": false
+    },
+    "cognigy_profile": {
+      "type": "string",
+      "title": "Default Cognigy profile",
+      "description": "Profile name to lock each session to (e.g. edj). Leave empty for none. `csp -p` / COGNIGY_ENVIRONMENT overrides it.",
+      "default": "",
+      "required": false,
+      "sensitive": false
     }
   },
   "mcpServers": {
@@ -32,7 +40,8 @@
       "args": ["-y", "-p", "github:pb-crackers/cognigy-plugin", "cognigy-mcp"],
       "env": {
         "COGNIGY_API_BASE_URL": "${user_config.cognigy_api_base_url}",
-        "COGNIGY_API_KEY": "${user_config.cognigy_api_key}"
+        "COGNIGY_API_KEY": "${user_config.cognigy_api_key}",
+        "COGNIGY_DEFAULT_PROFILE": "${user_config.cognigy_profile}"
       }
     },
     "docs": {

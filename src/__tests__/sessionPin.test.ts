@@ -348,6 +348,87 @@ describe("launch pin (COGNIGY_ENVIRONMENT)", () => {
   });
 });
 
+describe("launch pin from plugin settings (COGNIGY_DEFAULT_PROFILE)", () => {
+  it("pins the session at boot with source plugin-settings", async () => {
+    const r = rig(TWO(), { COGNIGY_DEFAULT_PROFILE: " B " });
+    expect(r.parts.startupNotices()).toEqual([]);
+    const res = await r.call("list_resources");
+    expect((parse(res)._environment as { name: string }).name).toBe("b");
+    const list = parse(await r.call("list_environments"));
+    expect(list.pin).toEqual({ name: "b", source: "plugin-settings" });
+  });
+
+  it("COGNIGY_ENVIRONMENT overrides the setting", async () => {
+    const r = rig(TWO(), {
+      COGNIGY_ENVIRONMENT: "a",
+      COGNIGY_DEFAULT_PROFILE: "b",
+    });
+    const list = parse(await r.call("list_environments"));
+    expect(list.pin).toEqual({ name: "a", source: "COGNIGY_ENVIRONMENT" });
+  });
+
+  it("an unusable COGNIGY_ENVIRONMENT fails closed rather than falling back to the setting", async () => {
+    const r = rig(TWO(), {
+      COGNIGY_ENVIRONMENT: "nope",
+      COGNIGY_DEFAULT_PROFILE: "b",
+    });
+    const res = await r.call("list_resources");
+    expect(parse(res).code).toBe("pin_invalid");
+    expect(Object.keys(r.handlerCalls)).toEqual([]);
+  });
+
+  it.each([[""], ["   "], ["${user_config.cognigy_profile}"]])(
+    "an empty or unexpanded value (%j) is treated as unset",
+    async (v) => {
+      const r = rig(TWO(), { COGNIGY_DEFAULT_PROFILE: v });
+      expect(r.parts.startupNotices()).toEqual([]);
+      expect(parse(await r.call("list_resources")).code).toBe("ambiguous");
+      expect(parse(await r.call("list_environments")).pin).toBeNull();
+    },
+  );
+
+  it("an empty COGNIGY_ENVIRONMENT falls through to the setting", async () => {
+    const r = rig(TWO(), {
+      COGNIGY_ENVIRONMENT: " ",
+      COGNIGY_DEFAULT_PROFILE: "a",
+    });
+    expect(parse(await r.call("list_environments")).pin).toEqual({
+      name: "a",
+      source: "plugin-settings",
+    });
+  });
+
+  it("an unknown value warns, leaves no pin, and pin-reliant calls fail naming the setting", async () => {
+    const r = rig(TWO(), { COGNIGY_DEFAULT_PROFILE: "nope" });
+    const notices = r.parts.startupNotices();
+    expect(notices.length).toBe(1);
+    expect(notices[0]).toMatch(/plugin setting/i);
+    expect(notices[0]).toMatch(/"nope"/);
+    const res = await r.call("list_resources");
+    const body = parse(res);
+    expect([res.isError, body.code, body.environment]).toEqual([
+      true,
+      "pin_invalid",
+      "nope",
+    ]);
+    expect(String(body.error)).toMatch(/plugin setting/i);
+    expect(String(body.error)).not.toMatch(/COGNIGY_ENVIRONMENT=/);
+    const list = parse(await r.call("list_environments"));
+    expect(list.pinRejected).toMatchObject({
+      value: "nope",
+      source: "plugin-settings",
+    });
+  });
+
+  it("a removed settings-pinned environment fails closed, naming the source", async () => {
+    const r = rig(TWO(), { COGNIGY_DEFAULT_PROFILE: "b" });
+    r.set(setOf(usable("A", KEY_A)));
+    const body = parse(await r.call("list_resources"));
+    expect(body.pinned).toEqual({ name: "b", source: "plugin-settings" });
+    expect(String(body.error)).toMatch(/plugin-settings/);
+  });
+});
+
 describe("createListEnvironments with a pin", () => {
   it("marks every environment pinned true/false and reports pin: null when unpinned", async () => {
     const registry = createEnvironmentRegistry({
