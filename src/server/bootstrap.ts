@@ -39,11 +39,21 @@ import {
   type ToolDefinition,
 } from "./dispatch.js";
 import { createRuntimeFactory } from "./runtimeFactory.js";
+import {
+  DISABLED_SESSION_STATE,
+  createSessionState,
+  installStatuslineScript,
+  sessionStateDisabled,
+  type SessionState,
+  type SessionStateOptions,
+} from "../environments/sessionState.js";
 
 export interface BootstrapDeps {
   env?: NodeJS.ProcessEnv;
   loadProfiles?: () => ProfileSet;
   createRuntime?: (profile: Profile) => EnvironmentRuntime;
+  /** Status line state file; false disables it (default: the real one). */
+  sessionState?: SessionStateOptions | false;
 }
 
 export interface ServerParts {
@@ -52,6 +62,8 @@ export interface ServerParts {
   dispatcher: Dispatcher;
   rateLimiter: RateLimiter;
   pin: SessionPin;
+  /** The status line state file; remove() on shutdown. */
+  sessionState: SessionState;
   /** Boot-time warnings, evaluated from a fresh snapshot on each call. */
   startupNotices(): string[];
 }
@@ -77,6 +89,8 @@ export function buildServerParts(deps: BootstrapDeps = {}): ServerParts {
       source: launchPin.source,
     });
   }
+
+  const sessionState = startSessionState(registry, pin, env, deps.sessionState);
 
   // One detector per runtime object: a rebuilt runtime gets a fresh one.
   const detectors = new WeakMap<
@@ -107,6 +121,8 @@ export function buildServerParts(deps: BootstrapDeps = {}): ServerParts {
       tool: USE_ENVIRONMENT_TOOL,
       use: createUseEnvironment({ registry, pin }),
     },
+    onPinChanged: () => sessionState.write(),
+    onDispatched: (environment) => sessionState.dispatched(environment),
   });
   const startupNotices = (): string[] => {
     const pinNotices =
@@ -125,5 +141,32 @@ export function buildServerParts(deps: BootstrapDeps = {}): ServerParts {
         ]
       : pinNotices;
   };
-  return { settings, registry, dispatcher, rateLimiter, pin, startupNotices };
+  return {
+    settings,
+    registry,
+    dispatcher,
+    rateLimiter,
+    pin,
+    sessionState,
+    startupNotices,
+  };
+}
+
+/** Writes the boot state file and installs the status line script. */
+function startSessionState(
+  registry: EnvironmentRegistry,
+  pin: SessionPin,
+  env: NodeJS.ProcessEnv,
+  options: SessionStateOptions | false | undefined,
+): SessionState {
+  const log = (message: string, meta?: Record<string, unknown>) =>
+    logger.debug(message, meta);
+  if (options === false) return DISABLED_SESSION_STATE;
+  const opts: SessionStateOptions = { env, log, ...options };
+  const state = createSessionState(registry, pin, opts);
+  state.write();
+  if (!sessionStateDisabled(opts.env ?? env)) {
+    installStatuslineScript(opts.homeDir, opts.scriptSources, opts.log);
+  }
+  return state;
 }

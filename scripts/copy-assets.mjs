@@ -6,6 +6,9 @@
  * is inlined into the rich flow-viz HTML so it renders fully offline — no CDN.
  * mermaid is a devDependency; only this copied asset ships, not node_modules.
  *
+ * plugin/scripts (the status line segment) is copied too, so the server can
+ * install it from the published package.
+ *
  * plugin/skills + plugin/agents are copied to dist/plugin-assets/ because the
  * installer has to write them onto disk for clients with no plugin marketplace
  * to fetch them from (Antigravity). Claude Code gets these same files from the
@@ -33,7 +36,7 @@ mkdirSync(destDir, { recursive: true });
 copyFileSync(src, dest);
 console.log(`[copy-assets] mermaid.min.js -> ${dest}`);
 
-for (const kind of ["skills", "agents"]) {
+for (const kind of ["skills", "agents", "scripts"]) {
   const from = join(root, "plugin", kind);
   if (!existsSync(from)) {
     console.error(`[copy-assets] plugin/${kind} not found at ${from}.`);

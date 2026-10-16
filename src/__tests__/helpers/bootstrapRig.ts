@@ -3,6 +3,7 @@ import { jest } from "@jest/globals";
 import { buildServerParts } from "../../server/bootstrap.js";
 import type { Profile, ProfileSet } from "../../profiles/profiles.js";
 import type { EnvironmentRuntime } from "../../environments/registry.js";
+import type { SessionStateOptions } from "../../environments/sessionState.js";
 
 export type Handler = (
   n: string,
@@ -13,6 +14,8 @@ export function rig(
   initial: ProfileSet,
   env: NodeJS.ProcessEnv = {},
   impl?: Record<string, Handler>,
+  /** Off by default so a test never writes into the real home directory. */
+  sessionState: SessionStateOptions | false = false,
 ) {
   let current = initial;
   let loader: () => ProfileSet = () => current;
@@ -33,6 +36,7 @@ export function rig(
     env,
     loadProfiles: () => loader(),
     createRuntime,
+    sessionState,
   });
   return {
     parts,

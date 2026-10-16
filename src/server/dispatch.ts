@@ -54,6 +54,12 @@ export interface DispatcherDeps {
     tool: ToolDefinition;
     use(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   };
+  /**
+   * Observers for the session state file. Called after a pin change and after
+   * a successfully dispatched call; a throwing observer is ignored.
+   */
+  onPinChanged?(): void;
+  onDispatched?(environment: { name: string; host: string }): void;
 }
 
 export interface Dispatcher {
@@ -86,6 +92,15 @@ const environmentErrorBody = (
 
 export function createDispatcher(deps: DispatcherDeps): Dispatcher {
   const { registry, logger } = deps;
+
+  const notify = (fn: (() => void) | undefined) => {
+    if (!fn) return;
+    try {
+      fn();
+    } catch {
+      // Observers are best-effort and must never affect a tool call.
+    }
+  };
 
   function withEnvironmentProperty(
     tool: ToolDefinition,
@@ -143,6 +158,7 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
         logger.info("Session environment pin changed", {
           environment: session.pin.get()?.name,
         });
+        notify(deps.onPinChanged);
         return text(result);
       } catch (err) {
         if (err instanceof EnvironmentError) {
@@ -251,6 +267,7 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
 
       try {
         const result = await runtime.handlers.handleToolCall(name, args);
+        notify(deps.onDispatched && (() => deps.onDispatched?.(marker)));
         return text({
           ...(isPlainObject(result) ? result : { result }),
           _environment: marker,
