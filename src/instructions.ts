@@ -19,7 +19,7 @@ TOOL TYPE SELECTION (create_tool):
 ENVIRONMENTS:
 - This plugin can be connected to several Cognigy environments (for example classic and v4, or staging and production). Every tool accepts an optional \`environment\` argument naming the environment the call runs against; call list_environments to see the configured ones.
 - When more than one environment is configured, \`environment\` is required on every call except list_environments and use_environment, unless the session is pinned. Keep it constant within a task.
-- A session can be pinned to one environment (use_environment, or COGNIGY_ENVIRONMENT at launch; list_environments shows the pin). When the session is pinned, do not pass \`environment\` (or pass the pinned name).
+- A session can be pinned to one environment (use_environment, or at launch by COGNIGY_ENVIRONMENT or the plugin setting; list_environments shows the pin). When the session is pinned, do not pass \`environment\` (or pass the pinned name).
 - When the user names a tenant or profile, call use_environment once at the start of the task.
 - Switch the pin only when the user asks, and say so.
 - When more than one environment exists, confirm the target environment with the user before any destructive operation (delete, restore, overwrite).

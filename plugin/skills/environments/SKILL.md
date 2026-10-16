@@ -18,7 +18,7 @@ The default marker (`isDefault`) in the `list_environments` output is not consen
 ## Pin the session
 
 - If the user names a tenant or profile, call `use_environment { name }` once at the start. Later calls then run there.
-- A session can also be pinned at launch with `COGNIGY_ENVIRONMENT=<name>`. `list_environments` shows the pin (`pinned: true`) and where it came from.
+- A session can also be pinned at launch with `COGNIGY_ENVIRONMENT=<name>`, or by the Claude Code plugin setting "Default Cognigy profile" (source `plugin-settings`; `COGNIGY_ENVIRONMENT` overrides it). `list_environments` shows the pin (`pinned: true`) and where it came from.
 - When the session is pinned, do not pass `environment` (or pass the pinned name). An explicit `environment` overrides the pin for that one call.
 - Switch the pin only when the user asks, and say so. `use_environment { clear: true }` removes it.
 - If the pinned environment is removed or broken, calls fail instead of going elsewhere. Tell the user; do not pick another one yourself.

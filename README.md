@@ -99,6 +99,8 @@ npx -y -p @cognigy/plugin-engine@latest cognigy-setup uninstall   # remove from 
 npx -y -p @cognigy/plugin-engine@latest cognigy-setup profile list # manage several Cognigy environments, see docs/install/multiple-environments.md
 ```
 
+With several environments, a session can be pinned to one (`use_environment`, `COGNIGY_ENVIRONMENT`, or the **Default Cognigy profile** plugin setting in Claude Code), and the Claude Code status line can show which one the session uses: see [Show the environment in the Claude Code status line](docs/install/multiple-environments.md#show-the-environment-in-the-claude-code-status-line).
+
 Beyond the MCP tools, the plugin ships **skills** and **agents** that surface the workflows automatically:
 
 - **Skills** (`/skills`) — one per workflow (agent creation, knowledge/RAG, voice gateway, voice go-live checklist, webchat, flow nodes, packages, settings, LLM providers, tools, red-teaming, troubleshooting). Claude loads the matching skill automatically when your request fits. Red-teaming runs in your main session — not as a subagent — so it can agree the scope contract, get approval before applying fixes, and open the finished report for you.
