@@ -2,7 +2,7 @@
 
 One install can hold several Cognigy environments (for example a classic `api-trial-us` tenant and a newer `api-staging-v4` one), each with its own URL and API key, without one overriding the other.
 
-> **How it works.** Every tool takes an optional `environment` argument that selects which environment the call runs against. With one environment configured nothing changes: the argument is optional and calls go to it. With two or more it is required on every call (except `list_environments`), and the server never guesses.
+> **How it works.** Every tool takes an optional `environment` argument that selects which environment the call runs against. With one environment configured nothing changes: the argument is optional and calls go to it. With two or more it is required on every call (except `list_environments` and `use_environment`), unless the session is pinned, and the server never guesses.
 
 ## Manage environments
 
@@ -30,6 +30,19 @@ Give the key with the hidden prompt (default in a terminal), `--api-key-env VAR`
 - Editing an environment's URL or key while the server runs takes effect on the next call. Per-session memory for that environment, such as "backup already offered", starts over.
 - The server now starts even when no environment is configured: it logs a warning and answers each call with how to add one, instead of exiting at startup.
 - Some clients cache the tool list, so the environment names in a tool's schema can be out of date. The name is always checked when the call arrives.
+
+## Pin a session
+
+Each assistant session runs its own server, so a session can be pinned to one environment. Calls without `environment` then go there.
+
+- **At launch:** set `COGNIGY_ENVIRONMENT=<name>` in the server's environment. The name is matched like the `environment` argument (`V4_Staging` is `v4-staging`).
+- **From the assistant:** `use_environment { name: "v4-staging" }` pins the session and returns the name and host (never the key). `use_environment { clear: true }` removes the pin.
+- `list_environments` marks the pinned environment with `pinned: true` and shows `pin: { name, source }`, where `source` is `COGNIGY_ENVIRONMENT` or `use_environment`.
+- An explicit `environment` argument still wins for that call. Every answer still carries `_environment`.
+- Without a pin nothing changes: with two or more environments the argument is still required.
+- If `COGNIGY_ENVIRONMENT` names an unknown or broken environment, the server still starts. It logs a warning, sets no pin, and calls that rely on the pin fail with the bad value and the available environments (`code: "pin_invalid"`). Fix it with `use_environment`, `use_environment { clear: true }`, or by passing `environment`.
+- If the pinned environment is removed from the profiles or breaks later, calls fail. They are never sent to another environment.
+- The assistant still confirms the environment by name before destructive operations (delete, snapshot restore, overwrite), even when pinned.
 
 ## Where environments come from
 
