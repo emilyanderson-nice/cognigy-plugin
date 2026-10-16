@@ -75,7 +75,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "update_ai_agent",
     description:
-      "Update an AI Agent's configuration. This tool updates both the AI Agent resource and the AI Agent Job Node config.\n\nDistribute the prompt across the fields below, each fact in one field (the agent-prompts skill has the layout, how Cognigy assembles the system prompt, and the writing rules):\n\nAGENT-LEVEL FIELDS (the agent's identity):\n- name: Display name\n- description: Agent PERSONA (max 1000 chars) — who the agent is, who it serves, personality as behaviors. Prose, no headings or lists.\n- instructions: COMMUNICATION and GUARDRAILS — '### Communication' and '### Guardrails' sections with one rule per bullet.\n\nJOB-LEVEL FIELDS (jobConfig — how the agent performs its job):\n- jobName: Job title / role name (e.g., 'Customer Support Specialist')\n- jobDescription: Goal and scope in prose — name every topic the job covers (Cognigy tells the model to hedge outside it) and what goes elsewhere\n- jobInstructions: How to do the job in '###' sections (Conversation flow, Using tools, When something goes wrong, Handing over, Voice output). Number only steps that happen in order; rules that apply any time are bullets.\n- llmProviderReferenceId: LLM to use (from setup_llm or list_resources { resourceType: 'llm_model' })\n- temperature: 0-1, lower = more deterministic (default: 0.7)\n- maxTokens: 100-8000 (default: 4000)\n\nKNOWLEDGE: Always use create_tool { toolType: 'knowledge' } to attach knowledge stores as tools. Only use persona-level knowledge if the user explicitly requests it.\n\nRequires: aiAgentId (from create_ai_agent or list_resources { resourceType: 'agent' }).\nAfter updating, use talk_to_agent to test the changes.",
+      "Update an AI Agent's configuration. This tool updates both the AI Agent resource and the AI Agent Job Node config.\n\nDistribute the prompt across the fields below, each fact in one field (the agent-prompts skill has the layout and the writing rules):\n\nAGENT-LEVEL FIELDS (the agent's identity):\n- name: Display name\n- description: Agent PERSONA (max 1000 chars) — who the agent is, who it serves, personality as behaviors. Prose, no headings or lists.\n- instructions: COMMUNICATION and GUARDRAILS — '## Communication' and '## Guardrails' sections with one rule per bullet.\n\nJOB-LEVEL FIELDS (jobConfig — how the agent performs its job):\n- jobName: Job title / role name (e.g., 'Customer Support Specialist')\n- jobDescription: Goal and scope in prose — name every topic the job covers and what goes elsewhere\n- jobInstructions: How to do the job in '##' sections (Conversation flow, Using tools, When something goes wrong, Handing over, Voice output). Number only steps that happen in order; rules that apply any time are bullets.\n- llmProviderReferenceId: LLM to use (from setup_llm or list_resources { resourceType: 'llm_model' })\n- temperature: 0-1, lower = more deterministic (default: 0.7)\n- maxTokens: 100-8000 (default: 4000)\n\nKNOWLEDGE: Always use create_tool { toolType: 'knowledge' } to attach knowledge stores as tools. Only use persona-level knowledge if the user explicitly requests it.\n\nRequires: aiAgentId (from create_ai_agent or list_resources { resourceType: 'agent' }).\nAfter updating, use talk_to_agent to test the changes.",
     annotations: {
       title: "Update AI Agent",
       readOnlyHint: false,
@@ -95,12 +95,12 @@ export const tools: ToolDefinition[] = [
         description: {
           type: "string",
           description:
-            "Agent PERSONA (max 1000 chars) — who the agent is, who it serves, and its personality as behaviors, in prose (Cognigy quotes it inside a sentence, so no headings or lists). Example: 'You are the order assistant for Acme Outdoor\'s online store. You help customers track orders and start returns. You\'re friendly and efficient: acknowledge a problem in one sentence, then fix it.'",
+            "Agent PERSONA (max 1000 chars) — who the agent is, who it serves, and its personality as behaviors, in prose, no headings or lists. Example: 'You are the order assistant for Acme Outdoor\'s online store. You help customers track orders and start returns. You\'re friendly and efficient: acknowledge a problem in one sentence, then fix it.'",
         },
         instructions: {
           type: "string",
           description:
-            "COMMUNICATION and GUARDRAILS that apply regardless of the job (keep near 1000 chars): '### Communication' and '### Guardrails' sections, one rule per bullet. Don\'t restate Safety Settings rules. Example: '### Guardrails\\n- Help only with Acme orders, returns and products.\\n- Never share another customer\'s details.'",
+            "COMMUNICATION and GUARDRAILS that apply regardless of the job (keep near 1000 chars): '## Communication' and '## Guardrails' sections, one rule per bullet. Don\'t restate Safety Settings rules. Example: '## Guardrails\\n- Help only with Acme orders, returns and products.\\n- Never share another customer\'s details.'",
         },
         jobConfig: {
           type: "object",
@@ -115,12 +115,12 @@ export const tools: ToolDefinition[] = [
             jobDescription: {
               type: "string",
               description:
-                "Job SCOPE in prose — every topic the job covers and what goes elsewhere. Cognigy tells the model to hedge on anything outside it. Tool details belong in the tool descriptions. Example: 'You handle order tracking, delivery questions, returns within 30 days and product questions. Payment disputes go to the support team.'",
+                "Job SCOPE in prose — every topic the job covers and what goes elsewhere. Tool details belong in the tool descriptions. Example: 'You handle order tracking, delivery questions, returns within 30 days and product questions. Payment disputes go to the support team.'",
             },
             jobInstructions: {
               type: "string",
               description:
-                "How to do the job, in '###' sections (never # or ##, Cognigy uses those): Conversation flow, Using tools, When something goes wrong, Handing over, Voice output. Number only steps that happen in order; rules that apply any time are bullets. Example: '### Conversation flow\\n1. Find out what the customer needs.\\n2. Get the order number and look it up.\\n\\n### Using tools\\n- Say one short line before a lookup, and vary it.\\n- If a tool fails, try once more, then offer the support team.'",
+                "How to do the job, in '##' sections: Conversation flow, Using tools, When something goes wrong, Handing over, Voice output. Number only steps that happen in order; rules that apply any time are bullets. Example: '## Conversation flow\\n1. Find out what the customer needs.\\n2. Get the order number and look it up.\\n\\n## Using tools\\n- Say one short line before a lookup, and vary it.\\n- If a tool fails, try once more, then offer the support team.'",
             },
             llmProviderReferenceId: {
               type: "string",

@@ -2,7 +2,7 @@
 
 ### Features
 
-* **agent-prompts:** new skill for writing AI Agent prompts — how Cognigy assembles the system prompt (logged from a live agent), which section goes in which field, 12 writing rules (number only real sequences, `###` headings, XML only for data and examples, calm wording, each rule once, tool and handover rules, sample-phrase variants, voice output), a standard knowledge-search section, a checklist, and chat and voice examples
+* **agent-prompts:** new skill for writing AI Agent prompts — which section goes in which field, 12 writing rules (number only real sequences, `##` headings, XML only for data and examples, calm wording, each rule once, tool and handover rules, sample-phrase variants, voice output), a standard knowledge-search section, a checklist, and chat and voice examples
 * **agent-creation / create_ai_agent / update_ai_agent:** field guidance and examples follow the new layout; numbered "step-by-step" job instructions and "use ALL fields" are gone
 * **tools-setup:** tool descriptions say what, when and when not
 

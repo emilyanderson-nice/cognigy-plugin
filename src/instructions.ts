@@ -38,7 +38,7 @@ DOCUMENTATION LOOKUP:
 
 RULES:
 - KEEP IT SIMPLE: build like a lazy senior developer — the simplest build that works and that the next person can follow. Reuse what the project already has, let the agent's instructions do what they can, prefer native nodes over Code nodes, fewest nodes/tools/flows, change before add. Never at the cost of correctness, validation or error handling the flow needs. The keep-it-simple skill has the full ladder.
-- AGENT PROMPTS: Cognigy wraps the prompt fields in its own \`##\` sections, so use \`###\` headings inside instructions/jobInstructions and plain prose in description/jobDescription. Number only steps that happen in order; rules are bullets. Plain wording, no ALL CAPS. Each rule in one field; tool descriptions say what, when and when not. The agent-prompts skill has the layout and rules.
+- AGENT PROMPTS: \`##\` headings inside instructions/jobInstructions, plain prose in description/jobDescription. Number only steps that happen in order; rules are bullets. Plain wording, no ALL CAPS. Each rule in one field; tool descriptions say what, when and when not. The agent-prompts skill has the layout and rules.
 - create_ai_agent auto-provisions flow + AI Agent Job Node + REST endpoint. Do NOT create these separately.
 - Build agents with the AI Agent node by default. Use LLM Prompt (llmPromptV2) only when the user asks for it by name; those flows have no agent resource, so address tools with flowId.
 - An LLM resource MUST exist AND be successfully connected in the project before calling talk_to_agent. Do NOT test an agent without a confirmed working LLM — it fails silently or returns empty responses. If LLM setup failed or was not completed, skip testing and inform the user.

@@ -54,23 +54,23 @@ Important: before creating a new tool, inspect the existing agent flow/tools fir
 
 update_ai_agent updates two layers: the **AI Agent resource** and the **AI Agent Job Node**.
 
-Write every prompt field with the **agent-prompts** skill: it shows how Cognigy assembles them into the system prompt, which section goes in which field, and the writing rules.
+Write every prompt field with the **agent-prompts** skill: it shows which section goes in which field, and the writing rules.
 
 ### Agent-level fields (the agent's identity)
 
 | Field        | Purpose                                                                                                   | Example                                                                                                       |
 | ------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| name         | Agent display name; Cognigy tells the model "Your name or brand is exactly '<name>'"                      | "Maya"                                                                                                        |
+| name         | Agent display name                      | "Maya"                                                                                                        |
 | description  | **Persona** (max 1000 chars) — who the agent is, who it serves, personality as behaviors. Prose, no lists | "You are the order assistant for Acme Outdoor's online store. You help customers track orders and start..." |
-| instructions | **Communication and guardrails** — `### Communication` and `### Guardrails` sections with bullets          | "### Guardrails\n- Help only with Acme Outdoor orders, returns and products..."                               |
+| instructions | **Communication and guardrails** — `## Communication` and `## Guardrails` sections with bullets          | "## Guardrails\n- Help only with Acme Outdoor orders, returns and products..."                               |
 
 ### Job-level fields (jobConfig — how the agent performs its job)
 
 | Field                  | Purpose                                                                                                      | Example                                                                                       |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | jobName                | **Job title** — the role the agent is performing                                                             | "Order assistant"                                                                             |
-| jobDescription         | **Goal and scope** — prose naming every topic in scope and what goes elsewhere (Cognigy hedges outside it)    | "You handle order tracking, returns within 30 days and product questions. Payment disputes..." |
-| jobInstructions        | **How to do the job** — `###` sections: conversation flow, using tools, when something goes wrong, handing over | "### Conversation flow\n1. Find out what the customer needs.\n..."                           |
+| jobDescription         | **Goal and scope** — prose naming every topic in scope and what goes elsewhere    | "You handle order tracking, returns within 30 days and product questions. Payment disputes..." |
+| jobInstructions        | **How to do the job** — `##` sections: conversation flow, using tools, when something goes wrong, handing over | "## Conversation flow\n1. Find out what the customer needs.\n..."                           |
 | llmProviderReferenceId | Which LLM the agent uses (from setup_llm or list_resources { resourceType: "llm_model" })                    | "abc-123-def-456"                                                                             |
 | temperature            | LLM temperature (0-1). Lower = more deterministic, higher = more creative. Default: 0.7                      | 0.3                                                                                           |
 | maxTokens              | Max tokens for LLM response (100-8000). Default: 4000                                                        | 2000                                                                                          |
