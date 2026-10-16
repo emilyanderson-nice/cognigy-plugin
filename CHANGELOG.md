@@ -1,3 +1,9 @@
+## 1.22.1-pb.1 (2026-10-16)
+
+### Chores
+
+* merge upstream Cognigy/cognigy-plugin 1.22.1 into the fork
+
 ## 1.22.0-pb.4 (2026-10-16)
 
 ### Features
@@ -22,6 +28,12 @@
 * **api:** redact the API key from client error logs and rejected errors, so an upstream error body that echoes the key no longer reaches the "API Response Error" or "Tool call failed" logs ([6e0f59f](https://github.com/pb-crackers/cognigy-plugin/commit/6e0f59f))
 * **talk_to_agent:** refuse redirects that leave the endpoint host, so one environment's endpoint cannot forward the message body to another host ([98abedd](https://github.com/pb-crackers/cognigy-plugin/commit/98abedd))
 * **profiles:** derive legacy fields and named profiles from one read of the credential file, so a replace during loading cannot yield a mixed snapshot ([cd72e2f](https://github.com/pb-crackers/cognigy-plugin/commit/cd72e2f))
+
+## [1.22.1](https://github.com/Cognigy/cognigy-plugin/compare/v1.22.0...v1.22.1) (2026-10-12)
+
+### Bug Fixes
+
+* **flow-nodes:** support Copilot wait/status nodes, wrap adaptive cards, flag duplicate imports ([#57](https://github.com/Cognigy/cognigy-plugin/issues/57)) ([bbf474e](https://github.com/Cognigy/cognigy-plugin/commit/bbf474e093d8cc53b12535986ff7ef2229a9bec8))
 
 ## [1.22.0](https://github.com/Cognigy/cognigy-plugin/compare/v1.21.0...v1.22.0) (2026-10-09)
 
