@@ -220,6 +220,27 @@ describe("createSessionState: file contents", () => {
     expect(() => s.remove()).not.toThrow();
   });
 
+  it("remove leaves a file another server rewrote (plugin reload)", () => {
+    const home = tempHome();
+    const registry = rig(TWO()).parts.registry;
+    const oldServer = createSessionState(
+      registry,
+      createSessionPin(),
+      opts(home, { pid: 111 }),
+    );
+    const newServer = createSessionState(
+      registry,
+      createSessionPin(),
+      opts(home, { pid: 222 }),
+    );
+    oldServer.write();
+    newServer.write();
+    oldServer.remove();
+    expect(readState(home)).toMatchObject({ pid: 222 });
+    newServer.remove();
+    expect(existsSync(stateFile(home))).toBe(false);
+  });
+
   it(`${SESSION_KEY_ENV_VAR} overrides the file name and skips the ps walk`, () => {
     const home = tempHome();
     const lookup = jest.fn<PsLookup>(() => undefined);

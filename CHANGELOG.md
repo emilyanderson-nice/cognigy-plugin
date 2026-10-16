@@ -1,3 +1,9 @@
+## 1.22.1-pb.3 (2026-10-16)
+
+### Bug Fixes
+
+* **status line:** the `cognigy:<profile>` segment no longer disappears after a plugin update or `/reload-plugins`; the old server only removes the session file while it still owns it
+
 ## 1.22.1-pb.2 (2026-10-16)
 
 ### Features
