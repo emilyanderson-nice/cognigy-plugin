@@ -6,11 +6,19 @@
  */
 import type { ToolDefinition } from "../server/dispatch.js";
 import { hostOf } from "../profiles/profiles.js";
+import { usableEnv } from "../placeholders.js";
 import type { EnvironmentRegistry } from "./registry.js";
 
 export const PIN_ENV_VAR = "COGNIGY_ENVIRONMENT";
+/** Set by the Claude Code plugin setting "Default Cognigy profile". */
+export const DEFAULT_PROFILE_ENV_VAR = "COGNIGY_DEFAULT_PROFILE";
+export const PLUGIN_SETTINGS_SOURCE = "plugin-settings";
 
-export type PinSource = typeof PIN_ENV_VAR | "use_environment";
+/** Where a launch pin came from. */
+export type LaunchPinSource =
+  | typeof PIN_ENV_VAR
+  | typeof PLUGIN_SETTINGS_SOURCE;
+export type PinSource = LaunchPinSource | "use_environment";
 
 export interface Pin {
   name: string;
@@ -21,6 +29,17 @@ export interface Pin {
 export interface RejectedPin {
   value: string;
   reason: string;
+  source: LaunchPinSource;
+}
+
+/** How a launch source is named in warnings and errors. */
+export function describeLaunchSource(r: {
+  value: string;
+  source: LaunchPinSource;
+}): string {
+  return r.source === PLUGIN_SETTINGS_SOURCE
+    ? `The plugin setting "Default Cognigy profile" (${DEFAULT_PROFILE_ENV_VAR}="${r.value}")`
+    : `${PIN_ENV_VAR}="${r.value}"`;
 }
 
 export interface SessionPin {
@@ -55,23 +74,35 @@ export function createSessionPin(): SessionPin {
 }
 
 /**
- * Applies COGNIGY_ENVIRONMENT at boot. Never throws: an unknown or unusable
- * value leaves no pin, is remembered as rejected, and returns a warning.
+ * Applies the launch pin at boot. COGNIGY_ENVIRONMENT wins over the plugin
+ * setting (COGNIGY_DEFAULT_PROFILE); empty values and unexpanded `${...}`
+ * placeholders count as unset. Never throws: an unknown or unusable value
+ * leaves no pin, is remembered as rejected, and returns a warning. A bad
+ * COGNIGY_ENVIRONMENT never falls back to the setting (fail closed).
  */
 export function applyLaunchPin(
   registry: EnvironmentRegistry,
   pin: SessionPin,
-  value: string | undefined,
+  env: NodeJS.ProcessEnv,
 ): string | undefined {
-  if (value === undefined || value.trim() === "") return undefined;
+  const launch = (raw: string | undefined) => {
+    const v = usableEnv(raw);
+    return v !== undefined && v.trim() !== "" ? v : undefined;
+  };
+  const fromEnv = launch(env[PIN_ENV_VAR]);
+  const fromSettings = launch(env[DEFAULT_PROFILE_ENV_VAR]);
+  const value = fromEnv ?? fromSettings;
+  if (value === undefined) return undefined;
+  const source: LaunchPinSource =
+    fromEnv !== undefined ? PIN_ENV_VAR : PLUGIN_SETTINGS_SOURCE;
   try {
     const { profile } = registry.resolve(value);
-    pin.set({ name: profile.name, source: PIN_ENV_VAR });
+    pin.set({ name: profile.name, source });
     return undefined;
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    pin.reject({ value, reason });
-    return `${PIN_ENV_VAR}="${value}" does not name a usable environment, so this session is not pinned: ${reason} Calls without an environment argument will fail until use_environment pins one.`;
+    pin.reject({ value, reason, source });
+    return `${describeLaunchSource({ value, source })} does not name a usable environment, so this session is not pinned: ${reason} Calls without an environment argument will fail until use_environment pins one.`;
   }
 }
 

@@ -8,7 +8,10 @@ import {
   EnvironmentError,
   type EnvironmentRegistry,
 } from "../environments/registry.js";
-import type { SessionPin } from "../environments/sessionPin.js";
+import {
+  describeLaunchSource,
+  type SessionPin,
+} from "../environments/sessionPin.js";
 import { hostOf } from "../profiles/profiles.js";
 import { redactKey } from "../utils/redact.js";
 import { checkEndpointUrl } from "./hostGuard.js";
@@ -54,6 +57,12 @@ export interface DispatcherDeps {
     tool: ToolDefinition;
     use(args: Record<string, unknown>): Promise<Record<string, unknown>>;
   };
+  /**
+   * Observers for the session state file. Called after a pin change and after
+   * a successfully dispatched call; a throwing observer is ignored.
+   */
+  onPinChanged?(): void;
+  onDispatched?(environment: { name: string; host: string }): void;
 }
 
 export interface Dispatcher {
@@ -87,6 +96,15 @@ const environmentErrorBody = (
 export function createDispatcher(deps: DispatcherDeps): Dispatcher {
   const { registry, logger } = deps;
 
+  const notify = (fn: (() => void) | undefined) => {
+    if (!fn) return;
+    try {
+      fn();
+    } catch {
+      // Observers are best-effort and must never affect a tool call.
+    }
+  };
+
   function withEnvironmentProperty(
     tool: ToolDefinition,
     names: string[],
@@ -97,7 +115,7 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
       environment: {
         type: "string",
         description:
-          "Selects the Cognigy environment this call runs against. Required when more than one environment is configured, unless the session is pinned with use_environment (or COGNIGY_ENVIRONMENT); optional otherwise. An explicit value overrides the pin for this call. Use list_environments to see the configured environments.",
+          "Selects the Cognigy environment this call runs against. Required when more than one environment is configured, unless the session is pinned with use_environment (or at launch by COGNIGY_ENVIRONMENT or the plugin setting); optional otherwise. An explicit value overrides the pin for this call. Use list_environments to see the configured environments.",
         ...(names.length > 1 ? { enum: names } : {}),
       },
     };
@@ -143,6 +161,7 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
         logger.info("Session environment pin changed", {
           environment: session.pin.get()?.name,
         });
+        notify(deps.onPinChanged);
         return text(result);
       } catch (err) {
         if (err instanceof EnvironmentError) {
@@ -186,7 +205,7 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
         const available = registry.snapshot().configuredNames;
         return text(
           {
-            error: `COGNIGY_ENVIRONMENT="${rejected.value}" does not name a usable environment, so this session is not pinned. Available environments: ${available.join(", ") || "(none)"}. Pass \`environment\` explicitly, or call use_environment to pin one.`,
+            error: `${describeLaunchSource(rejected)} does not name a usable environment, so this session is not pinned. Available environments: ${available.join(", ") || "(none)"}. Pass \`environment\` explicitly, or call use_environment to pin one.`,
             code: "pin_invalid",
             environment: rejected.value,
             reason: rejected.reason,
@@ -251,6 +270,7 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
 
       try {
         const result = await runtime.handlers.handleToolCall(name, args);
+        notify(deps.onDispatched && (() => deps.onDispatched?.(marker)));
         return text({
           ...(isPlainObject(result) ? result : { result }),
           _environment: marker,

@@ -36,13 +36,43 @@ Give the key with the hidden prompt (default in a terminal), `--api-key-env VAR`
 Each assistant session runs its own server, so a session can be pinned to one environment. Calls without `environment` then go there.
 
 - **At launch:** set `COGNIGY_ENVIRONMENT=<name>` in the server's environment. The name is matched like the `environment` argument (`V4_Staging` is `v4-staging`).
+- **From the plugin settings (Claude Code):** set **Default Cognigy profile** in `/plugin` → cognigy → Configure. Claude Code passes it to the server as `COGNIGY_DEFAULT_PROFILE`, and every new session is pinned to it. Leave it empty for no pin. `COGNIGY_ENVIRONMENT` (for example from `csp -p`) overrides it. The API URL and key settings are optional when your profiles supply the credentials.
 - **From the assistant:** `use_environment { name: "v4-staging" }` pins the session and returns the name and host (never the key). `use_environment { clear: true }` removes the pin.
-- `list_environments` marks the pinned environment with `pinned: true` and shows `pin: { name, source }`, where `source` is `COGNIGY_ENVIRONMENT` or `use_environment`.
+- `list_environments` marks the pinned environment with `pinned: true` and shows `pin: { name, source }`, where `source` is `COGNIGY_ENVIRONMENT`, `plugin-settings` or `use_environment`.
 - An explicit `environment` argument still wins for that call. Every answer still carries `_environment`.
 - Without a pin nothing changes: with two or more environments the argument is still required.
-- If `COGNIGY_ENVIRONMENT` names an unknown or broken environment, the server still starts. It logs a warning, sets no pin, and calls that rely on the pin fail with the bad value and the available environments (`code: "pin_invalid"`). Fix it with `use_environment`, `use_environment { clear: true }`, or by passing `environment`.
+- If `COGNIGY_ENVIRONMENT` or the plugin setting names an unknown or broken environment, the server still starts. It logs a warning, sets no pin, and calls that rely on the pin fail with the bad value and the available environments (`code: "pin_invalid"`). Fix it with `use_environment`, `use_environment { clear: true }`, or by passing `environment`.
+- A bad `COGNIGY_ENVIRONMENT` never falls back to the plugin setting. Empty values count as unset.
 - If the pinned environment is removed from the profiles or breaks later, calls fail. They are never sent to another environment.
 - The assistant still confirms the environment by name before destructive operations (delete, snapshot restore, overwrite), even when pinned.
+
+## Show the environment in the Claude Code status line
+
+Each session's server writes a small state file, `~/.cognigy-plugin/sessions/<claude pid>.json`. It holds the pin, its source, the host, the last environment used and the number of configured environments. It never holds a key. The server rewrites it when the pin or the last-used environment changes and deletes it on shutdown.
+
+At startup the server also copies a status line script to `~/.cognigy-plugin/statusline-segment.sh`. That path stays the same across plugin versions. The script finds its session's file and prints one segment:
+
+- pinned: `cognigy:<name>`
+- not pinned, two or more environments: `cognigy:unpinned`, plus `(last <name>)` once a call has run
+- one environment: `cognigy:<name>`
+- no Cognigy server in this session: nothing
+
+Add it to your status line command (see Claude Code's `/statusline`), for example:
+
+```bash
+#!/usr/bin/env bash
+input=$(cat)
+line="$(echo "$input" | jq -r '.model.display_name')"
+seg=$(bash ~/.cognigy-plugin/statusline-segment.sh 2>/dev/null)
+[ -n "$seg" ] && line="$line | $seg"
+printf '%s' "$line"
+```
+
+- The script needs only `ps`. It uses `jq` when installed and `sed` otherwise. It always exits 0.
+- `COGNIGY_SL_COLOR=0` prints plain text. By default the name is light blue and the prefix is dim.
+- Files left by a server that was killed are ignored and deleted.
+- `COGNIGY_SESSION_STATE=0` in the server's environment turns the file off. `COGNIGY_SESSION_KEY=<key>` names the file `<key>.json` instead of the `claude` pid, for other clients.
+- macOS and Linux only. On Windows, or when the server has no `claude` parent process, no file is written.
 
 ## Where environments come from
 

@@ -46,6 +46,8 @@ export interface McpServer {
     args?: Record<string, unknown>,
   ): Promise<{ result: ToolCallResult; body: Record<string, any> }>;
   close(): Promise<void>;
+  /** Sends a signal (or ends stdin) and waits for the child to exit. */
+  stop(how: NodeJS.Signals | "stdin-end"): Promise<number | null>;
 }
 
 export function makeTempHome(): string {
@@ -230,5 +232,10 @@ export async function startMcpServer(opts: {
       return { result, body: JSON.parse(result.content[0].text) };
     },
     close,
+    stop: async (how) => {
+      if (how === "stdin-end") child.stdin.end();
+      else child.kill(how);
+      return exited;
+    },
   };
 }
