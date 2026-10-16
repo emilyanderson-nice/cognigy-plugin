@@ -1,3 +1,9 @@
+## 1.22.1-pb.2 (2026-10-16)
+
+### Features
+
+* **flow-nodes:** 10 code node readability guidelines in the `flow-nodes` skill (descriptive names, one statement per line, data one entry per line, constants at the top, read → decide → write, small helpers, early returns, named types, why-comments) with a before/after example; the create example is now multi-line, and the `manage_flow_nodes` description points at the guidelines
+
 ## 1.22.1-pb.1 (2026-10-16)
 
 ### Chores
