@@ -96,7 +96,7 @@ describe("dispatcher.listTools", () => {
     );
   });
 
-  it("L1: preserves existing properties and required EXACTLY, and adds none", () => {
+  it("L1: preserves existing properties and the original required entries in order, and with two or more environments appends environment", () => {
     const withReq = tool("withReq", {
       inputSchema: {
         type: "object",
@@ -111,10 +111,21 @@ describe("dispatcher.listTools", () => {
     const w = byName(out, "withReq");
     eq(
       w.inputSchema.required,
+      ["a", "environment"],
+      "required keeps originals then environment",
+      "L1: with two environments required is the original entries in order followed by environment exactly once",
+      "Keep the original required entries in order and append environment last, once.",
+    );
+    const oneOut = harness({
+      set: ONE(),
+      tools: [withReq, noReq, noProps],
+    }).dispatcher.listTools();
+    eq(
+      byName(oneOut, "withReq").inputSchema.required,
       ["a"],
-      "required preserved",
-      "L1: required array untouched",
-      "Never add environment to required.",
+      "required exactly as declared with one environment",
+      "L1: with one environment required is exactly as the tool declared it",
+      "Do not add environment to required unless two or more environments exist.",
     );
     eq(
       { a: w.inputSchema.properties?.a, b: w.inputSchema.properties?.b },
@@ -123,22 +134,30 @@ describe("dispatcher.listTools", () => {
       "L1: existing properties kept",
       "Keep every existing property exactly as supplied.",
     );
-    ok(
-      !("required" in byName(out, "noReq").inputSchema),
-      "absent required stays absent",
-      "L1: no required injection",
-      "no required key",
-      "required key present",
-      "Do not introduce a required array.",
+    eq(
+      byName(out, "noReq").inputSchema.required,
+      ["environment"],
+      "absent required becomes [environment] with two environments",
+      "L1: a tool with no required array gets exactly [environment] when two or more environments exist",
+      "Create required holding only environment.",
     );
-    ok(
-      !("required" in byName(out, "noProps").inputSchema),
-      "absent required stays absent (no props)",
-      "L1: no required injection",
-      "no required key",
-      "required key present",
-      "Do not introduce a required array.",
+    eq(
+      byName(out, "noProps").inputSchema.required,
+      ["environment"],
+      "absent required becomes [environment] (no props) with two environments",
+      "L1: a tool with no required array gets exactly [environment] when two or more environments exist",
+      "Create required holding only environment.",
     );
+    for (const n of ["noReq", "noProps"]) {
+      ok(
+        !("required" in byName(oneOut, n).inputSchema),
+        `absent required stays absent with one environment (${n})`,
+        "L1: with one environment no required array is introduced",
+        "no required key",
+        "required key present",
+        "Do not introduce a required array unless two or more environments exist.",
+      );
+    }
     eq(
       Object.keys(byName(out, "noProps").inputSchema.properties ?? {}),
       ["environment"],

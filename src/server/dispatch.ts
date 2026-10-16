@@ -83,6 +83,14 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
         ...(names.length > 1 ? { enum: names } : {}),
       },
     };
+    // `required` must mirror registry.resolve()'s ambiguity rule (more than one
+    // configured name, broken ones included) so schema and runtime agree.
+    if (names.length > 1) {
+      const required = clone.inputSchema.required ?? [];
+      clone.inputSchema.required = required.includes("environment")
+        ? required
+        : [...required, "environment"];
+    }
     return clone;
   }
 

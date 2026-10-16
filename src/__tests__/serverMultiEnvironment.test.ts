@@ -51,7 +51,7 @@ describe("scenario 1: two environments via env vars", () => {
     });
   }, TIMEOUT);
 
-  it("tools/list injects the environment enum and keeps required unchanged", async () => {
+  it("tools/list injects the environment enum and requires environment", async () => {
     const listed = await s.listTools();
     const names = listed.map((t) => t.name);
     ok(
@@ -77,9 +77,13 @@ describe("scenario 1: two environments via env vars", () => {
           t?.inputSchema?.properties?.environment?.enum,
           t?.inputSchema?.required,
         ],
-        ["string", ["a", "b"], def.inputSchema.required],
+        [
+          "string",
+          ["a", "b"],
+          [...(def.inputSchema.required ?? []), "environment"],
+        ],
         `mcp::schema[${def.name}]`,
-        "Rule: environment string enum [a,b]; required unchanged",
+        "Rule: environment string enum [a,b]; required is the original entries in order followed by environment",
         "Advertise the environment argument on every real tool.",
       );
     }

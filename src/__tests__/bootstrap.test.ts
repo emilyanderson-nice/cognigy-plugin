@@ -66,10 +66,13 @@ describe("buildServerParts: tool surface", () => {
       );
       eq(
         t?.inputSchema.required,
-        def.inputSchema.required,
-        `bootstrap::required_unchanged[${def.name}]`,
-        "Rule: `required` is not modified by the injection",
-        "Keep each tool's required list as defined.",
+        [
+          ...((def.inputSchema.required as string[] | undefined) ?? []),
+          "environment",
+        ],
+        `bootstrap::required_gains_environment[${def.name}]`,
+        "Rule: with two environments `required` is the tool's original entries in order followed by `environment` exactly once",
+        "Append `environment` last to each tool's required list, keeping the original entries.",
       );
     }
   });
@@ -94,6 +97,15 @@ describe("buildServerParts: tool surface", () => {
       show(env),
       "Only enumerate names when more than one environment is configured.",
     );
+    for (const def of tools.filter((d) => d.name !== "list_environments")) {
+      eq(
+        listed.find((t) => t.name === def.name)?.inputSchema.required,
+        def.inputSchema.required,
+        `bootstrap::zero_required_as_declared[${def.name}]`,
+        "Rule: with fewer than two environments `required` is exactly as the tool declared it",
+        "Do not add `environment` to required unless two or more environments exist.",
+      );
+    }
   });
 });
 
