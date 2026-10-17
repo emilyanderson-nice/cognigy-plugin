@@ -9,11 +9,11 @@ nothing here is assumed.
 
 **Environments probed** (all GET-only; see `scripts/discovery/probe.mjs`)
 
-| Profile                 | API host                                                 | Release (from its OpenAPI) | Key accepted                                 |
-| ----------------------- | -------------------------------------------------------- | -------------------------- | -------------------------------------------- |
-| `v4-staging`            | `api-staging-v4.cognigy.ai` (UI `staging-v4.cognigy.ai`) | 2026.21.0                  | yes                                          |
-| `v2`                    | `api-trial-us.cognigy.ai`                                | 2026.20.1                  | yes                                          |
-| (earlier, wrong region) | `api-trial.cognigy.ai`                                   | 2026.21.0                  | no: 401 "Unable to authenticate via api key" |
+| Profile                 | API host                                                 | Release (from its OpenAPI)             | Key accepted                                 |
+| ----------------------- | -------------------------------------------------------- | -------------------------------------- | -------------------------------------------- |
+| `v4-staging`            | `api-staging-v4.cognigy.ai` (UI `staging-v4.cognigy.ai`) | 2026.21.0 (Oct 12), 2026.21.1 (Oct 15) | yes                                          |
+| `v2`                    | `api-trial-us.cognigy.ai`                                | 2026.20.1 (Oct 12), 2026.21.0 (Oct 15) | yes                                          |
+| (earlier, wrong region) | `api-trial.cognigy.ai`                                   | 2026.21.0                              | no: 401 "Unable to authenticate via api key" |
 
 Raw OpenAPI documents are kept outside the repo (about 5 MB each); this log carries the conclusions.
 
@@ -31,6 +31,7 @@ Raw OpenAPI documents are kept outside the repo (about 5 MB each); this log carr
 | F8  | observed   | The flow `kind` field (`conversation` or `tool`) and the `kind` filter on `GET /flows` and snapshot resources are in the 2026.20.1 spec but absent from the 2026.21.0 spec, yet live v4-staging flows still return `kind`. The spec lags behaviour.                                                                                                                                                                                                                                          |
 | F9  | observed   | Neither release's OpenAPI document (2026.20.1 classic, 2026.21.0 v4-staging) contains an OAuth, device-code or authorize endpoint. The only security schemes are `X-API-Key`, an `api_key` query parameter, the CXone bearer header `x-cxone-authorization` ("CXone integrated environments only") and Basic Auth for the management UI. `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server` return 404 on both API hosts (`probes/*/.well-known_*`).          |
 | F10 | documented | User API keys are created by hand in My Profile, API Keys (shown once, inheriting the user's permissions): https://docs.cognigy.com/ai/administer/user-menu/my-profile. The API overview also lists OAuth2 Client Credentials (non-interactive) for general API access: https://docs.cognigy.com/api-reference/about. No document found describing browser or SSO sign-in to obtain a key; nothing found confirming that CXone offers a device-code flow.                                    |
+| F11 | observed   | Release drift is fast and moves both ways at once: between Oct 12 and Oct 15 the classic `api-trial-us` host went from 2026.20.1 to 2026.21.0 (the release `v4-staging` had on Oct 12) while `v4-staging` moved on to 2026.21.1. Read live through `list_environments` with `check: true`. Supports detecting the release per environment instead of trusting a `v2`/`v4` label.                                                                                                             |
 
 ### F5 detail: spec differences, classic 2026.20.1 -> v4-staging 2026.21.0
 

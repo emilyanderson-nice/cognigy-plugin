@@ -158,6 +158,8 @@ export class CognigyApiClient {
 
   constructor(config: CognigyApiClientConfig) {
     this.apiKey = config.apiKey;
+    // Upstream error bodies can echo the key; keep it out of every log line.
+    logger.registerSecret(config.apiKey);
     this.auditAttribution = config.auditAttribution !== false;
     const maxRetries = config.maxRetries ?? MAX_RETRIES;
     const log = config.quiet ? QUIET_LOGGER : logger;

@@ -2,11 +2,12 @@
  * Named profiles stored in the user config file (~/.cognigy-plugin/config.json)
  * under "profiles" / "defaultProfile", next to the legacy flat string map.
  */
-import { readFileSync } from "fs";
 import {
   isPlainObject,
-  parseConfigText,
+  readConfigRaw,
   RESERVED_KEYS,
+  type RawRead,
+  type ReadOptions,
   USER_CONFIG_FILE,
 } from "../userConfigFile.js";
 
@@ -56,29 +57,37 @@ function toRawProfile(v: unknown): RawFileProfile | string {
 }
 
 /** Reads the profiles section; absent or unreadable files yield no profiles. */
-export function readUserProfilesFile(
-  path: string = USER_CONFIG_FILE,
-): ProfilesFile {
-  const result: ProfilesFile = { profiles: {}, problems: [] };
-  try {
-    const parsed = parseConfigText(readFileSync(path, "utf-8"));
-    if (!isPlainObject(parsed)) return result;
-    if (typeof parsed.defaultProfile === "string") {
-      result.defaultProfile = parsed.defaultProfile;
-    }
-    if (isPlainObject(parsed.profiles)) {
-      for (const [name, raw] of Object.entries(parsed.profiles)) {
-        if (RESERVED_NAMES.has(name)) continue;
-        const profile = toRawProfile(raw);
-        if (typeof profile === "string") {
-          result.problems.push({ name, reason: profile });
-        } else {
-          result.profiles[name] = profile;
-        }
+function collect(parsed: Record<string, unknown>, result: ProfilesFile): void {
+  if (typeof parsed.defaultProfile === "string") {
+    result.defaultProfile = parsed.defaultProfile;
+  }
+  if (isPlainObject(parsed.profiles)) {
+    for (const [name, raw] of Object.entries(parsed.profiles)) {
+      if (RESERVED_NAMES.has(name)) continue;
+      const profile = toRawProfile(raw);
+      if (typeof profile === "string") {
+        result.problems.push({ name, reason: profile });
+      } else {
+        result.profiles[name] = profile;
       }
     }
-  } catch {
-    // Missing or malformed: behave as if no profiles were configured.
   }
+}
+
+/**
+ * Reads the profiles section. By default an absent or unreadable file yields
+ * no profiles; with `strict`, only an absent file does and anything else throws.
+ */
+export function readUserProfilesFile(
+  path: string = USER_CONFIG_FILE,
+  options: ReadOptions = {},
+): ProfilesFile {
+  return profilesFromRaw(readConfigRaw(path, options));
+}
+
+/** The profiles section of a parsed file; anything unusable yields no profiles. */
+export function profilesFromRaw(raw: RawRead): ProfilesFile {
+  const result: ProfilesFile = { profiles: {}, problems: [] };
+  if (raw.state === "ok") collect(raw.data, result);
   return result;
 }

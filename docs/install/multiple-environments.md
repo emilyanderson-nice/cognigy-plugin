@@ -2,7 +2,7 @@
 
 One install can hold several Cognigy environments (for example a classic `api-trial-us` tenant and a newer `api-staging-v4` one), each with its own URL and API key, without one overriding the other.
 
-> **Status.** This release adds the storage and the `cognigy-setup profile` commands. Choosing an environment per tool call arrives in a later release; until then the engine keeps using the single environment it uses today (`COGNIGY_API_BASE_URL` + `COGNIGY_API_KEY`).
+> **How it works.** Every tool takes an optional `environment` argument that selects which environment the call runs against. With one environment configured nothing changes: the argument is optional and calls go to it. With two or more it is required on every call (except `list_environments`), and the server never guesses.
 
 ## Manage environments
 
@@ -18,6 +18,18 @@ cognigy-setup profile remove v4-staging --yes
 Every subcommand has `--help`. Names are lower-case; `V4_Staging` is stored as `v4-staging`.
 
 Give the key with the hidden prompt (default in a terminal), `--api-key-env VAR`, or `--api-key KEY`. The last one is stored in your shell history, so prefer the other two.
+
+## Using several environments from the assistant
+
+- Ask the assistant to run `list_environments` first. It shows each environment's name, host, source and default marker, and with `check: true` the detected platform release.
+- After that every call carries `environment` (case and `_`/`-` do not matter: `V4_Staging` is `v4-staging`), and every answer says which environment served it in `_environment`.
+- Instead of guessing, the server refuses: no `environment` with two or more configured (even when a default is set), an unknown name (it lists the available ones), a broken definition (it gives the reason), or no environment at all (it points at `cognigy-setup profile add`).
+- Ids, endpoint URLs, package and snapshot references belong to one environment. `talk_to_agent` rejects an `endpointUrl` whose host is not the chosen environment's endpoint host.
+- The rate limit (100 calls per minute by default; `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_WINDOW_MS`) is counted per environment. It used to be one shared counter.
+- If the credentials file cannot be read (locked or corrupt), calls fail with an error instead of quietly falling back to fewer environments.
+- Editing an environment's URL or key while the server runs takes effect on the next call. Per-session memory for that environment, such as "backup already offered", starts over.
+- The server now starts even when no environment is configured: it logs a warning and answers each call with how to add one, instead of exiting at startup.
+- Some clients cache the tool list, so the environment names in a tool's schema can be out of date. The name is always checked when the call arrives.
 
 ## Where environments come from
 

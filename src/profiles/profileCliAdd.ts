@@ -4,6 +4,7 @@ import {
   isValidProfileName,
   normalizeName,
   ProfileConfigError,
+  type ProfileSet,
   type ProfileSource,
 } from "./profiles.js";
 import { ArgError, parseArgs, type ParsedArgs } from "./profileCliArgs.js";
@@ -21,6 +22,10 @@ const VALUE_FLAGS = [
 ] as const;
 
 class AddFailure extends Error {}
+
+/** Configured environments: usable profiles plus those with problems. */
+const configuredCount = (set: ProfileSet): number =>
+  new Set([...set.profiles, ...set.problems].map((p) => p.name)).size;
 
 /** Sources that override a saved profile of the same name (see loadProfiles). */
 const SHADOWING = new Set<ProfileSource>(["env-profile", "legacy-env"]);
@@ -92,7 +97,8 @@ async function add(args: ParsedArgs, deps: ProfileCliDeps): Promise<number> {
     );
   }
   const force = args.flags.has("--force");
-  const existing = deps.loadProfiles().profiles.find((p) => p.name === name);
+  const before = deps.loadProfiles();
+  const existing = before.profiles.find((p) => p.name === name);
   if (existing && !force) throw new AddFailure(refusal(name, existing.source));
   const apiBaseUrl = await resolveUrl(args, deps);
   const apiKey = await resolveKey(args, deps);
@@ -116,11 +122,19 @@ async function add(args: ParsedArgs, deps: ProfileCliDeps): Promise<number> {
     if (e instanceof ProfileConfigError) throw new AddFailure(e.message);
     throw e;
   }
-  const reloaded = deps.loadProfiles().profiles.find((p) => p.name === name);
+  const after = deps.loadProfiles();
+  const reloaded = after.profiles.find((p) => p.name === name);
   const saved = reloaded?.source === "file-profile" ? reloaded : undefined;
   deps.out(
     `Saved profile "${name}" (${saved ? describeProfile(saved).apiHost : hostOf(apiBaseUrl)}).\n`,
   );
+  const beforeCount = configuredCount(before);
+  const afterCount = configuredCount(after);
+  if (beforeCount === 1 && afterCount >= 2) {
+    deps.out(
+      `Note: ${afterCount} environments are now configured. From now on every tool call must name its environment with the \`environment\` argument; use list_environments to see them.\n`,
+    );
+  }
   if (existing && SHADOWING.has(existing.source)) {
     deps.err(
       `WARNING: "${name}" is also defined by ${existing.source}; environment variables take precedence over the saved profile.\n`,

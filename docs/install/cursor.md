@@ -42,9 +42,9 @@ npx -y -p @cognigy/plugin-engine@latest cognigy-setup uninstall --client other-h
 
 ## Troubleshooting
 
-**`COGNIGY_API_KEY is not set`**
+**Tool calls answer "No Cognigy environment is configured"**
 
-The variables are empty, or Cursor loaded the plugin from the vendor-neutral [Agent Plugins](https://agent-plugins.org) manifests instead of the Cursor one — those ship credential-less by design, since a plugin manifest is public text. Fill in **Plugins → Configure** first; if the fields aren't offered, fall back to the credentials file that every spec host uses:
+The server starts either way, but it has no credentials to use. The variables are empty, or Cursor loaded the plugin from the vendor-neutral [Agent Plugins](https://agent-plugins.org) manifests instead of the Cursor one — those ship credential-less by design, since a plugin manifest is public text. Fill in **Plugins → Configure** first; if the fields aren't offered, fall back to the credentials file that every spec host uses:
 
 ```
 npx -y -p @cognigy/plugin-engine@latest cognigy-setup --client other-hosts

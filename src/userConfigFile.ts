@@ -15,6 +15,7 @@
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { basename, dirname, join } from "path";
+import { ProfileConfigError } from "./profiles/errors.js";
 import {
   acquireLock,
   atomicWrite,
@@ -77,7 +78,7 @@ export function toSafeObject(src: Record<string, unknown>): RawConfig {
   return out;
 }
 
-type RawRead =
+export type RawRead =
   | { state: "missing" }
   | { state: "corrupt" }
   | { state: "error"; err: unknown }
@@ -103,6 +104,25 @@ function readRaw(path: string): RawRead {
   }
 }
 
+export interface ReadOptions {
+  /** Fail closed: anything but a missing file or a valid JSON object throws. */
+  strict?: boolean;
+}
+
+/** Like readRaw, but unreadable or malformed files throw a fixed-text error. */
+export function readStrict(path: string): RawRead {
+  const raw = readRaw(path);
+  const file = basename(path);
+  if (raw.state === "error") {
+    const code = (raw.err as NodeJS.ErrnoException).code ?? "UNKNOWN";
+    throw new ProfileConfigError(`Cannot read ${file} (${code}).`);
+  }
+  if (raw.state === "corrupt") {
+    throw new ProfileConfigError(`${file} is not a valid JSON object.`);
+  }
+  return raw;
+}
+
 /**
  * Read the fallback config file. Returns `{}` when the file is absent or
  * unreadable/malformed, so a bad file must never throw during server boot
@@ -110,8 +130,24 @@ function readRaw(path: string): RawRead {
  */
 export function readUserConfigFile(
   path: string = USER_CONFIG_FILE,
+  options: ReadOptions = {},
 ): UserConfigFile {
-  const raw = readRaw(path);
+  return legacyFromRaw(readConfigRaw(path, options));
+}
+
+/**
+ * Reads and parses the file once. Callers that need several sections derive
+ * them all from this one result so they never mix two versions of the file.
+ */
+export function readConfigRaw(
+  path: string = USER_CONFIG_FILE,
+  options: ReadOptions = {},
+): RawRead {
+  return options.strict ? readStrict(path) : readRaw(path);
+}
+
+/** The legacy flat string fields of a parsed file; anything unusable is empty. */
+export function legacyFromRaw(raw: RawRead): UserConfigFile {
   const out: UserConfigFile = {};
   if (raw.state !== "ok") return out;
   for (const [k, v] of Object.entries(raw.data)) {

@@ -10,7 +10,7 @@
 - `plugin/skills/<id>/SKILL.md` — workflow knowledge as plugin skills (hand-authored, auto-load on intent in clients that support skills, e.g. Claude Code, Antigravity). Always-on guidance lives in `src/instructions.ts`
 - `src/install/` — per-client installers: `claudeCode.ts` (plugin CLI), `claudeDesktop.ts` (connector in `claude_desktop_config.json`), `antigravity.ts` (builds and installs a native Antigravity plugin directly, without needing the `agy` CLI), `desktopLauncher.ts` (auto-updating engine shim shared by Desktop and Antigravity)
 
-## Why 16 Tools Instead of 359?
+## Why 20 Tools Instead of 359?
 
 The Cognigy API has ~359 endpoints across 50+ categories. Creating one tool per endpoint would overwhelm AI agents and make the system unusable. Our solution:
 
@@ -23,7 +23,7 @@ The Cognigy API has ~359 endpoints across 50+ categories. Creating one tool per 
 
 **Example**: Rather than separate tools for every CRUD operation on every resource type, `list_resources` and `get_resource` cover all read operations via a `resourceType` parameter, while `delete_resource` handles all deletions.
 
-**Result**: 18 tools covering ~115 API endpoints (97% reduction from 359 endpoints).
+**Result**: 20 tools covering ~115 API endpoints (97% reduction from 359 endpoints).
 
 ### Tool inventory
 
@@ -47,6 +47,8 @@ The Cognigy API has ~359 endpoints across 50+ categories. Creating one tool per 
 | `audit_voice_agent`    | Write          |
 | `manage_snapshots`     | Write          |
 | `manage_a2a_server`    | Write          |
+| `manage_flows`         | Write          |
+| `list_environments`    | Read           |
 
 ## Modern AI Agent-Centric Approach
 
