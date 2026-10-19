@@ -23,19 +23,25 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { replaceEnginePin } from "./fork-identity.mjs";
 
 export const FORK_SUFFIX = "pb";
 const FORK_VERSION_RE = /^(\d+\.\d+\.\d+)-pb\.(\d+)$/;
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Manifests that carry a version, mirroring sync-plugin-version.mjs. */
+/**
+ * Manifests that carry a version and/or an engine pin, mirroring
+ * sync-plugin-version.mjs. Pin-only files have no version field.
+ */
 const FILES = [
   "package.json",
   "plugin/.claude-plugin/plugin.json",
   "plugin/.codex-plugin/plugin.json",
+  "plugin/.codex-plugin/mcp.json",
   "plugin/plugin.json",
+  "plugin/mcp.json",
   "plugin/.cursor-plugin/plugin.json",
 ];
 
@@ -77,11 +83,14 @@ function main() {
     const src = readFileSync(path, "utf-8");
     // Replaced in place rather than via a JSON round-trip so each file keeps
     // its existing formatting and stays Prettier-clean.
-    const out = src.replace(/("version":\s*")[^"]*(")/, `$1${next}$2`);
+    const out = replaceEnginePin(
+      src.replace(/("version":\s*")[^"]*(")/, `$1${next}$2`),
+      next,
+    );
     writeFileSync(path, out);
 
     const check = JSON.parse(out).version;
-    if (check !== next) {
+    if (check !== undefined && check !== next) {
       console.error(`FAILED to set ${rel} to ${next} (still ${check})`);
       process.exit(1);
     }
@@ -91,4 +100,4 @@ function main() {
   console.log(`\nFork version: ${current} -> ${next} (upstream base ${base})`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (import.meta.url === pathToFileURL(process.argv[1]).href) main();

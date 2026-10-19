@@ -1,7 +1,7 @@
 // npm `prepare` hook. Runs in two very different situations:
 //
 //  1. Local development (`npm install` in a clone) — install the husky hooks.
-//  2. A git install (`npx -p github:pb-crackers/cognigy-plugin cognigy-mcp`)
+//  2. A git install (`npx -p github:<fork-repo>#v<version> cognigy-mcp`)
 //     — npm clones this repo, installs devDependencies, and runs `prepare`.
 //     There is no published tarball and therefore no `dist/`, so the TypeScript
 //     has to be compiled here or the `cognigy-mcp` bin (dist/index.js) will not

@@ -22,12 +22,21 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  FORK_MARKETPLACE_NAME as FORK_MARKETPLACE,
+  FORK_REPO,
+  LEGACY_FORK_REPO,
+  UPSTREAM_REPO,
+  enginePin,
+} from "./fork-identity.mjs";
 
-const FORK_MARKETPLACE = "cognigy-plugin-pb";
-const FORK_REPO = "pb-crackers/cognigy-plugin";
-const ENGINE_SPEC = `github:${FORK_REPO}`;
-const UPSTREAM_REPO = "Cognigy/cognigy-plugin";
+// Manifests are pinned to the release tag, so compare and boot that pin.
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ENGINE_SPEC = enginePin(
+  JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8")).version,
+);
 
 const claudeDir = join(homedir(), ".claude");
 const pluginsDir = join(claudeDir, "plugins");
@@ -86,6 +95,16 @@ if (!forkEntry) {
       `The fork is registered as "${name}" but should be "${FORK_MARKETPLACE}". An old registration under upstream's name can collide in the plugin cache. Remove and re-add it.`,
     );
   }
+}
+
+const legacyEntry = entries.find(
+  ([, v]) =>
+    (v?.source?.repo ?? "").toLowerCase() === LEGACY_FORK_REPO.toLowerCase(),
+);
+if (legacyEntry) {
+  problems.push(
+    `The previous fork's marketplace (${LEGACY_FORK_REPO}) is registered as "${legacyEntry[0]}". It ships a different engine; having it alongside this fork is how the wrong plugin gets installed. Remove it: claude plugin marketplace remove ${legacyEntry[0]}`,
+  );
 }
 
 if (upstreamEntry) {

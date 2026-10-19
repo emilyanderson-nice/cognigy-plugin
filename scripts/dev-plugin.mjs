@@ -30,6 +30,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FORK_MARKETPLACE_NAME, FORK_REPO } from "./fork-identity.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const devRoot = join(repoRoot, ".dev-plugin");
@@ -39,11 +40,11 @@ const DEV_MARKETPLACE = "cognigy-dev";
 // fork and upstream shared a name AND a version number, the cache key
 // collided and the stock engine was served under the fork's install with no
 // error. See MAINTAINING.md.
-const PROD_MARKETPLACE = "cognigy-plugin-pb";
+const PROD_MARKETPLACE = FORK_MARKETPLACE_NAME;
 // This fork's own repo, NOT Cognigy/cognigy-plugin. Restoring upstream here
 // would reinstall the stock plugin, whose manifests pin the npm engine — the
 // fork's engine would stop running with no error and no visible difference.
-const PROD_MARKETPLACE_SOURCE = "pb-crackers/cognigy-plugin";
+const PROD_MARKETPLACE_SOURCE = FORK_REPO;
 
 function claude(args, { allowFailure = false } = {}) {
   try {
