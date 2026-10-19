@@ -9,6 +9,8 @@ Covers the **chat** side of the standalone Claude Desktop app. The Desktop **"Co
 | **Extra steps**  | Yes — install the plugin inside the app (below)                   |
 | **Auto-updates** | Automatic: the connector refreshes its engine on every app launch |
 
+> **The tools here come from Cognigy's published engine, not this fork's.** The `Cognigy` connector's launcher pulls `@cognigy/plugin-engine@latest` from npm on every app launch, so fork-only features are not available in Desktop chat. The installer prints the same notice. Claude Code, ChatGPT + Codex and Cursor run the fork's engine.
+
 ## Step 1 — Run the installer
 
 [Run the installer](../../README.md#installation) and pick **Claude Desktop chat**. It merges a `Cognigy` connector into `claude_desktop_config.json` (backing up any existing file to `.bak` first) pointing at an auto-updating, offline-safe launcher. Restart Claude Desktop — **the tools work now**.
@@ -19,8 +21,8 @@ The connector serves tools only. Skills and agents arrive exclusively through th
 
 1. Click **Customize** in the left sidebar.
 2. Next to **Personal plugins**, click **+**, hover **Add**, and click **Add marketplace**.
-3. In the URL field enter `Cognigy/cognigy-plugin`, select the result, and click **Sync**.
-4. The `cognigy-plugin` marketplace is now added.
+3. In the URL field enter `emilyanderson-nice/cognigy-plugin`, select the result, and click **Sync**.
+4. The `cognigy-plugin-v2` marketplace is now added.
 5. Install the **Cognigy** plugin by clicking **+**.
 6. On the local-MCP warning, click **Continue**.
 
@@ -45,7 +47,7 @@ To make the connector appear:
 ## Uninstall
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup uninstall --client claude-desktop
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client claude-desktop
 ```
 
 This removes the **connector entry only** — Desktop keeps plugin state in your claude.ai account, not a local file, so the installer cannot touch it. **Remove the plugin yourself from Customize → Plugins**, or it stays.

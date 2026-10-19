@@ -43,9 +43,10 @@ npm run plugin:dev:off
 ```
 
 > **Never edit the tracked `plugin/.claude-plugin/plugin.json` for testing.** Its published form
-> (`npx -y -p cognigy-engine@npm:@cognigy/plugin-engine@<version> cognigy-mcp`, version in lockstep
+> (`npx -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp`, version in lockstep
 > with `package.json`) is enforced by `npm run check:manifest`, which runs in pre-commit and PR CI —
-> a dev-edited manifest cannot be committed.
+> a dev-edited manifest cannot be committed. Versions and pins are changed only by
+> `npm run version:fork`.
 
 The dev manifest is generated from the current branch's `plugin.json` — after switching branches,
 re-run `npm run plugin:dev`.
@@ -63,38 +64,40 @@ Use this to verify the plugin the way end users install it.
 **Published marketplace (real end-user flow):**
 
 ```
-/plugin marketplace add Cognigy/cognigy-plugin
-/plugin install cognigy@cognigy-plugin
+/plugin marketplace add emilyanderson-nice/cognigy-plugin
+/plugin install cognigy@cognigy-plugin-v2
 ```
 
 Then:
 
 1. On first boot, the plugin's `mcpServers` command runs
-   `npx -y -p cognigy-engine@npm:@cognigy/plugin-engine@<version> cognigy-mcp`, which fetches the
-   engine pinned to the plugin's own version (kept in lockstep by semantic-release) and launches it.
-   npx caches by version, so repeat boots are fast/offline once fetched. No `@latest` float.
+   `npx -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp`, which clones this
+   repo at the tag matching the plugin's own version (stamped by `npm run version:fork`), builds it
+   through the `prepare` hook and launches it. The first boot of a version is slower (clone,
+   install, build); npx caches by spec, so repeat boots are expected to be fast once fetched. No
+   branch-tracking float. The tag `v<version>` must exist on origin or the engine fails to start.
 2. Provide your `COGNIGY_API_BASE_URL` and `COGNIGY_API_KEY` when prompted.
 3. Verify the tools are available under the `mcp__plugin_cognigy_platform__` prefix and that
    skills auto-load on intent.
 
-> **Heads-up:** this path runs the **released** engine for the pinned version — not your local
+> **Heads-up:** this path runs the **tagged** engine for the pinned version — not your local
 > `src/` changes. Unreleased engine changes are only testable via the local dev loop above; the
-> published path can be re-verified end to end after the release.
+> published path can be re-verified end to end once the tag exists. `npm run doctor` checks that the
+> installed plugin is this fork and boots the pinned engine.
 
-> **Why the pin is an npm alias** (`cognigy-engine@npm:@cognigy/plugin-engine@<pin>`): with a plain
-> `@cognigy/plugin-engine@<pin>` spec, `npm exec` in a session rooted in **this repo** sees the
-> repo's own `package.json` (same name + version as the pin), decides the spec is already satisfied
-> locally, skips the install, and fails with `sh: cognigy-mcp: command not found` (exit 127,
-> surfacing as MCP error `-32000`). The alias name never matches the repo's package name, so npm
-> always installs from the registry and the prod plugin boots anywhere — including inside this repo.
-> `npm run check:manifest` enforces this form; do not "simplify" it back.
+> **No npm alias.** Upstream pins an npm alias (`cognigy-engine@npm:@cognigy/plugin-engine@<pin>`);
+> this fork pins a GitHub tag instead and is not published to npm. `npm run check:manifest`
+> rejects the alias form (it would run Cognigy's stock engine, not this fork). Upstream's reason for
+> the alias was a plain `@cognigy/plugin-engine@<pin>` spec being treated as satisfied by this
+> repo's own `package.json` when `npm exec` runs in a session rooted here; whether the `github:`
+> spec is affected the same way has not been verified.
 
 **Picking up changes / re-testing a clean install:**
 
 ```
-/plugin marketplace remove cognigy-plugin
-/plugin marketplace add Cognigy/cognigy-plugin
-/plugin install cognigy@cognigy-plugin
+/plugin marketplace remove cognigy-plugin-v2
+/plugin marketplace add emilyanderson-nice/cognigy-plugin
+/plugin install cognigy@cognigy-plugin-v2
 ```
 
 (`npm run plugin:dev:off` runs exactly this restore for you.)
@@ -108,13 +111,13 @@ Test the Codex plugin manifests from a pushed branch (Codex reads the repo's
 `.claude-plugin/marketplace.json`, so any branch works):
 
 ```bash
-codex plugin marketplace add Cognigy/cognigy-plugin --ref <branch>
+codex plugin marketplace add emilyanderson-nice/cognigy-plugin --ref <branch>
 ```
 
 then install **cognigy** via `/plugins` in a Codex session and confirm the skills
 list and the `platform` tools respond (creds must exist — run `cognigy-setup
 --client codex` first or write `~/.cognigy-plugin/config.json`). The installer
-path itself: `npx -y -p @cognigy/plugin-engine@latest cognigy-setup --client codex …`,
+path itself: `npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client codex …`,
 then check `~/.codex/config.toml` for the `[mcp_servers.cognigy]` block.
 
 ## 3. Run Automated Checks
@@ -133,4 +136,5 @@ npm run check:manifest
 1. Run `npm run build`
 2. Run `npm test`, `npm run lint`, `npx tsc --noEmit`, and `npm run check:manifest`
 3. Test your changes with the local dev loop (`npm run plugin:dev`), then restore with `npm run plugin:dev:off`
-4. Verify the marketplace + plugin install path end to end (against a published engine version)
+4. Verify the marketplace + plugin install path end to end (against the tagged engine version; see
+   [Releasing a version](../MAINTAINING.md#releasing-a-version) for the order: stamp, push, tag, verify, merge)
