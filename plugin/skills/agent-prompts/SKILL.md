@@ -88,8 +88,9 @@ Refer to another section by its name ("see Handing over"), never "rule 7".
   repeat a single example word for word. Add "Vary it; never reuse the same
   sentence structure in one conversation."
 - **Happy path first.** Write the common case, then add an edge case only
-  when a test shows the agent needs it. Long prompts slow responses and
-  bury the rules that matter.
+  when a test shows the agent needs it, and only after checking an existing
+  rule can't cover it (see Changing an existing agent). Long prompts slow
+  responses and bury the rules that matter.
 - **The prompt is not a security boundary.** Anything that must never happen
   (refunds over a limit, showing another customer's data) is enforced in the
   tool or the API. The prompt only explains it to the caller.
@@ -165,10 +166,30 @@ Your replies are spoken by a text-to-speech voice, so write the way a person tal
 
 ## Changing an existing agent
 
-Read the current fields first (`get_resource`). Make the change the user asked
-for in the existing prompt's voice and structure. Don't rewrite the rest to
-this layout unasked: list what doesn't meet the checklist in your reply and
-let the user decide.
+Every change, however small, starts from the whole prompt, not from the
+behavior you just saw. A one-line patch per failed test grows the prompt and
+dilutes the rules that matter.
+
+1. Fetch the current agent and its tools (`get_resource`) right before the
+   change, even if you read them earlier: someone or an earlier round may
+   have changed them. Read every field end to end: `description`,
+   `instructions`, `jobName`, `jobDescription`, `jobInstructions`, and each
+   tool and parameter description.
+2. Name the behavior to change in one line, as a general rule rather than
+   the test case that showed it ("confirms details before booking", not "the
+   caller in sim IT-3 said Tuesday").
+3. Find what already governs it. Most fixes belong in an existing rule that
+   is unclear, buried, contradicted or in the wrong field.
+4. Change the prompt as a whole: reword, merge or move that rule; remove the
+   rule it contradicts. Add a new bullet only when nothing covers the
+   behavior, and put it in the section where it belongs.
+5. Re-read the full result. Each rule appears once, and the prompt is no
+   longer than it needs to be: if it grew, say by how much and why.
+
+In your reply, show the before and after of each field you changed, not just
+the added line. Make the change in the existing prompt's voice and structure.
+Don't rewrite the rest to this layout unasked: list what doesn't meet the
+checklist and let the user decide.
 
 ## Example: chat agent
 

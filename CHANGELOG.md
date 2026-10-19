@@ -1,3 +1,9 @@
+## 1.22.1-pb.5 (2026-10-19)
+
+### Features
+
+* **agent-prompts:** changing an existing agent starts from the whole prompt: fetch the agent and tools fresh, read every field end to end, name the behavior as a general rule, fix the existing rule that should cover it before adding a line, re-read the result and report any growth; replies show before/after per changed field
+
 ## 1.22.1-pb.4 (2026-10-16)
 
 ### Features
