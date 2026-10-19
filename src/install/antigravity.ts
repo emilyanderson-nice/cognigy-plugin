@@ -48,6 +48,7 @@ import { fileURLToPath } from "url";
 import type { UserConfigFile } from "../userConfigFile.js";
 import { writeUserConfigFile } from "../userConfigFile.js";
 import { runNpm } from "./npmRunner.js";
+import { FORK_REPO } from "./forkIdentity.js";
 // The launcher is shared with Claude Desktop — it is a generic "auto-update the
 // engine, then hand off" shim, not a Desktop-specific one. Antigravity needs the
 // same treatment: it is a GUI app with a minimal PATH that cannot resolve `npx`.
@@ -164,7 +165,7 @@ export function buildPluginManifest(
     description:
       "NiCE Cognigy Plugin — create, test, and manage AI Agents on the NiCE Cognigy platform",
     author: { name: "Cognigy", url: "https://www.cognigy.com" },
-    repository: "https://github.com/Cognigy/cognigy-plugin",
+    repository: `https://github.com/${FORK_REPO}`,
     license: "MIT",
     keywords: ["cognigy", "ai-agents", "conversational-ai", "mcp", "llm"],
   };

@@ -10,6 +10,7 @@ import {
   normalizeApiBaseUrl,
 } from "./hosts.js";
 import { placeholderHint, usableEnv } from "./placeholders.js";
+import { FORK_REPO } from "./install/forkIdentity.js";
 import {
   loadRuntimeSettings,
   type RuntimeSettings,
@@ -45,7 +46,7 @@ export function loadConfig(): Config {
       `COGNIGY_API_BASE_URL is not set.` +
         placeholderHint(process.env.COGNIGY_API_BASE_URL) +
         ` Provide it via the plugin install prompt, ` +
-        `or run "npx -y -p @cognigy/plugin-engine cognigy-setup" to write ${USER_CONFIG_FILE}.`,
+        `or run "npx -y -p github:${FORK_REPO} cognigy-setup" to write ${USER_CONFIG_FILE}.`,
     );
   }
 
@@ -54,7 +55,7 @@ export function loadConfig(): Config {
       `COGNIGY_API_KEY is not set.` +
         placeholderHint(process.env.COGNIGY_API_KEY) +
         ` Provide it via the plugin install prompt, ` +
-        `or run "npx -y -p @cognigy/plugin-engine cognigy-setup" to write ${USER_CONFIG_FILE}.`,
+        `or run "npx -y -p github:${FORK_REPO} cognigy-setup" to write ${USER_CONFIG_FILE}.`,
     );
   }
 

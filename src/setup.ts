@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * `cognigy-setup` — one-command installer for the NiCE Cognigy Plugin.
- * Run: `npx -y -p @cognigy/plugin-engine@latest cognigy-setup`.
+ * Run: `npx -y -p github:<fork repo> cognigy-setup` (the fork repository,
+ * FORK_REPO below).
  *
  * Collects the Cognigy API base URL + key (key masked, never echoed or written
  * to shell history), asks which client(s) to set up, and performs the full
@@ -16,6 +17,10 @@
  *     MCP servers, skills and agents into the shared ~/.gemini/config tree.
  *
  * Non-interactive (scripting/CI): pass --client, --api-base-url, --api-key.
+ *
+ * `install --project` installs the plugin for the CURRENT PROJECT only (Claude
+ * Code project scope, declared in .claude/settings.json) instead of for the
+ * user. Claude Code is the only client that supports it.
  */
 import { createInterface } from "readline";
 import { pathToFileURL } from "url";
@@ -27,7 +32,14 @@ import {
   installClaudeCode,
   uninstallClaudeCode,
   updateClaudeCode,
+  type InstallScope,
 } from "./install/claudeCode.js";
+import {
+  FORK_PLUGIN_ID,
+  FORK_REPO,
+  getEngineSpec,
+} from "./install/forkIdentity.js";
+import { prewarmEngine } from "./install/prewarm.js";
 import {
   desktopHasCognigyEntry,
   installClaudeDesktop,
@@ -58,8 +70,7 @@ import {
 } from "./install/codex.js";
 import { existsSync, realpathSync } from "fs";
 import { homedir } from "os";
-import { dirname, join } from "path";
-import { runNpm } from "./install/npmRunner.js";
+import { dirname, join, parse, resolve } from "path";
 import { CognigyApiClient } from "./api/client.js";
 import { runProfileCommand } from "./profiles/profileCli.js";
 import { loadProfilesFromSystem } from "./profiles/profiles.js";
@@ -68,8 +79,6 @@ import {
   setDefaultProfile,
   upsertProfile,
 } from "./profiles/profilesStore.js";
-
-const PKG = "@cognigy/plugin-engine";
 
 const DEFAULT_BASE_URL = "https://api-trial.cognigy.ai";
 
@@ -130,6 +139,8 @@ interface Flags {
   invalidClients: string[];
   apiBaseUrl?: string;
   apiKey?: string;
+  /** --project: install for the current project (Claude Code only). */
+  project: boolean;
 }
 
 function isClient(v: string): v is Client {
@@ -137,7 +148,7 @@ function isClient(v: string): v is Client {
 }
 
 export function parseFlags(argv: string[]): Flags {
-  const flags: Flags = { clients: [], invalidClients: [] };
+  const flags: Flags = { clients: [], invalidClients: [], project: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const take = () => argv[++i];
@@ -161,8 +172,40 @@ export function parseFlags(argv: string[]): Flags {
     else if (arg === "--client") addClient(take());
     else if (arg.startsWith("--client="))
       addClient(arg.slice("--client=".length));
+    else if (arg === "--project") flags.project = true;
   }
   return flags;
+}
+
+/**
+ * Resolve scope + target clients. Project scope is Claude Code only: it
+ * defaults to that client and rejects any other rather than narrowing the list
+ * silently (a dropped client would look installed when it is not).
+ */
+export function planInstall(
+  flags: Pick<Flags, "project" | "clients">,
+): { scope: InstallScope; clients: Client[] } | { error: string } {
+  if (!flags.project) return { scope: "user", clients: flags.clients };
+  const unsupported = flags.clients.filter((c) => c !== "claude-code");
+  if (unsupported.length > 0) {
+    return {
+      error:
+        `--project only supports claude-code; it cannot be combined with: ${unsupported.join(", ")}. ` +
+        "Drop those --client values, or run without --project for a user-wide install.",
+    };
+  }
+  return { scope: "project", clients: ["claude-code"] };
+}
+
+/** The error text for unknown --client values (with a hint for retired ones). */
+export function unknownClientsMessage(invalid: string[]): string {
+  return (
+    `Unknown --client value(s): ${invalid.join(", ")}. Valid values: ${ALL_CLIENTS.join(", ")}.\n` +
+    (invalid.includes("gemini")
+      ? `  Gemini CLI support was removed: https://github.com/${FORK_REPO}/blob/main/docs/install/gemini-cli.md\n` +
+        "  Remove an installed extension with: gemini extensions uninstall cognigy\n"
+      : "")
+  );
 }
 
 /**
@@ -174,13 +217,7 @@ export function parseFlags(argv: string[]): Flags {
  */
 function rejectInvalidClients(invalid: string[]): void {
   if (invalid.length === 0) return;
-  process.stderr.write(
-    `Unknown --client value(s): ${invalid.join(", ")}. Valid values: ${ALL_CLIENTS.join(", ")}.\n` +
-      (invalid.includes("gemini")
-        ? "  Gemini CLI support was removed: https://github.com/Cognigy/cognigy-plugin/blob/main/docs/install/gemini-cli.md\n" +
-          "  Remove an installed extension with: gemini extensions uninstall cognigy\n"
-        : ""),
-  );
+  process.stderr.write(unknownClientsMessage(invalid));
   process.exit(1);
 }
 
@@ -379,7 +416,79 @@ async function chooseClients(): Promise<Client[]> {
   return picked.map((i) => menu[i]);
 }
 
-function runInstall(client: Client, creds: UserConfigFile): void {
+/** Success text for a project-scope Claude Code install. */
+export function projectInstallSummary(cwd: string): string {
+  return (
+    `\n  Project: ${cwd}\n` +
+    "  The plugin is declared in that folder's .claude/settings.json, so you can commit it for your teammates.\n" +
+    "  The API key is NOT in the project: Claude Code keeps it in its own per-user credential store.\n" +
+    "  Claude Code may ask you to trust the project settings the first time you open the project.\n"
+  );
+}
+
+const PROJECT_FLAG_SUBCOMMANDS = ["uninstall", "update", "status"];
+
+/** `--project` only applies to `install`; explain how to undo a project install. */
+export function rejectProjectFlag(
+  subcommand: string,
+  argv: string[],
+): string | undefined {
+  if (!PROJECT_FLAG_SUBCOMMANDS.includes(subcommand)) return undefined;
+  if (!argv.includes("--project")) return undefined;
+  return (
+    `--project is not supported by '${subcommand}': it only applies to 'install'.\n` +
+    "To remove a project install, run this in the project folder:\n" +
+    `  claude plugin uninstall ${FORK_PLUGIN_ID} --scope project\n`
+  );
+}
+
+function stripTrailingSeparators(p: string): string {
+  const root = parse(p).root;
+  let out = p;
+  while (out.length > root.length && /[\\/]$/.test(out)) out = out.slice(0, -1);
+  return out;
+}
+
+/** Refuses a home folder or filesystem root; warns when it is not a project root. */
+export function projectDirProblem(
+  cwd: string,
+  home: string,
+  exists: (path: string) => boolean,
+): { refuse?: string; warn?: string } | undefined {
+  const norm = (p: string): string => {
+    const s = stripTrailingSeparators(resolve(p));
+    return process.platform === "win32" ? s.toLowerCase() : s;
+  };
+  const dir = norm(cwd);
+  if (dir === norm(home)) {
+    return {
+      refuse:
+        `Refusing a project install in your home folder (${cwd}): it would apply to every project under it.\n` +
+        "Run this from the project folder instead.",
+    };
+  }
+  if (dir === norm(parse(resolve(cwd)).root)) {
+    return {
+      refuse:
+        `Refusing a project install at the filesystem root (${cwd}).\n` +
+        "Run this from the project folder instead.",
+    };
+  }
+  if (!exists(join(cwd, ".git")) && !exists(join(cwd, ".claude"))) {
+    return {
+      warn:
+        `Note: ${cwd} does not look like a project root (no .git or .claude folder).\n` +
+        "Continuing; make sure this is the folder you want the plugin declared in.",
+    };
+  }
+  return undefined;
+}
+
+function runInstall(
+  client: Client,
+  creds: UserConfigFile,
+  scope: InstallScope = "user",
+): void {
   if (client === "other-hosts") {
     // Nothing to wire: these hosts either install the plugin themselves (VS
     // Code reads our Claude-format manifest) or take a hand-written MCP entry.
@@ -395,7 +504,7 @@ function runInstall(client: Client, creds: UserConfigFile): void {
         "  Any host that starts the engine now picks these up automatically.\n\n" +
         `  ${bold("VS Code / Copilot")} — install the plugin, then restart:\n` +
         `      ${cyan("1.")} Set ${bold('"chat.plugins.enabled": true')} in settings.json.\n` +
-        `      ${cyan("2.")} Add ${bold('"chat.plugins.marketplaces": ["Cognigy/cognigy-plugin"]')}.\n` +
+        `      ${cyan("2.")} Add ${bold(`"chat.plugins.marketplaces": ["${FORK_REPO}"]`)}.\n` +
         `      ${cyan("3.")} Extensions view → search ${bold("@agentPlugins")} → install ${bold("cognigy")}.\n` +
         dim(
           "  You get tools, skills, and agents. Leave the credential fields alone —\n" +
@@ -418,8 +527,13 @@ function runInstall(client: Client, creds: UserConfigFile): void {
     return;
   }
   if (client === "claude-code") {
-    const res = installClaudeCode(creds);
-    if (res.method === "cli") {
+    const res = installClaudeCode(creds, scope);
+    if (res.method === "cli" && scope === "project") {
+      process.stdout.write(
+        green(bold("\n✅ Claude Code — installed for THIS project.")) +
+          projectInstallSummary(process.cwd()),
+      );
+    } else if (res.method === "cli") {
       process.stdout.write(
         green(bold("\n✅ Claude Code — all set.")) +
           " Plugin installed via the claude CLI " +
@@ -445,7 +559,30 @@ function runInstall(client: Client, creds: UserConfigFile): void {
           "\n\n" +
           `  ${bold("• Claude Desktop → 'Code' tab")} — use the plugin browser:\n` +
           `      ${cyan("1.")} Click ${bold("+")} near the prompt → ${bold("Plugins")} → ${bold("Add plugin")}.\n` +
-          `      ${cyan("2.")} Add the marketplace ${bold("Cognigy/cognigy-plugin")}, then install the ${bold("Cognigy")} plugin.\n`,
+          `      ${cyan("2.")} Add the marketplace ${bold(FORK_REPO)}, then install the ${bold("Cognigy")} plugin.\n`,
+      );
+    }
+    if (res.method === "cli") {
+      // A cold first launch downloads + builds the engine, which can outlast
+      // Claude Code's 30s MCP connect timeout. Best-effort: never fails the install.
+      let warm: ReturnType<typeof prewarmEngine>;
+      try {
+        warm = prewarmEngine(getEngineSpec());
+      } catch (err) {
+        // getEngineSpec reads package.json and can throw.
+        warm = {
+          ok: false,
+          reason: err instanceof Error ? err.message : String(err),
+        };
+      }
+      process.stdout.write(
+        warm.ok
+          ? dim(
+              "  Engine cache primed — the first session should connect promptly.\n",
+            )
+          : yellow(
+              `  ⚠ Could not pre-warm the engine cache (${warm.reason}). The first session may time out connecting; run /mcp and reconnect to fix it.\n`,
+            ),
       );
     }
     // Windows: a normal Claude Code restart often isn't enough — the old
@@ -536,6 +673,7 @@ function runInstall(client: Client, creds: UserConfigFile): void {
         ),
       );
     }
+    printUpstreamEngineNotice(client);
     return;
   }
   // claude-desktop
@@ -578,7 +716,7 @@ function runInstall(client: Client, creds: UserConfigFile): void {
       bold(yellow("SKILLS & AGENTS install ONLY via these in-app steps")) +
       " —\n  do them now, in Claude Desktop:\n\n" +
       `    ${cyan("1.")} In chat, go ${bold("Customize")} → ${bold("Plugins")} → ${bold("Add")} → ${bold("Add marketplace")}.\n` +
-      `    ${cyan("2.")} In the URL field enter ${bold("Cognigy/cognigy-plugin")}, select the result, click ${bold("Sync")}.\n` +
+      `    ${cyan("2.")} In the URL field enter ${bold(FORK_REPO)}, select the result, click ${bold("Sync")}.\n` +
       `    ${cyan("3.")} The ${bold("cognigy-plugin")} marketplace is now added.\n` +
       `    ${cyan("4.")} Install the ${bold("Cognigy")} plugin by clicking ${bold("+")}.\n` +
       `    ${cyan("5.")} On the local-MCP warning, click ${bold("Continue")}.\n\n` +
@@ -589,41 +727,45 @@ function runInstall(client: Client, creds: UserConfigFile): void {
       yellow(RULE) +
       "\n",
   );
+  printUpstreamEngineNotice(client);
 }
 
-/** Latest published engine version from npm, or null (offline / npm missing). */
-function npmLatestVersion(): string | null {
-  try {
-    const res = runNpm(["view", `${PKG}@latest`, "version"], {
-      capture: true,
-      timeout: 15000,
-    });
-    if (res.status !== 0 || !res.stdout) return null;
-    return res.stdout.trim() || null;
-  } catch {
-    return null;
-  }
+/**
+ * Desktop and Antigravity launch the engine through the shared launcher, which
+ * pulls Cognigy's published npm package rather than this fork's engine.
+ */
+export function upstreamEngineNotice(client: string): string | undefined {
+  if (client !== "claude-desktop" && client !== "antigravity") return undefined;
+  return (
+    "Note: this client runs Cognigy's published engine, without this fork's changes. " +
+    "Re-running the installer does not change that for now.\n"
+  );
 }
 
-/** `status` — report what's installed on each surface + the latest available. */
+function printUpstreamEngineNotice(client: string): void {
+  const notice = upstreamEngineNotice(client);
+  if (notice) process.stdout.write("\n" + yellow(notice));
+}
+
+/** Indented, dim variant of the notice for `status` output. */
+function printUpstreamEngineNoticeDim(client: string): void {
+  const notice = upstreamEngineNotice(client);
+  if (notice) process.stdout.write(dim(`    ${notice}`));
+}
+
+/** `status` — report what's installed on each surface. */
 function runStatus(): void {
-  const latest = npmLatestVersion();
   const cliPath = detectClaudePath();
   const desktopEngine = installedDesktopEngineVersion();
   const desktopWired = desktopHasCognigyEntry();
 
   process.stdout.write(bold(cyan("\nNiCE Cognigy Plugin — status\n\n")));
   process.stdout.write(
-    `  Latest engine on npm: ${latest ? green(latest) : yellow("unknown (offline?)")}\n`,
-  );
-  process.stdout.write(
     `  Claude Code CLI:      ${cliPath ? green("found") + dim(` (${cliPath})`) : yellow("not on PATH")}\n`,
   );
   if (cliPath) {
     process.stdout.write(
-      dim(
-        "    Plugin version is managed by Claude Code — see `/plugin` → cognigy-plugin.\n",
-      ),
+      dim("    Plugin version is managed by Claude Code — see `/plugin`.\n"),
     );
   }
   process.stdout.write(
@@ -631,13 +773,7 @@ function runStatus(): void {
       (desktopEngine ? dim(` · engine ${desktopEngine}`) : "") +
       "\n",
   );
-  if (desktopEngine && latest && desktopEngine !== latest) {
-    process.stdout.write(
-      yellow(
-        `    Desktop engine ${desktopEngine} < ${latest} — it auto-updates on the next Desktop restart.\n`,
-      ),
-    );
-  }
+  if (desktopWired) printUpstreamEngineNoticeDim("claude-desktop");
   const agPlugin = antigravityHasPlugin();
   const agVersion = installedPluginVersion();
   process.stdout.write(
@@ -645,13 +781,7 @@ function runStatus(): void {
       (agVersion ? dim(` · v${agVersion}`) : "") +
       "\n",
   );
-  if (agVersion && latest && agVersion !== latest) {
-    process.stdout.write(
-      yellow(
-        `    Antigravity plugin ${agVersion} < ${latest} — run \`cognigy-setup update\` to re-stage skills and agents.\n`,
-      ),
-    );
-  }
+  if (agPlugin) printUpstreamEngineNoticeDim("antigravity");
   process.stdout.write(
     `  ChatGPT + Codex:      ${codexHasCognigyPlugin() ? green("plugin installed") : dim("not installed")}\n`,
   );
@@ -723,7 +853,7 @@ function runUpdate(): void {
         yellow("• ChatGPT + Codex") +
           ": update failed — run it by hand:\n" +
           cyan("    codex plugin marketplace upgrade\n") +
-          cyan("    codex plugin add cognigy@cognigy-plugin\n"),
+          cyan(`    codex plugin add ${FORK_PLUGIN_ID}\n`),
       );
     }
   } else {
@@ -926,6 +1056,11 @@ export function stripSetupToken(argv: string[]): string[] {
 async function main(): Promise<void> {
   const raw = stripSetupToken(process.argv.slice(2));
   const { sub, rest } = parseSubcommand(raw);
+  const projectRejection = rejectProjectFlag(sub, rest);
+  if (projectRejection) {
+    process.stderr.write(projectRejection);
+    process.exit(1);
+  }
   switch (sub) {
     case "install":
       break;
@@ -966,15 +1101,29 @@ async function main(): Promise<void> {
   const argv = rest;
   const flags = parseFlags(argv);
   rejectInvalidClients(flags.invalidClients);
+  const plan = planInstall(flags);
+  if ("error" in plan) {
+    process.stderr.write(`${plan.error}\n`);
+    process.exit(1);
+  }
+  const { scope } = plan;
+  if (scope === "project") {
+    const problem = projectDirProblem(process.cwd(), homedir(), existsSync);
+    if (problem?.refuse) {
+      process.stderr.write(`${problem.refuse}\n`);
+      process.exit(1);
+    }
+    if (problem?.warn) process.stdout.write(yellow(`${problem.warn}\n`));
+  }
   const interactive = process.stdin.isTTY && flags.apiKey === undefined;
 
   let apiBaseUrl = flags.apiBaseUrl;
   let apiKey = flags.apiKey;
-  let clients = flags.clients;
+  let clients = plan.clients;
 
   if (interactive) {
     process.stdout.write(bold(cyan("\n🚀 NiCE Cognigy Plugin Setup\n\n")));
-    clients = await chooseClients();
+    if (scope === "user") clients = await chooseClients();
     process.stdout.write("\n");
     const urlAnswer = await ask(`Cognigy API base URL [${DEFAULT_BASE_URL}]: `);
     apiBaseUrl = urlAnswer || DEFAULT_BASE_URL;
@@ -985,7 +1134,9 @@ async function main(): Promise<void> {
       process.stderr.write(
         `No client selected. Pass one or more of: ${ALL_CLIENTS.map(
           (c) => `--client ${c}`,
-        ).join(", ")}.\n`,
+        ).join(
+          ", ",
+        )} (or --project to install Claude Code for this project).\n`,
       );
       process.exit(1);
     }
@@ -1009,7 +1160,7 @@ async function main(): Promise<void> {
   const failed: { client: Client; message: string }[] = [];
   for (const client of clients) {
     try {
-      runInstall(client, creds);
+      runInstall(client, creds, scope);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failed.push({ client, message });

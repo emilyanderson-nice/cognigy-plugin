@@ -24,12 +24,18 @@ export function detectOnPath(bin: string): string | null {
  * spaces (e.g. under "Program Files") would break — use the bare bin name on
  * Windows (PATH already resolved it, since `where` succeeded) and reserve the
  * absolute path for non-Windows. stdin ignored so a stray prompt can't hang
- * the run.
+ * the run. `timeoutMs` bounds long-running commands; omitted, none is applied.
  */
-export function runCliTool(bin: string, absPath: string, args: string[]) {
+export function runCliTool(
+  bin: string,
+  absPath: string,
+  args: string[],
+  opts: { timeoutMs?: number } = {},
+) {
   const command = isWin ? bin : absPath;
   return spawnSync(command, isWin ? quoteWinArgs(args) : args, {
     stdio: ["ignore", "inherit", "inherit"],
     shell: isWin,
+    ...(opts.timeoutMs !== undefined ? { timeout: opts.timeoutMs } : {}),
   });
 }

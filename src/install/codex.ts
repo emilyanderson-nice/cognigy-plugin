@@ -18,8 +18,8 @@
  * (src/config.ts).
  *
  * Everything else is `codex plugin`, which is fully non-interactive:
- *   codex plugin marketplace add Cognigy/cognigy-plugin --ref main
- *   codex plugin add cognigy@cognigy-plugin
+ *   codex plugin marketplace add <fork repo> --ref main
+ *   codex plugin add <plugin>@<marketplace>
  * Without the CLI we print the equivalent GUI steps.
  *
  * `--ref main` is not optional, and it is what makes updates work at all.
@@ -45,10 +45,14 @@ import { join } from "path";
 import type { UserConfigFile } from "../userConfigFile.js";
 import { writeUserConfigFile } from "../userConfigFile.js";
 import { detectOnPath, runCliTool } from "./cliRunner.js";
+import {
+  FORK_REPO,
+  FORK_MARKETPLACE_NAME,
+  FORK_PLUGIN_ID,
+} from "./forkIdentity.js";
 
-const PLUGIN_NAME = "cognigy";
 /** Marketplace *source* — what `marketplace add` takes (owner/repo). */
-const MARKETPLACE_SOURCE = "Cognigy/cognigy-plugin";
+const MARKETPLACE_SOURCE = FORK_REPO;
 /** The only ref users should ever be pinned to. See the note at the top. */
 export const MARKETPLACE_REF = "main";
 /**
@@ -56,9 +60,9 @@ export const MARKETPLACE_REF = "main";
  * which is what Codex registers it as and what `marketplace remove` takes.
  * Not interchangeable with the source above.
  */
-const MARKETPLACE_NAME = "cognigy-plugin";
+const MARKETPLACE_NAME = FORK_MARKETPLACE_NAME;
 /** Plugin selector for `plugin add` / `plugin remove`. */
-const PLUGIN_SELECTOR = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
+const PLUGIN_SELECTOR = FORK_PLUGIN_ID;
 
 export const CODEX_CONFIG_PATH = join(homedir(), ".codex", "config.toml");
 
@@ -67,7 +71,7 @@ export function detectCodexPath(): string | null {
   return detectOnPath("codex");
 }
 
-/** `codex plugin marketplace add Cognigy/cognigy-plugin --ref main`. */
+/** `codex plugin marketplace add <fork repo> --ref main`. */
 export function buildCodexMarketplaceAddArgs(): string[] {
   return [
     "plugin",
@@ -84,17 +88,17 @@ export function buildCodexMarketplaceUpgradeArgs(): string[] {
   return ["plugin", "marketplace", "upgrade"];
 }
 
-/** `codex plugin marketplace remove cognigy-plugin` (by name, not source). */
+/** `codex plugin marketplace remove <marketplace>` (by name, not source). */
 export function buildCodexMarketplaceRemoveArgs(): string[] {
   return ["plugin", "marketplace", "remove", MARKETPLACE_NAME];
 }
 
-/** `codex plugin add cognigy@cognigy-plugin`. */
+/** `codex plugin add <plugin>@<marketplace>`. */
 export function buildCodexPluginAddArgs(): string[] {
   return ["plugin", "add", PLUGIN_SELECTOR];
 }
 
-/** `codex plugin remove cognigy@cognigy-plugin`. */
+/** `codex plugin remove <plugin>@<marketplace>`. */
 export function buildCodexPluginRemoveArgs(): string[] {
   return ["plugin", "remove", PLUGIN_SELECTOR];
 }
@@ -122,7 +126,7 @@ export function codexHasCognigyPlugin(
  * registered as a git source (absent, or a local path a developer wired by
  * hand — which we must leave alone).
  *
- * Scoped to the `[marketplaces.cognigy-plugin]` table on purpose: config.toml
+ * Scoped to the `[marketplaces.<marketplace>]` table on purpose: config.toml
  * is the user's file and holds unrelated secrets, so we read the one block we
  * own and never parse or rewrite the rest (the codex CLI does the writing).
  */
