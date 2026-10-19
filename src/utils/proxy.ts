@@ -303,7 +303,7 @@ interface RedirectRequestOptions {
   agents?: { http?: Agent; https?: Agent };
 }
 
-function redirectTargetUrl(options: RedirectRequestOptions): string {
+export function redirectTargetUrl(options: RedirectRequestOptions): string {
   if (options.href) return options.href;
   // `href` is one of the fields follow-redirects copies from the resolved
   // redirect URL, so this is belt and braces; rebuild it if a future version

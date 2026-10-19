@@ -102,7 +102,9 @@ Cognigy uses two ID formats — see [ARCHITECTURE.md](ARCHITECTURE.md#id-formats
 
 ## Troubleshooting
 
-**"Rate limit exceeded"** — wait for the window to reset, or increase `RATE_LIMIT_MAX_REQUESTS` in your env config.
+**"Rate limit exceeded"** — wait for the window to reset, or increase `RATE_LIMIT_MAX_REQUESTS` in your env config. The limit is counted per environment.
+
+**"ambiguous" / "unknown" environment errors** — with two or more environments configured, every tool call must name one with the `environment` argument. Run `list_environments` to see the names. See [multiple-environments.md](install/multiple-environments.md).
 
 **Agent returns no response / empty output** — check that an LLM resource exists in the project (`list_resources` with `resourceType: llm_model`). The agent cannot generate responses without one.
 
@@ -112,7 +114,7 @@ Cognigy uses two ID formats — see [ARCHITECTURE.md](ARCHITECTURE.md#id-formats
 
 **Knowledge search returns no results** — verify ingestion completed by calling `manage_knowledge` with `operation: list_chunks` and the `knowledgeStoreId`.
 
-**Connection errors** — confirm `COGNIGY_API_BASE_URL` is reachable and `COGNIGY_API_KEY` is valid.
+**Connection errors** — confirm the environment's API base URL is reachable and its key is valid: `cognigy-setup profile test <name>` checks both and prints the detected platform release.
 
 ## Getting help
 

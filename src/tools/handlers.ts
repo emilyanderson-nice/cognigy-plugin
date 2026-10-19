@@ -15,6 +15,7 @@ import { randomUUID } from "crypto";
 import { pathToFileURL } from "url";
 import axios from "axios";
 import { applyProxyToRedirect, getProxyAxiosOptions } from "../utils/proxy.js";
+import { endpointRedirectGuard } from "../utils/endpointRedirectGuard.js";
 import { CognigyApiClient } from "../api/client.js";
 import {
   endpointUrlFor,
@@ -3615,7 +3616,9 @@ export class ToolHandlers {
         // the endpoint host differs from the API host and may be excluded by
         // NO_PROXY independently.
         ...getProxyAxiosOptions(endpointUrl!),
-        beforeRedirect: applyProxyToRedirect,
+        // Every hop must stay on the configured endpoint host (the host guard
+        // only saw the first URL); proxy routing is applied after that check.
+        beforeRedirect: endpointRedirectGuard(this.endpointBaseUrl),
       });
 
       let agentResponse = response.data.text || "";

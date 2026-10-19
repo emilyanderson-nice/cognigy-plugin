@@ -8,7 +8,7 @@ A plugin that connects your AI assistant to the [Cognigy.AI](https://www.cognigy
 
 ## Features
 
-- **18 workflow tools** for flow building, agent creation, deployment, packaging, backup, voice setup, and agent-to-agent (A2A) delegation
+- **20 workflow tools** (including `list_environments`, for working with several Cognigy environments at once) for flow building, agent creation, deployment, packaging, backup, voice setup, and agent-to-agent (A2A) delegation
 - **Flow building without an agent**: create standalone Flows (shared subroutines, error handlers, classic Node dialogs) and chain nodes onto them directly
 - **One-call agent setup**: creates Agent + Flow + AI Agent Job Node + REST Endpoint automatically
 - **Self-improvement loop**: talk to your agent, evaluate responses, update the job description, repeat
