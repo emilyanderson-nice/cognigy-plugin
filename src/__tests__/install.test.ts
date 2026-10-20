@@ -162,7 +162,7 @@ describe("claudeCode arg building", () => {
       "plugin",
       "marketplace",
       "add",
-      "Cognigy/cognigy-plugin",
+      "emilyanderson-nice/cognigy-plugin",
     ]);
   });
 
@@ -170,7 +170,7 @@ describe("claudeCode arg building", () => {
     expect(buildPluginInstallArgs(CREDS)).toEqual([
       "plugin",
       "install",
-      "cognigy@cognigy-plugin",
+      "cognigy@cognigy-plugin-v2",
       "--scope",
       "user",
       "--config",
@@ -182,8 +182,8 @@ describe("claudeCode arg building", () => {
 
   it("offers the manual /plugin fallback commands", () => {
     expect(fallbackCommands()).toEqual([
-      "/plugin marketplace add Cognigy/cognigy-plugin",
-      "/plugin install cognigy@cognigy-plugin",
+      "/plugin marketplace add emilyanderson-nice/cognigy-plugin",
+      "/plugin install cognigy@cognigy-plugin-v2",
     ]);
   });
 
@@ -191,18 +191,18 @@ describe("claudeCode arg building", () => {
     expect(buildPluginUpdateArgs()).toEqual([
       "plugin",
       "update",
-      "cognigy@cognigy-plugin",
+      "cognigy@cognigy-plugin-v2",
     ]);
     expect(buildPluginUninstallArgs()).toEqual([
       "plugin",
       "uninstall",
-      "cognigy@cognigy-plugin",
+      "cognigy@cognigy-plugin-v2",
     ]);
     expect(buildMarketplaceRemoveArgs()).toEqual([
       "plugin",
       "marketplace",
       "remove",
-      "cognigy-plugin",
+      "cognigy-plugin-v2",
     ]);
   });
 });

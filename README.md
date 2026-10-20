@@ -4,7 +4,7 @@
 
 A plugin that connects your AI assistant to the [Cognigy.AI](https://www.cognigy.com) REST API. Create, test, and improve LLM-based AI Agents through a self-improvement loop — without leaving your client.
 
-**Quick links:** [Installation](#installation) · [Staying up to date](#staying-up-to-date)
+**Quick links:** [Installation](#installation) · [Install for one project](#install-for-one-project-claude-code) · [Add another environment](#add-another-environment) · [Staying up to date](#staying-up-to-date)
 
 ## Features
 
@@ -27,24 +27,47 @@ A plugin that connects your AI assistant to the [Cognigy.AI](https://www.cognigy
 
 One installer covers every client. Run it, pick your client(s), enter your Cognigy API base URL (Enter for the trial default) and API key (masked as you type), then restart the client.
 
-**macOS / Linux** — one line (checks for Node.js, then runs the installer):
+You need [Node.js 20+](https://nodejs.org) and `git` on your PATH. This is a fork of the NiCE Cognigy plugin that installs straight from GitHub (it is not published to npm), so run the installer from this repository:
 
 ```
-bash <(curl -fsSL https://raw.githubusercontent.com/Cognigy/cognigy-plugin/main/install.sh)
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup
 ```
 
-**Windows (PowerShell)** — open as **Administrator**, then:
+The first run downloads and builds the engine, which can take 20–30 seconds; later runs use npm's cache.
+
+> **Do not use** the upstream `install.sh` / `install.ps1` one-liners or `npx -p @cognigy/plugin-engine@latest …` — they install Cognigy's published engine, which does not contain this fork's changes.
+
+### Install for one project (Claude Code)
+
+To add the plugin to a single project instead of your whole user profile, run this from the **project's root folder**, in a terminal:
 
 ```
-irm https://raw.githubusercontent.com/Cognigy/cognigy-plugin/main/install.ps1 | iex
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
 ```
 
-> The bootstrap only checks that Node.js 20+ is present (it tells you how to install it if not — it never installs it for you), then runs exactly the command below. Use whichever you prefer; they do the same thing.
+It asks for your Cognigy API base URL and API key (the key is hidden as you type). It then:
 
-Already have [Node.js 20+](https://nodejs.org)? Skip the bootstrap:
+1. Declares the marketplace and enables the plugin in the project's `.claude/settings.json`.
+2. Stores your key in Claude Code's own per-user credential store (and in `~/.cognigy-plugin/config.json`) — **never in the project**, so `.claude/settings.json` is safe to commit.
+3. Downloads the engine ahead of time so the first session does not time out connecting.
+
+Then restart Claude Code (or run `/reload-plugins`) and check with `/mcp`. Claude Code may ask you to trust the project's settings the first time it opens the project.
+
+`--project` works with Claude Code only. Run it again at any time to change the URL or key.
+
+Things to know:
+
+- **Credentials are per user, not per project.** Every project on the same machine sees the same set of Cognigy environments. When more than one is configured, the assistant names the environment on each request instead — see [Add another environment](#add-another-environment).
+- **Teammates:** commit `.claude/settings.json`. Each person still runs the command above once, because their own key lives on their own machine.
+
+**Asking Claude to do it.** In a fresh VS Code window with Claude Code open on your project, paste:
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup
+Install the Cognigy plugin for this project. Do not ask me for my API key in
+chat. Tell me to run this in the terminal at the project root, where it asks for
+the URL and key privately:
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
+Then tell me to restart Claude Code and check /mcp.
 ```
 
 ### Step 2 — check your client's row
@@ -66,19 +89,21 @@ Cursor is the one client that needs no installer at all: it collects your creden
 <sup>2</sup> Cursor asks for the credentials itself (Plugins → Configure), so it doesn't need the installer — see its guide.
 <sup>3</sup> The host owns the plugin version.
 
+> **Which clients run this fork's engine.** Claude Code, ChatGPT + Codex and Cursor load the plugin from this repository's manifests, which pin this fork's engine, so they get this fork's changes. The installer paths for **Claude Desktop chat** and **Antigravity** still fetch Cognigy's published engine from npm instead — they work, but without this fork's changes, and the installer says so when you pick them. Giving them a fork engine source is planned work.
+
 <details>
 <summary>Scripting / CI</summary>
 
 Skip the prompts with flags:
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup \
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup \
   --client claude-code --client claude-desktop --client codex \
   --client antigravity --client other-hosts \
   --api-base-url https://api-trial.cognigy.ai --api-key <key>
 ```
 
-`--client` is repeatable; valid values are `claude-code`, `claude-desktop`, `codex`, `antigravity`, and `other-hosts`. Omit it in interactive mode to pick from the menu.
+`--client` is repeatable; valid values are `claude-code`, `claude-desktop`, `codex`, `antigravity`, and `other-hosts`. Omit it in interactive mode to pick from the menu. `--project` replaces `--client` and installs Claude Code for the current project only (see above).
 
 </details>
 
@@ -87,16 +112,16 @@ npx -y -p @cognigy/plugin-engine@latest cognigy-setup \
 See the **Auto-updates** column in the table above for what each client does on its own. To pull a new release now instead of waiting for the client to notice:
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup update
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
 ```
 
 The installer doubles as a manager:
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup status      # what's installed, per client, + latest available
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup update      # pull the latest where it isn't automatic
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup uninstall   # remove from every client (--client narrows it; --purge also clears ~/.cognigy-plugin)
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup profile list # manage several Cognigy environments, see docs/install/multiple-environments.md
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup status      # what's installed, per client
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update      # pull the latest where it isn't automatic
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall   # remove from every client (--client narrows it; --purge also clears ~/.cognigy-plugin)
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup profile list # manage several Cognigy environments, see "Add another environment" below
 ```
 
 Beyond the MCP tools, the plugin ships **skills** and **agents** that surface the workflows automatically:
@@ -106,7 +131,7 @@ Beyond the MCP tools, the plugin ships **skills** and **agents** that surface th
 
 ## Configuration
 
-The [installer](#installation) collects your **Cognigy API base URL** and **API key** and wires them per client: on Claude Code into the system **keychain**, on Claude Desktop into `claude_desktop_config.json` (`chmod 600`). The engine receives them as environment variables. If either is missing for a given launch, the engine falls back to `~/.cognigy-plugin/config.json` (`chmod 600`), which the installer also writes — so credentials resolve from the environment first, then that file. ChatGPT + Codex, Antigravity, and other hosts rely on that file exclusively: their client configs carry no secrets.
+The [installer](#installation) collects your **Cognigy API base URL** and **API key** and wires them per client: on Claude Code into Claude Code's own per-user **credential store**, on Claude Desktop into `claude_desktop_config.json` (`chmod 600`). The engine receives them as environment variables. If either is missing for a given launch, the engine falls back to `~/.cognigy-plugin/config.json` (`chmod 600`), which the installer also writes — so credentials resolve from the environment first, then that file. ChatGPT + Codex, Antigravity, and other hosts rely on that file exclusively: their client configs carry no secrets.
 
 A value that arrives as an unexpanded `${...}` placeholder counts as missing. Hosts other than Claude Code don't implement `userConfig` and pass the manifest's `${user_config.cognigy_api_key}` through literally; treating that as a real credential would both fail the request and shadow the file fallback. The optional variables below can be set in the MCP server `env` if you need to override defaults.
 
@@ -125,6 +150,48 @@ A value that arrives as an unexpanded `${...}` placeholder counts as missing. Ho
 | `COGNIGY_ENDPOINT_BASE_URL`         | No       | derived | Endpoint host, when it cannot be derived from the API host     |
 | `COGNIGY_WEBCHAT_BASE_URL`          | No       | derived | Webchat host, when it cannot be derived from the API host      |
 | `COGNIGY_STATIC_FILES_BASE_URL`     | No       | derived | Static-files host, when it cannot be derived from the API host |
+
+### Add another environment
+
+You can keep several Cognigy environments on one machine — for example a classic trial tenant and a newer one — each with its own URL and key. Every command below is shown without its prefix; run each as `npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup <command>`.
+
+> **How the assistant uses them.** Every tool takes an optional `environment` argument. With one environment configured nothing changes. With two or more it is **required** on every call (except `list_environments`), the tool schemas mark it required, and the server never guesses: a call without it, or with an unknown name, is refused with the list of available environments. Every answer says which environment served it (`_environment`). Ask the assistant to run `list_environments` first, and to confirm the environment by name before anything destructive.
+
+1. **Add it.** Pick a short lower-case name and give the base URL:
+
+   ```
+   profile add v4-staging --api-base-url https://staging-v4.cognigy.ai --api-key-env MY_V4_KEY
+   ```
+
+   The key comes from a hidden prompt (the default in a terminal), from the environment variable named by `--api-key-env`, or from `--api-key KEY` — avoid the last one, it lands in your shell history.
+
+2. **Check what you have.**
+
+   ```
+   profile list
+   profile test --all        # read-only checks; a profile that cannot be used counts as a failure
+   profile show v4-staging   # hosts and key length, never the key
+   ```
+
+3. **Optionally mark a default.** `list_environments` shows it, but with two or more environments the assistant must still name the environment on every call, and it is told not to treat the marker as consent.
+
+   ```
+   profile default v4-staging    # or: profile default --clear
+   ```
+
+4. **Use it.** Ask in plain words, for example:
+
+   ```
+   List my Cognigy environments, then list the projects in v4-staging.
+   ```
+
+5. **Remove one you no longer need.**
+
+   ```
+   profile remove v4-staging --yes
+   ```
+
+Profiles live in `~/.cognigy-plugin/config.json` (readable only by you). Re-running the installer keeps them. You can also define them with `COGNIGY_PROFILE_<NAME>_API_BASE_URL` and `_API_KEY` environment variables. See [docs/install/multiple-environments.md](docs/install/multiple-environments.md) for the details, file protection and troubleshooting.
 
 ### Audit attribution
 
@@ -327,16 +394,16 @@ Full privacy policy: [https://www.cognigy.com/privacy-policy](https://www.cognig
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/Cognigy/cognigy-plugin/issues)
-- **Documentation**: see [`docs/`](https://github.com/Cognigy/cognigy-plugin/tree/main/docs) folder
+- **Issues**: [GitHub Issues](https://github.com/emilyanderson-nice/cognigy-plugin/issues)
+- **Documentation**: see [`docs/`](https://github.com/emilyanderson-nice/cognigy-plugin/tree/main/docs) folder
 
 ## Documentation
 
-- [docs/install/](https://github.com/Cognigy/cognigy-plugin/tree/main/docs/install) — per-client install guides ([Claude Code](docs/install/claude-code.md), [Claude Desktop](docs/install/claude-desktop.md), [ChatGPT + Codex](docs/install/chatgpt-codex.md), [Antigravity](docs/install/antigravity.md), [Cursor](docs/install/cursor.md), [other hosts](docs/install/other-hosts.md))
-- [docs/ARCHITECTURE.md](https://github.com/Cognigy/cognigy-plugin/blob/main/docs/ARCHITECTURE.md) — tool design, self-improvement loop, ID formats
-- [docs/USAGE.md](https://github.com/Cognigy/cognigy-plugin/blob/main/docs/USAGE.md) — detailed usage reference
-- [docs/TESTING.md](https://github.com/Cognigy/cognigy-plugin/blob/main/docs/TESTING.md) — how to test the plugin and a local engine build
-- [docs/CONTRIBUTING.md](https://github.com/Cognigy/cognigy-plugin/blob/main/docs/CONTRIBUTING.md) — development setup and contribution guide
+- [docs/install/](https://github.com/emilyanderson-nice/cognigy-plugin/tree/main/docs/install) — per-client install guides ([Claude Code](docs/install/claude-code.md), [Claude Desktop](docs/install/claude-desktop.md), [ChatGPT + Codex](docs/install/chatgpt-codex.md), [Antigravity](docs/install/antigravity.md), [Cursor](docs/install/cursor.md), [other hosts](docs/install/other-hosts.md))
+- [docs/ARCHITECTURE.md](https://github.com/emilyanderson-nice/cognigy-plugin/blob/main/docs/ARCHITECTURE.md) — tool design, self-improvement loop, ID formats
+- [docs/USAGE.md](https://github.com/emilyanderson-nice/cognigy-plugin/blob/main/docs/USAGE.md) — detailed usage reference
+- [docs/TESTING.md](https://github.com/emilyanderson-nice/cognigy-plugin/blob/main/docs/TESTING.md) — how to test the plugin and a local engine build
+- [docs/CONTRIBUTING.md](https://github.com/emilyanderson-nice/cognigy-plugin/blob/main/docs/CONTRIBUTING.md) — development setup and contribution guide
 
 ## License
 

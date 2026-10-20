@@ -1,3 +1,9 @@
+# NOTE (fork): this is UPSTREAM's bootstrap script. It installs Cognigy's published
+# engine (@cognigy/plugin-engine from npm) WITHOUT the changes in this fork
+# (emilyanderson-nice/cognigy-plugin). To install this fork, use the command in
+# the README (Installation):
+#   npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup
+#
 # NiCE Cognigy Plugin - bootstrap installer (Windows PowerShell).
 #
 # Run in PowerShell (opened as Administrator is recommended for Claude Code):
@@ -11,6 +17,8 @@ $ErrorActionPreference = 'Stop'
 
 $MinNodeMajor = 20
 $Pkg = '@cognigy/plugin-engine@latest'
+
+[Console]::Error.WriteLine("WARNING: this script installs Cognigy's published engine, without this fork's changes. To install the fork, run: npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup")
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {

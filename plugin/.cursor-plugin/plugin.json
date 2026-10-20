@@ -35,7 +35,12 @@
   "mcpServers": {
     "platform": {
       "command": "npx",
-      "args": ["-y", "-p", "github:pb-crackers/cognigy-plugin", "cognigy-mcp"],
+      "args": [
+        "-y",
+        "-p",
+        "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.1",
+        "cognigy-mcp"
+      ],
       "env": {
         "COGNIGY_API_BASE_URL": "${COGNIGY_API_BASE_URL}",
         "COGNIGY_API_KEY": "${COGNIGY_API_KEY}"

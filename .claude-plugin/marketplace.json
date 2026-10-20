@@ -1,11 +1,11 @@
 {
-  "name": "cognigy-plugin-pb",
+  "name": "cognigy-plugin-v2",
   "owner": {
-    "name": "pb-crackers (fork of Cognigy)",
-    "url": "https://github.com/pb-crackers/cognigy-plugin"
+    "name": "emilyanderson-nice (fork of Cognigy)",
+    "url": "https://github.com/emilyanderson-nice/cognigy-plugin"
   },
   "metadata": {
-    "description": "pb-crackers fork of the NiCE Cognigy Plugin — adds code-node error tracing, flow building without an AI Agent, and CognigyScript $cs checking. Named apart from upstream so client caches cannot collide."
+    "description": "emilyanderson-nice fork of the NiCE Cognigy Plugin — adds code-node error tracing, flow building without an AI Agent, and CognigyScript $cs checking. Named apart from upstream so client caches cannot collide."
   },
   "plugins": [
     {

@@ -17,6 +17,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FORK_MARKETPLACE_NAME, enginePin } from "./fork-identity.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
@@ -27,13 +28,13 @@ const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
 // (cognigy-engine@npm:@cognigy/plugin-engine@<v>); that form must not come
 // back on a merge, or the plugin would silently run the stock engine and the
 // fork's changes would vanish with no error.
-const ENGINE_SPEC = "github:pb-crackers/cognigy-plugin";
-const FORK_MARKETPLACE_NAME = "cognigy-plugin-pb";
+// The pin is the fork's GitHub repo at the release tag for package.json's
+// version (see fork-identity.mjs).
 // The fork's version is always <upstream base>-pb.<n>. Sharing upstream's
 // exact version number is half of what let a client cache serve the stock
 // engine under this fork's install; the marketplace name is the other half.
 const FORK_VERSION_RE = /^\d+\.\d+\.\d+-pb\.\d+$/;
-const expectedArgs = ["-y", "-p", ENGINE_SPEC, "cognigy-mcp"];
+const expectedArgs = ["-y", "-p", enginePin(pkg.version), "cognigy-mcp"];
 
 function checkPlatformServer(platform, errors) {
   if (!platform) {

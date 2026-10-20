@@ -1,9 +1,9 @@
 // Keeps every tracked plugin manifest in lockstep with the release version.
 // For each file it rewrites the top-level `version` field (when present).
 //
-// This fork installs the engine from GitHub rather than npm, so there is no
-// versioned engine pin left to rewrite — the spec carries a git ref, not a
-// version. The check below asserts the npm pin has not returned via an
+// This fork installs the engine from GitHub rather than npm, pinned to the
+// release tag v<version>; the pin is rewritten together with the version. The
+// check below asserts the npm pin has not returned via an
 // upstream merge, which would silently swap the fork's engine for the stock
 // one. Invoked by
 // semantic-release (.releaserc exec prepareCmd) with the computed next
@@ -13,6 +13,7 @@
 // existing formatting is preserved and stays Prettier-clean.
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { replaceEnginePin } from "./fork-identity.mjs";
 
 const version = process.argv[2];
 if (!version) {
@@ -33,7 +34,10 @@ const FILES = [
 
 for (const file of FILES) {
   const src = readFileSync(file, "utf8");
-  const next = src.replace(/("version":\s*")[^"]*(")/, `$1${version}$2`);
+  const next = replaceEnginePin(
+    src.replace(/("version":\s*")[^"]*(")/, `$1${version}$2`),
+    version,
+  );
   writeFileSync(file, next);
 
   const parsed = JSON.parse(next);

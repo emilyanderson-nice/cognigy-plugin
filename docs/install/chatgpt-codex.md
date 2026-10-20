@@ -25,7 +25,7 @@ The installer needs the `codex` CLI on PATH to install the plugin for you. Witho
 
 1. Click **Plugins** in the sidebar.
 2. Click **Add** at the top right, then **Add a Marketplace**.
-3. Enter `Cognigy/cognigy-plugin` as the source and click **Add Marketplace**.
+3. Enter `emilyanderson-nice/cognigy-plugin` as the source and click **Add Marketplace**.
 4. Click **Install** on the **Cognigy** plugin.
 5. Start a new thread.
 
@@ -36,7 +36,7 @@ You can also install the plugin here first and run the installer afterwards — 
 ## Uninstall
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup uninstall --client codex
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client codex
 ```
 
 Or in the app: **Plugins** in the sidebar → **⋯** on Cognigy → **Uninstall**.
@@ -62,9 +62,11 @@ _Background — you don't need any of this to use the plugin._
 **What the installer runs.** With the `codex` CLI on PATH, both steps are non-interactive:
 
 ```
-codex plugin marketplace add Cognigy/cognigy-plugin
-codex plugin add cognigy@cognigy-plugin
+codex plugin marketplace add emilyanderson-nice/cognigy-plugin --ref main
+codex plugin add cognigy@cognigy-plugin-v2
 ```
+
+This registers the fork's marketplace (named `cognigy-plugin-v2`, from `.claude-plugin/marketplace.json`), so Codex runs the fork's engine, pinned by the plugin manifest to `github:emilyanderson-nice/cognigy-plugin#v<version>` — that tag must exist on the fork for the pin to resolve.
 
 plus writing your credentials. Without the CLI it writes the credentials and prints the in-app steps.
 
@@ -81,7 +83,7 @@ codex mcp remove cognigy
 To force it immediately instead of waiting for the next app start:
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup update
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
 ```
 
 **If you are stuck on an old version**, the marketplace is almost certainly pinned to a branch that has stopped moving — auto-upgrade then works perfectly and finds nothing, forever. Check the ref:
@@ -90,6 +92,6 @@ npx -y -p @cognigy/plugin-engine@latest cognigy-setup update
 codex plugin marketplace list
 ```
 
-The installer registers the marketplace with `--ref main` precisely to prevent this. Without that ref, `codex plugin marketplace add Cognigy/cognigy-plugin` takes the branch from whatever Git checkout you ran it in. Re-running the installer detects a non-`main` ref and re-pins it for you.
+The installer registers the marketplace with `--ref main` precisely to prevent this. Without that ref, `codex plugin marketplace add emilyanderson-nice/cognigy-plugin` takes the branch from whatever Git checkout you ran it in. Re-running the installer detects a non-`main` ref and re-pins it for you.
 
 **Project-scoped config is ignored by the desktop app** — it loads only the global `~/.codex/config.toml` ([openai/codex#13025](https://github.com/openai/codex/issues/13025)). Plugins are recorded there, so this doesn't affect you.

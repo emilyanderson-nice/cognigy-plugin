@@ -37,9 +37,9 @@ Most new clients are archetype 1 or 2. "Stage and register" is the answer when t
 | `src/install/<client>.ts` | New module. Detection, arg builders, `install<Client>()`, `uninstall<Client>()`, and an "is it wired?" probe. Mirror `src/install/codex.ts` (CLI-driven) or `src/install/claudeDesktop.ts` (file-merge). |
 | `src/setup.ts` | Add the key to `Client`, `ALL_CLIENTS`, `CLIENT_LABELS`, `detectClients()`; a branch in `runInstall()`; a line in `runStatus()` and `runUpdate()`; a `runUninstall<Client>()` function called from `runUninstall()`. |
 | `plugin/.<client>-plugin/plugin.json` | Only for archetype 1, and only if the client's own manifest schema carries fields the fallback can't. |
-| `scripts/sync-plugin-version.mjs` | Add any **committed** manifest carrying a `version` field or an engine pin to `FILES`. |
-| `scripts/check-plugin-manifest.mjs` | Guard the new committed manifest's published form (npx command, alias pin). |
-| `.releaserc.json` | Add the same committed manifests to the `@semantic-release/git` assets. Add a build step to `prepareCmd` + a GitHub asset only if the client needs a packaged artifact (the removed `build-gemini-extension.mjs` in git history is the pattern). |
+| `scripts/sync-plugin-version.mjs`, `scripts/fork-version.mjs` | Add any **committed** manifest carrying a `version` field or an engine pin to `FILES` in both. A manifest carrying a pin also goes in `PIN_MANIFESTS` in `scripts/release-tag.mjs`. |
+| `scripts/check-plugin-manifest.mjs` | Guard the new committed manifest's published form (npx command, `github:` tag pin, version in lockstep). |
+| `.releaserc.json` | Upstream's semantic-release config (it does not run successfully on this fork). Keep its `@semantic-release/git` assets listing the same committed manifests so the file stays mergeable with upstream. Add a build step to `prepareCmd` + a GitHub asset only if the client needs a packaged artifact (the removed `build-gemini-extension.mjs` in git history is the pattern). |
 | `src/__tests__/install<...>.test.ts` | Arg builders, config merge/remove round-trips, detection. Follow `installCodex.test.ts`. |
 | `docs/install/<client>.md` | Install, credentials, update, uninstall — same four sections as the existing guides. |
 | `README.md` | Row in the per-client support table — including the **Auto-updates** cell — link in the docs list, and the credentials paragraph if this client uses a different channel. |
@@ -52,12 +52,12 @@ Do **not** touch `src/index.ts`, the tools, or the skills — the MCP server its
 
 **Engine pinning.** Two different specs, deliberately:
 
-- **Committed manifests** pin the exact release: `cognigy-engine@npm:@cognigy/plugin-engine@<version>`. Add the file to `sync-plugin-version.mjs`, `check-plugin-manifest.mjs`, and the release git assets, or it will drift out of lockstep.
-- **User-global config files** (`~/.codex/config.toml`, extension manifests) use `@latest`, because our releases never re-sync a file that lives in the user's home directory.
+- **Committed manifests** pin the exact release to a git tag on this fork: `github:emilyanderson-nice/cognigy-plugin#v<version>` (the repo slug and pin form come from `scripts/fork-identity.mjs` / `src/install/forkIdentity.ts`, never a literal). This fork is not published to npm; npm builds the engine from the tag through the `prepare` hook. Add a new committed manifest that carries a pin to `PIN_MANIFESTS` in `release-tag.mjs`, `FILES` in `fork-version.mjs` and `sync-plugin-version.mjs`, and the checks in `check-plugin-manifest.mjs`, or it will drift out of lockstep.
+- **User-global config files and the Desktop/Antigravity launcher** are not re-synced by a release, so they cannot carry a version pin. The existing Desktop and Antigravity paths in `src/install/` still reference `@cognigy/plugin-engine@latest` (the upstream npm package, i.e. the stock engine; `src/__tests__/upstreamEngineNotice.test.ts` covers the warning for those clients). Check `src/install/` for what a new client should use rather than assuming `@latest`.
 
-The **npm alias form is required in both cases**. A plain `@cognigy/plugin-engine@<v>` spec makes `npm exec` treat this repo's own package.json as satisfying the pin when a session is rooted here, skip the install, and fail with `cognigy-mcp: command not found` (MCP `-32000`).
+**The npm alias form (`cognigy-engine@npm:@cognigy/plugin-engine@<version>`) must not come back.** It is upstream's pin; if an upstream merge restores it the plugin silently runs Cognigy's stock engine. `check-plugin-manifest.mjs` rejects it and `merge:resolve` rewrites it.
 
-**Never hand-bump versions.** semantic-release owns every `version` field.
+**Never hand-bump versions or pins.** `npm run version:fork` owns every `version` field and engine pin (the same rule as in `MAINTAINING.md`); a release also needs the git tag `v<version>` on origin (`npm run release:tag`, see "Releasing a version" in `MAINTAINING.md`).
 
 **Let the client's CLI own its config.** If the client ships a CLI that writes its own config (`codex mcp add`), drive the CLI and print a paste-able snippet as fallback when the binary isn't on PATH. Only parse and merge a config file yourself when there is no CLI (Claude Desktop). When merging, preserve all other servers and top-level keys, back up the original once (never overwrite an existing `.bak`), and chmod 0600 if it holds secrets.
 
@@ -96,7 +96,7 @@ Then wire `runUpdate()` to actually do the work. A branch that prints a claim in
 5. Add manifests + release plumbing only if the client needs a committed manifest or a build artifact.
 6. Tests, then `docs/install/<client>.md`, then the README table.
 7. Verify: `npx tsc -p tsconfig.json --noEmit`, `npm test -- --runInBand`, `npm run check:manifest`, `npx prettier --write <changed files>`.
-8. Commit with a `feat(installer):` scope so semantic-release ships it.
+8. Commit with a `feat(installer):` scope (commitlint requires a conventional type). It reaches users only through a hand-stamped release: `version:fork`, then the tag, per `MAINTAINING.md`.
 
 ## Notes
 

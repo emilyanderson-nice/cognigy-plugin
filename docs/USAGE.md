@@ -118,6 +118,6 @@ Cognigy uses two ID formats — see [ARCHITECTURE.md](ARCHITECTURE.md#id-formats
 
 ## Getting help
 
-- [GitHub Issues](https://github.com/Cognigy/cognigy-plugin/issues)
+- [GitHub Issues](https://github.com/emilyanderson-nice/cognigy-plugin/issues)
 - Cognigy support: support@cognigy.com
 - [API Reference](API_REFERENCE.md)

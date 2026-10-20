@@ -10,13 +10,17 @@ Antigravity has a first-class plugin format, so the installer builds a real plug
 | **Requires**     | Nothing; the installer does not need `agy` on PATH                      |
 | **Auto-updates** | Yes — engine every launch, skills and agents on the launch after a bump |
 
+> **This client runs Cognigy's published engine, not this fork's.** The installer is run from the fork, but Antigravity's launcher pulls `@cognigy/plugin-engine@latest` from npm on every launch, so fork-only features are not available here. The installer prints the same notice. Claude Code, ChatGPT + Codex and Cursor run the fork's engine.
+
 ## Install
 
 [Run the installer](../../README.md#installation) and pick **Antigravity**:
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup --client antigravity
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client antigravity
 ```
+
+The installer is fetched from GitHub and builds on first run (20-30 s).
 
 Restart Antigravity. Tools, skills, and agents are live in the IDE and the `agy` CLI.
 
@@ -44,24 +48,24 @@ The API key is **not** written into any `mcp_config.json` — that file is share
 
 ## Updating
 
-Nothing to do. The plugin's server runs through a launcher that pulls the latest engine on every Antigravity launch (offline-safe), and on the first launch after a version bump that same launcher re-stages the plugin's skills and agents from the new engine. The engine is live immediately; the refreshed skills and agents load on the **next** launch, since Antigravity reads them at startup.
+Nothing to do. The plugin's server runs through a launcher that pulls the latest published engine (Cognigy's `@cognigy/plugin-engine` on npm, not this fork's) on every Antigravity launch (offline-safe), and on the first launch after a version bump that same launcher re-stages the plugin's skills and agents from the new engine. The engine is live immediately; the refreshed skills and agents load on the **next** launch, since Antigravity reads them at startup.
 
 This is ours, not Antigravity's: `agy` has no update command, no marketplace, and no refresh of its own — `agy plugin install` only ever copies a local directory.
 
 To pull a release now rather than at the next launch:
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup update
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
 ```
 
-`cognigy-setup status` shows the installed plugin version next to the latest on npm.
+`cognigy-setup status` shows whether the plugin is installed and its installed version.
 
 One caveat for existing installs: the launcher lives outside the versioned engine directory, so a launcher that predates this feature cannot update itself. Run `cognigy-setup update` once and it is rewritten; after that, updates are hands-off.
 
 ## Uninstall
 
 ```
-npx -y -p @cognigy/plugin-engine@latest cognigy-setup uninstall --client antigravity
+npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client antigravity
 ```
 
 Removes the plugin directory and both registry entries — again without needing `agy`. Drop `--client` to uninstall from every client; add `--purge` to also delete `~/.cognigy-plugin`, the credentials file every client shares.

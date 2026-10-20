@@ -33,7 +33,7 @@ describe("codex arg building", () => {
       "plugin",
       "marketplace",
       "add",
-      "Cognigy/cognigy-plugin",
+      "emilyanderson-nice/cognigy-plugin",
       "--ref",
       "main",
     ]);
@@ -46,7 +46,7 @@ describe("codex arg building", () => {
       "plugin",
       "marketplace",
       "remove",
-      "cognigy-plugin",
+      "cognigy-plugin-v2",
     ]);
   });
 
@@ -54,12 +54,12 @@ describe("codex arg building", () => {
     expect(buildCodexPluginAddArgs()).toEqual([
       "plugin",
       "add",
-      "cognigy@cognigy-plugin",
+      "cognigy@cognigy-plugin-v2",
     ]);
     expect(buildCodexPluginRemoveArgs()).toEqual([
       "plugin",
       "remove",
-      "cognigy@cognigy-plugin",
+      "cognigy@cognigy-plugin-v2",
     ]);
   });
 
@@ -96,7 +96,9 @@ describe("codex arg building", () => {
   });
 
   it("the GUI fallback names the marketplace source", () => {
-    expect(codexGuiSteps().join("\n")).toContain("Cognigy/cognigy-plugin");
+    const steps = codexGuiSteps().join("\n");
+    expect(steps).toContain("emilyanderson-nice/cognigy-plugin");
+    expect(steps).not.toContain("Cognigy/cognigy-plugin");
   });
 });
 
@@ -105,9 +107,18 @@ describe("codexHasCognigyPlugin", () => {
     const config = join(tmp(), "config.toml");
     writeFileSync(
       config,
-      `model = "gpt-5"\n\n[plugins."cognigy@cognigy-plugin"]\nenabled = true\n`,
+      `model = "gpt-5"\n\n[plugins."cognigy@cognigy-plugin-v2"]\nenabled = true\n`,
     );
     expect(codexHasCognigyPlugin(config)).toBe(true);
+  });
+
+  it("is false for upstream's plugin table (a different install)", () => {
+    const config = join(tmp(), "config.toml");
+    writeFileSync(
+      config,
+      `[plugins."cognigy@cognigy-plugin"]\nenabled = true\n`,
+    );
+    expect(codexHasCognigyPlugin(config)).toBe(false);
   });
 
   it("is false for other plugins, missing file, and a bare mcp server", () => {
@@ -127,10 +138,20 @@ describe("readCodexMarketplaceRef", () => {
     const config = join(tmp(), "config.toml");
     writeFileSync(
       config,
-      `model = "gpt-5"\n\n[marketplaces.cognigy-plugin]\nsource_type = "git"\n` +
-        `source = "https://github.com/Cognigy/cognigy-plugin.git"\nref = "main"\n`,
+      `model = "gpt-5"\n\n[marketplaces.cognigy-plugin-v2]\nsource_type = "git"\n` +
+        `source = "https://github.com/emilyanderson-nice/cognigy-plugin.git"\nref = "main"\n`,
     );
     expect(readCodexMarketplaceRef(config)).toBe("main");
+  });
+
+  it("ignores upstream's marketplace table", () => {
+    const config = join(tmp(), "config.toml");
+    writeFileSync(
+      config,
+      `[marketplaces.cognigy-plugin]\nsource_type = "git"\n` +
+        `source = "https://github.com/Cognigy/cognigy-plugin.git"\nref = "main"\n`,
+    );
+    expect(readCodexMarketplaceRef(config)).toBe(null);
   });
 
   it("reports a stale branch ref so the installer can re-pin it", () => {
@@ -139,7 +160,7 @@ describe("readCodexMarketplaceRef", () => {
     const config = join(tmp(), "config.toml");
     writeFileSync(
       config,
-      `[marketplaces.cognigy-plugin]\nsource_type = "git"\n` +
+      `[marketplaces.cognigy-plugin-v2]\nsource_type = "git"\n` +
         `ref = "feat/plugin-platforms-codex-gemini"\n\n[marketplaces.openai-bundled]\n` +
         `source_type = "local"\nref = "not-ours"\n`,
     );
@@ -156,7 +177,7 @@ describe("readCodexMarketplaceRef", () => {
     const local = join(dir, "local.toml");
     writeFileSync(
       local,
-      `[marketplaces.cognigy-plugin]\nsource_type = "local"\nsource = "/tmp/x"\n`,
+      `[marketplaces.cognigy-plugin-v2]\nsource_type = "local"\nsource = "/tmp/x"\n`,
     );
     expect(readCodexMarketplaceRef(local)).toBe(null);
 

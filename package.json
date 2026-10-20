@@ -24,6 +24,7 @@
     "check:manifest": "node scripts/check-plugin-manifest.mjs",
     "doctor": "node scripts/doctor.mjs",
     "version:fork": "node scripts/fork-version.mjs",
+    "release:tag": "node scripts/release-tag.mjs",
     "merge:resolve": "node scripts/resolve-upstream-merge.mjs",
     "start": "node dist/index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
