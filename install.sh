@@ -3,7 +3,7 @@
 # engine (@cognigy/plugin-engine from npm) WITHOUT the changes in this fork
 # (emilyanderson-nice/cognigy-plugin). To install this fork, use the command in
 # the README (Installation):
-#   npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup
+#   npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup
 #
 # NiCE Cognigy Plugin — bootstrap installer (macOS / Linux).
 #
@@ -25,7 +25,7 @@ PKG="@cognigy/plugin-engine@latest"
 
 err() { printf '%s\n' "$*" >&2; }
 
-err "WARNING: this script installs Cognigy's published engine, without this fork's changes. To install the fork, run: npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup"
+err "WARNING: this script installs Cognigy's published engine, without this fork's changes. To install the fork, run: npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup"
 
 if ! command -v node >/dev/null 2>&1; then
   err "Node.js is required but was not found."

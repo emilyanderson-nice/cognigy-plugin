@@ -47,7 +47,7 @@ To make the connector appear:
 ## Uninstall
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client claude-desktop
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client claude-desktop
 ```
 
 This removes the **connector entry only** — Desktop keeps plugin state in your claude.ai account, not a local file, so the installer cannot touch it. **Remove the plugin yourself from Customize → Plugins**, or it stays.

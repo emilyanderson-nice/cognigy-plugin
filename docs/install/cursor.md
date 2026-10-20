@@ -15,7 +15,7 @@ Because the credentials live in Cursor's plugin config rather than a file on one
 
 Install from the Cursor Marketplace, or add the repo directly: `emilyanderson-nice/cognigy-plugin` (this fork). Cursor reads the plugin's Cursor manifest, which points at its skills, agents, and MCP servers.
 
-The plugin pins its engine to this fork as a git spec, `npx -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp`, so the `v<version>` tag must exist on the fork for the server to start.
+The plugin pins its engine to this fork as a git spec, `npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp`, so the `v<version>` tag must exist on the fork for the server to start.
 
 ## Step 2 — Set the two variables
 
@@ -37,7 +37,7 @@ Cursor owns the plugin's version — update it the way you update any Cursor plu
 Remove the plugin in Cursor. Nothing is written outside Cursor's own configuration, so there is nothing else to clean up — unless you also ran the installer, in which case:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client other-hosts --purge
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client other-hosts --purge
 ```
 
 `--purge` deletes `~/.cognigy-plugin`, which every client shares — don't pass it while another client is still installed.
@@ -49,7 +49,7 @@ npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --cli
 The server starts either way, but it has no credentials to use. The variables are empty, or Cursor loaded the plugin from the vendor-neutral [Agent Plugins](https://agent-plugins.org) manifests instead of the Cursor one — those ship credential-less by design, since a plugin manifest is public text. Fill in **Plugins → Configure** first; if the fields aren't offered, fall back to the credentials file that every spec host uses:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client other-hosts
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client other-hosts
 ```
 
 That writes `~/.cognigy-plugin/config.json` (`chmod 600`) and touches no Cursor config. See [other-hosts.md](other-hosts.md).

@@ -29,7 +29,7 @@ In the Claude Desktop **"Code"** tab there is no slash-command install — use t
 Run the installer with `--project` from the project's root folder to declare the plugin in that project's `.claude/settings.json` instead of your user profile:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
 ```
 
 Your key is stored in Claude Code's per-user credential store, never in the project, so the settings file is safe to commit. Credentials are per user: every project on the machine sees the same set of Cognigy environments, and when more than one is configured the assistant names the environment on each request (see [multiple environments](multiple-environments.md)). The plugin declares its URL and key as required settings and Claude Code does not start the server until both are set, which is why the installer passes them even at project scope. See the [README](../../README.md#install-for-one-project-claude-code) for the full walkthrough.
@@ -55,7 +55,7 @@ A normal restart often isn't enough — the old process lingers and the plugin w
 ## Uninstall
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client claude-code
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client claude-code
 ```
 
 Without `--client` it removes the plugin from every client. Add `--purge` to also delete `~/.cognigy-plugin` — that file holds the credentials **all** clients fall back to, so purging while others stay installed breaks them. By hand: `/plugin uninstall cognigy@cognigy-plugin-v2` then `/plugin marketplace remove cognigy-plugin-v2`. A project-scope install is removed from inside that project with `claude plugin uninstall cognigy@cognigy-plugin-v2 --scope project`.

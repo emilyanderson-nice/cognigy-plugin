@@ -20,7 +20,7 @@ npx -y -p cognigy-engine@npm:@cognigy/plugin-engine@<version> cognigy-mcp
 **This fork is not published to npm.** It is installed straight from GitHub. The plugin manifests pin the engine to a **git tag** on this repo:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp
 ```
 
 `<version>` is the `version` in `package.json`, in the form `<x.y.z>-pb.<n>` (for example `v1.22.0-pb.1`). npm clones the repo at that tag, installs its dependencies, runs the `prepare` hook (`scripts/prepare.mjs`), which compiles `src/` to `dist/`, and then runs the `cognigy-mcp` bin. So the engine that runs **is this repo's source at that tag**.
@@ -29,11 +29,11 @@ Consequences worth knowing:
 
 - **The pin resolves only once the tag `v<version>` exists on origin.** Manifests on `main` name a tag; until that tag is pushed, every install from `main` fails to start the engine. This is why the tag is created before the merge, never after (see [Releasing a version](#releasing-a-version)).
 - **The spec no longer tracks the default branch.** It is frozen at a tag, so a push to `main` does not change what a client runs; only a new version (a new tag and new manifests) does. (Historical: before the tag pin, the spec was an unpinned `github:` spec that followed `main`.)
-- **The first cold start is slower than an npm install**: a clone, a dependency install and a TypeScript build, measured at ~22-30s for the unpinned spec. npx caches by spec, so a given version should be fast after its first start; a new version is a new spec and pays the cold start once per machine. (The cold-start figures were measured before the tag pin and have not been re-measured for it.)
+- **The first cold start is slower than an npm install**: a clone, a dependency install and a TypeScript build, measured at about 2 minutes (110-150 s over three runs, 13 s warm). npx caches by spec, so a given version should be fast after its first start; a new version is a new spec and pays the cold start once per machine. (These figures were measured on 2026-10-20 with the tag pin on npm 12.2.0, Windows; other machines and networks will differ.)
 
 ### Versions
 
-The fork's version is always `<upstream base>-pb.<n>`, currently `1.22.0-pb.1`. The base names the upstream release this is built on; the suffix keeps the number distinct from upstream's, which is the second half of the cache collision described below.
+The fork's version is always `<upstream base>-pb.<n>`; the current value is the `version` in `package.json`. The base names the upstream release this is built on; the suffix keeps the number distinct from upstream's, which is the second half of the cache collision described below.
 
 `npm run version:fork` stamps it: no argument bumps the suffix, an upstream version rebases onto it (`npm run version:fork 1.20.0` becomes `1.20.0-pb.1`), and `npm run version:fork 1.20.0 3` sets both. It rewrites the `version` in `package.json` and the plugin manifests that carry one, **and** the engine pin in the four files that carry a pin:
 
@@ -65,7 +65,7 @@ Nothing in the repo could detect it, because nothing in the repo was wrong. `npm
 npm run doctor
 ```
 
-Reports the registered marketplaces, which plugin is enabled, the engine spec in every cached manifest, whether credentials resolve, and, the one that matters most, whether the engine **actually starts and serves the fork's tools**. The boot check runs `npx -y -p github:emilyanderson-nice/cognigy-plugin#v<package.json version> cognigy-mcp`, so it needs the tag to exist on origin. Exits non-zero if Claude Code is running anything other than this fork. Pass `--no-boot` to skip the boot check when offline. `npm run plugin:dev:off` runs it automatically, since switching back is when the wrong plugin tends to get left behind.
+Reports the registered marketplaces, which plugin is enabled, the engine spec in every cached manifest, whether credentials resolve, and, the one that matters most, whether the engine **actually starts and serves the fork's tools**. The boot check runs `npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin#v<package.json version> cognigy-mcp`, so it needs the tag to exist on origin. Exits non-zero if Claude Code is running anything other than this fork. Pass `--no-boot` to skip the boot check when offline. `npm run plugin:dev:off` runs it automatically, since switching back is when the wrong plugin tends to get left behind.
 
 It flags, among other things:
 
@@ -97,12 +97,12 @@ It is nasty to diagnose because it only reproduces on a **cold npx cache** (the 
 
 ### Boot times
 
-|                                         |                                        |
-| --------------------------------------- | -------------------------------------- |
-| Cold (no npx cache for the pinned spec) | ~30s: clone, install, TypeScript build |
-| Warm                                    | ~3s                                    |
+|                                         |                                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Cold (no npx cache for the pinned spec) | about 2 minutes (110-150 s measured with the tag pin, npm 12.2.0, Windows): clone, install, TypeScript build |
+| Warm                                    | about 13 s (measured, same setup)                                                                            |
 
-These were measured before the tag pin; the build is the same, so they are expected to hold, but they have not been re-measured. The cold path runs close to a client's MCP startup timeout, so after a release run `npm run doctor`: it boots the engine end to end, which both verifies the pin and leaves the npx cache warm for the next client start.
+The figures in the table were measured on 2026-10-20 with the tag pin on npm 12.2.0, Windows. The cold path runs close to a client's MCP startup timeout, so after a release run `npm run doctor`: it boots the engine end to end, which both verifies the pin and leaves the npx cache warm for the next client start.
 
 ### The trap to watch for
 
@@ -112,10 +112,10 @@ If an upstream merge restores the npm pin in any manifest, the plugin silently r
 
 The fork's identity (repo slug, marketplace name, plugin id, engine pin form) lives in exactly two files, and everything else imports them:
 
-| File                          | Used by             | Exports                                                                                                                                                                               |
-| ----------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/install/forkIdentity.ts` | TypeScript (`src/`) | `FORK_REPO`, `FORK_MARKETPLACE_NAME`, `FORK_PLUGIN_ID`, `getEngineSpec()` (reads `package.json` lazily and returns `github:<repo>#v<version>`)                                        |
-| `scripts/fork-identity.mjs`   | `scripts/*.mjs`     | `FORK_REPO`, `FORK_MARKETPLACE_NAME`, `UPSTREAM_REPO`, `LEGACY_FORK_REPO`, `LEGACY_MARKETPLACE_NAME`, `FORK_ENGINE_SPEC`, `enginePin(version)`, `replaceForkSpec`, `replaceEnginePin` |
+| File                          | Used by             | Exports                                                                                                                                                                                                                                |
+| ----------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/install/forkIdentity.ts` | TypeScript (`src/`) | `FORK_REPO`, `FORK_MARKETPLACE_NAME`, `FORK_PLUGIN_ID`, `ENGINE_NPX_FLAGS`, `SETUP_COMMAND`, `getEngineSpec()` (reads `package.json` lazily and returns `github:<repo>#v<version>`)                                                    |
+| `scripts/fork-identity.mjs`   | `scripts/*.mjs`     | `FORK_REPO`, `FORK_MARKETPLACE_NAME`, `UPSTREAM_REPO`, `LEGACY_FORK_REPO`, `LEGACY_MARKETPLACE_NAME`, `FORK_ENGINE_SPEC`, `ENGINE_NPX_FLAGS`, `engineLaunchArgs(version)`, `enginePin(version)`, `replaceForkSpec`, `replaceEnginePin` |
 
 The two files must agree; `forkIdentity.test.ts` and `forkIdentityScripts.test.ts` pin the same repo slug, marketplace name and pin form in each. A rename or move of the fork is a change to these two files (plus the manifests, which `version:fork` re-stamps), not a hunt across the codebase. Guard tests keep the literals out of everything else:
 
@@ -145,7 +145,7 @@ There is no automated release on this fork. Never publish or tag without the mai
 
    **The tag is created before the merge, never after.** Until the tag exists on origin, every install from `main` fails to start the engine.
 
-3. **Verify the pin resolves.** Run `npm run doctor`, or boot the pin directly: `npx -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp` (it should start and wait for MCP traffic on stdio).
+3. **Verify the pin resolves.** Run `npm run doctor`, or boot the pin directly: `npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp` (it should start and wait for MCP traffic on stdio).
 4. **Merge** the PR on GitHub.
 
 ## Taking updates from upstream

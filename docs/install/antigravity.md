@@ -17,10 +17,10 @@ Antigravity has a first-class plugin format, so the installer builds a real plug
 [Run the installer](../../README.md#installation) and pick **Antigravity**:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client antigravity
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client antigravity
 ```
 
-The installer is fetched from GitHub and builds on first run (20-30 s).
+The installer is fetched from GitHub and builds on first run (about 2 minutes cold, measured 110-150 s; later runs use the cache, about 13 s).
 
 Restart Antigravity. Tools, skills, and agents are live in the IDE and the `agy` CLI.
 
@@ -55,7 +55,7 @@ This is ours, not Antigravity's: `agy` has no update command, no marketplace, an
 To pull a release now rather than at the next launch:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
 ```
 
 `cognigy-setup status` shows whether the plugin is installed and its installed version.
@@ -65,7 +65,7 @@ One caveat for existing installs: the launcher lives outside the versioned engin
 ## Uninstall
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client antigravity
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client antigravity
 ```
 
 Removes the plugin directory and both registry entries — again without needing `agy`. Drop `--client` to uninstall from every client; add `--purge` to also delete `~/.cognigy-plugin`, the credentials file every client shares.

@@ -43,7 +43,7 @@ npm run plugin:dev:off
 ```
 
 > **Never edit the tracked `plugin/.claude-plugin/plugin.json` for testing.** Its published form
-> (`npx -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp`, version in lockstep
+> (`npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp`, version in lockstep
 > with `package.json`) is enforced by `npm run check:manifest`, which runs in pre-commit and PR CI —
 > a dev-edited manifest cannot be committed. Versions and pins are changed only by
 > `npm run version:fork`.
@@ -71,7 +71,7 @@ Use this to verify the plugin the way end users install it.
 Then:
 
 1. On first boot, the plugin's `mcpServers` command runs
-   `npx -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp`, which clones this
+   `npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp`, which clones this
    repo at the tag matching the plugin's own version (stamped by `npm run version:fork`), builds it
    through the `prepare` hook and launches it. The first boot of a version is slower (clone,
    install, build); npx caches by spec, so repeat boots are expected to be fast once fetched. No
@@ -117,7 +117,7 @@ codex plugin marketplace add emilyanderson-nice/cognigy-plugin --ref <branch>
 then install **cognigy** via `/plugins` in a Codex session and confirm the skills
 list and the `platform` tools respond (creds must exist — run `cognigy-setup
 --client codex` first or write `~/.cognigy-plugin/config.json`). The installer
-path itself: `npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client codex …`,
+path itself: `npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client codex …`,
 then check `~/.codex/config.toml` for the `[mcp_servers.cognigy]` block.
 
 ## 3. Run Automated Checks
