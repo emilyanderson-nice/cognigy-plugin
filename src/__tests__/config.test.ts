@@ -44,6 +44,38 @@ describe("loadConfig", () => {
     expect(() => loadConfig()).toThrow(/COGNIGY_API_KEY is not set/);
   });
 
+  describe("setup command in missing-credential errors", () => {
+    const SETUP =
+      "npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup";
+
+    function messageFor(missing: "url" | "key"): string {
+      if (missing === "url") {
+        delete process.env.COGNIGY_API_BASE_URL;
+        process.env.COGNIGY_API_KEY = "test-key";
+      } else {
+        process.env.COGNIGY_API_BASE_URL = "https://api-trial.cognigy.ai";
+        delete process.env.COGNIGY_API_KEY;
+      }
+      try {
+        loadConfig();
+      } catch (e) {
+        return (e as Error).message;
+      }
+      return "";
+    }
+
+    it.each(["url", "key"] as const)(
+      "missing %s: message carries the flagged setup command, not the unflagged one",
+      (missing) => {
+        const msg = messageFor(missing);
+        expect({
+          flagged: msg.includes(SETUP),
+          unflagged: msg.includes("npx -y -p github:"),
+        }).toEqual({ flagged: true, unflagged: false });
+      },
+    );
+  });
+
   it("normalizes bare UI URL to API URL", () => {
     process.env.COGNIGY_API_BASE_URL = "https://dev.cognigy.ai";
     process.env.COGNIGY_API_KEY = "test-key";

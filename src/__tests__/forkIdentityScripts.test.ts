@@ -132,6 +132,86 @@ describe("scripts/fork-identity.mjs", () => {
     );
   });
 
+  describe("engine launch args (git-allow flag)", () => {
+    /** Deep-equality variant of check() for array values. */
+    function checkArray(
+      testName: string,
+      requirement: string,
+      expected: unknown[],
+      actual: unknown,
+      guidance: string,
+    ): void {
+      check(
+        testName,
+        requirement,
+        JSON.stringify(expected),
+        JSON.stringify(actual),
+        guidance,
+      );
+    }
+
+    it("ENGINE_NPX_FLAGS is exactly ['--allow-git=root']", () => {
+      checkArray(
+        "ENGINE_NPX_FLAGS",
+        "npm 12 blocks github: specs unless git is allowed for the root package, so every launch passes this flag",
+        ["--allow-git=root"],
+        evalInScript("m.ENGINE_NPX_FLAGS ?? null"),
+        "Export ENGINE_NPX_FLAGS from scripts/fork-identity.mjs as an array holding only the allow-git=root flag.",
+      );
+    });
+
+    it.each(["1.22.0-pb.1", "1.23.0-pb.2"])(
+      "engineLaunchArgs(%s) is the flag, -y, -p, the pinned fork spec, then cognigy-mcp",
+      (version) => {
+        checkArray(
+          `engineLaunchArgs(${version})`,
+          "The launch args put the git-allow flag first, followed by the npx invocation of the pinned fork engine",
+          [
+            "--allow-git=root",
+            "-y",
+            "-p",
+            `${FORK}#v${version}`,
+            "cognigy-mcp",
+          ],
+          evalInScript(
+            `typeof m.engineLaunchArgs === "function" ? m.engineLaunchArgs(${JSON.stringify(version)}) : null`,
+          ),
+          "Export engineLaunchArgs(version) from scripts/fork-identity.mjs returning the five launch args in that exact order.",
+        );
+      },
+    );
+
+    it("engineLaunchArgs(package.json version) is what the manifests must carry", () => {
+      checkArray(
+        "engineLaunchArgs(package.json version)",
+        "The launch args track package.json's version and begin with the git-allow flag",
+        [
+          "--allow-git=root",
+          "-y",
+          "-p",
+          `${FORK}#v${pkgVersion}`,
+          "cognigy-mcp",
+        ],
+        evalInScript(
+          `typeof m.engineLaunchArgs === "function" ? m.engineLaunchArgs(${JSON.stringify(pkgVersion)}) : null`,
+        ),
+        "Derive the pinned spec from the version argument; do not hard-code a version.",
+      );
+    });
+
+    it("engineLaunchArgs returns a fresh array each call (mutating one does not affect the next)", () => {
+      checkArray(
+        "engineLaunchArgs independence",
+        "Callers may mutate the returned args without corrupting later results",
+        ["--allow-git=root", "-y", "-p", `${FORK}#v1.22.0-pb.1`, "cognigy-mcp"],
+        evalInScript(
+          `typeof m.engineLaunchArgs === "function" ? (m.engineLaunchArgs("9.9.9").length = 0, m.engineLaunchArgs("1.22.0-pb.1")) : null`,
+        ),
+        "Return a new array on every call.",
+      );
+    });
+  });
+
   describe("replaceEnginePin", () => {
     it("pins an unpinned fork spec", () => {
       check(

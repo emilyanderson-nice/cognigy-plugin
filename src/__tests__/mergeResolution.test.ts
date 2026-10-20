@@ -12,6 +12,7 @@ const OLD = "github:pb-crackers/cognigy-plugin";
 const UPSTREAM = "github:Cognigy/cognigy-plugin";
 const aliasFor = (version: string) =>
   `cognigy-engine@npm:@cognigy/plugin-engine@${version}`;
+const FLAG = "--allow-git=root";
 const ALIAS_VERSIONS = ["1.23.0", "1.22.0-pb.1", "2.0.0", "latest"];
 
 interface Outcome {
@@ -181,9 +182,9 @@ describe("resolveManifestText: engine spec normalisation", () => {
       check(
         `npm alias spec ${version}`,
         "The fork installs its engine from GitHub; whatever version the alias carries is dropped",
-        `{"args":["-y","-p","${FORK}","cognigy-mcp"]}`,
+        `{"args":["${FLAG}","-y","-p","${FORK}","cognigy-mcp"]}`,
         resolveManifestText("plugin/mcp.json", src),
-        "Rewrite cognigy-engine@npm:@cognigy/plugin-engine@<any version text> to the unpinned fork github: spec; do not hard-code a version.",
+        "Rewrite cognigy-engine@npm:@cognigy/plugin-engine@<any version text> to the unpinned fork github: spec (do not hard-code a version) and make --allow-git=root the first element of that args array.",
       );
     },
   );
@@ -245,47 +246,47 @@ describe("resolveManifestText: engine spec normalisation", () => {
   });
 
   it("collapses two adjacent identical spec array entries into one", () => {
-    const src = `["-y",\n    "${FORK}",\n    "${FORK}",\n    "cognigy-mcp"]`;
+    const src = `["-y",\n    "-p",\n    "${FORK}",\n    "${FORK}",\n    "cognigy-mcp"]`;
     check(
       "adjacent duplicate entries",
       "Merging must not leave the same spec twice in an args array",
-      `["-y",\n    "${FORK}",\n    "cognigy-mcp"]`,
+      `["${FLAG}",\n    "-y",\n    "-p",\n    "${FORK}",\n    "cognigy-mcp"]`,
       resolveManifestText("plugin/mcp.json", src),
-      "Drop an array entry that repeats the previous entry (separated only by a comma and whitespace).",
+      "Drop an array entry that repeats the previous entry (separated only by a comma and whitespace); the array holds the engine spec, so it also gains --allow-git=root as its first element, reusing the separator that follows the first element.",
     );
   });
 
   it("collapses entries that only become identical after normalisation", () => {
-    const src = `["${FORK}#v1.22.0-pb.1",\n  "${OLD}",\n  "tail"]`;
+    const src = `["-p",\n  "${FORK}#v1.22.0-pb.1",\n  "${OLD}",\n  "tail"]`;
     check(
       "duplicates after normalisation",
       "Deduplication happens on the normalised spec",
-      `["${FORK}",\n  "tail"]`,
+      `["${FLAG}",\n  "-p",\n  "${FORK}",\n  "tail"]`,
       resolveManifestText("plugin/mcp.json", src),
       "Normalise specs first, then collapse adjacent identical entries.",
     );
   });
 
   it("does not collapse non-adjacent or non-spec duplicates", () => {
-    const src = `["${FORK}",\n  "other",\n  "${FORK}",\n  "x",\n  "x"]`;
+    const src = `["-p",\n  "${FORK}",\n  "other",\n  "${FORK}",\n  "x",\n  "x"]`;
     check(
       "non-adjacent duplicates kept",
       "Only adjacent identical spec entries collapse",
-      src,
+      `["${FLAG}",\n  "-p",\n  "${FORK}",\n  "other",\n  "${FORK}",\n  "x",\n  "x"]`,
       resolveManifestText("plugin/mcp.json", src),
       "Limit deduplication to immediately adjacent entries that are fork specs.",
     );
   });
 
-  it("is idempotent on a clean plain manifest with only the unpinned fork spec", () => {
-    const src = `{\n  "command": "npx",\n  "args": ["-y", "${FORK}", "cognigy-mcp"]\n}\n`;
+  it("is idempotent on a clean plain manifest with only the unpinned fork spec and the flag", () => {
+    const src = `{\n  "command": "npx",\n  "args": ["${FLAG}", "-y", "${FORK}", "cognigy-mcp"]\n}\n`;
     const once = resolveManifestText("plugin/mcp.json", src);
     check(
       "clean text unchanged",
-      "Resolving already-clean text is a no-op",
+      "Resolving already-clean text (flag first, unpinned fork spec) is a no-op",
       src,
       once,
-      "Do not modify text that has no markers and only the unpinned fork spec.",
+      "Do not modify text that has no markers, the unpinned fork spec and --allow-git=root already first.",
     );
     check(
       "second pass equals first",
@@ -293,6 +294,244 @@ describe("resolveManifestText: engine spec normalisation", () => {
       once,
       resolveManifestText("plugin/mcp.json", once),
       "Normalisation output must itself be a fixed point.",
+    );
+  });
+});
+
+describe("resolveManifestText: --allow-git=root in engine args arrays", () => {
+  const ALIAS = aliasFor("1.23.0");
+  const FLAG_GUIDANCE =
+    "After normalising the engine spec, ensure the args array that holds it has --allow-git=root as its FIRST element exactly once, keeping the array's existing separators and indentation.";
+
+  it("(a) inserts the flag once, before -y, when the array lacks it", () => {
+    const out = resolveManifestText(
+      "plugin/mcp.json",
+      `{"args":["-y","-p","${ALIAS}","cognigy-mcp"]}`,
+    );
+    check(
+      "flag inserted first",
+      "Upstream's args array has no flag; the merge result must launch with --allow-git=root first",
+      [FLAG, "-y", "-p", FORK, "cognigy-mcp"],
+      JSON.parse(out).args,
+      FLAG_GUIDANCE,
+    );
+  });
+
+  it("(a2) inserts the flag when the array arrives through the theirs side of a hunk", () => {
+    const src = `{\n${hunk(
+      `  "args": ["${FLAG}", "-y", "-p", "${FORK}#v1.0.0", "cognigy-mcp"]`,
+      `  "args": ["-y", "-p", "${ALIAS}", "cognigy-mcp"]`,
+    )}}\n`;
+    check(
+      "flag inserted after hunk resolution",
+      "The theirs side is chosen first, then the array is normalised including the flag; the single-line ', ' separator style is kept",
+      `{\n  "args": ["${FLAG}", "-y", "-p", "${FORK}", "cognigy-mcp"]\n}\n`,
+      resolveManifestText("plugin/mcp.json", src),
+      FLAG_GUIDANCE,
+    );
+  });
+
+  it("(b) does not double the flag when the array already has it", () => {
+    const src = `{"args":["${FLAG}","-y","-p","${ALIAS}","cognigy-mcp"]}`;
+    check(
+      "flag not doubled",
+      "An array that already starts with the flag keeps exactly one",
+      `{"args":["${FLAG}","-y","-p","${FORK}","cognigy-mcp"]}`,
+      resolveManifestText("plugin/mcp.json", src),
+      FLAG_GUIDANCE,
+    );
+  });
+
+  it("(b2) is idempotent: resolving the output again changes nothing", () => {
+    const src = `{"args":["-y","-p","${ALIAS}","cognigy-mcp"]}`;
+    const once = resolveManifestText("plugin/mcp.json", src);
+    check(
+      "second pass equals first",
+      "Re-running the merge resolution must be a fixed point and never add a second flag",
+      once,
+      resolveManifestText("plugin/mcp.json", once),
+      FLAG_GUIDANCE,
+    );
+    check(
+      "exactly one flag after two passes",
+      "The flag appears once in the args",
+      1,
+      JSON.parse(resolveManifestText("plugin/mcp.json", once)).args.filter(
+        (a: string) => a === FLAG,
+      ).length,
+      FLAG_GUIDANCE,
+    );
+  });
+
+  it("(c) keeps a multi-line array's indentation and inserts the flag once as the first element", () => {
+    const src = `{\n  "args": [\n    "-y",\n    "-p",\n    "${ALIAS}",\n    "cognigy-mcp"\n  ]\n}\n`;
+    check(
+      "multi-line array",
+      "The new first element sits on its own line at the same indent as its siblings",
+      `{\n  "args": [\n    "${FLAG}",\n    "-y",\n    "-p",\n    "${FORK}",\n    "cognigy-mcp"\n  ]\n}\n`,
+      resolveManifestText("plugin/mcp.json", src),
+      FLAG_GUIDANCE,
+    );
+  });
+
+  it("(c2) preserves CRLF line endings in a multi-line array", () => {
+    const src = `{\r\n  "args": [\r\n    "-y",\r\n    "-p",\r\n    "${ALIAS}",\r\n    "cognigy-mcp"\r\n  ]\r\n}\r\n`;
+    check(
+      "multi-line array CRLF",
+      "The inserted line uses the file's CRLF endings, not LF",
+      `{\r\n  "args": [\r\n    "${FLAG}",\r\n    "-y",\r\n    "-p",\r\n    "${FORK}",\r\n    "cognigy-mcp"\r\n  ]\r\n}\r\n`,
+      resolveManifestText("plugin/mcp.json", src),
+      FLAG_GUIDANCE,
+    );
+  });
+
+  it("(c3) a multi-line array that already has the flag is unchanged apart from the spec", () => {
+    const src = `{\n  "args": [\n    "${FLAG}",\n    "-y",\n    "-p",\n    "${ALIAS}",\n    "cognigy-mcp"\n  ]\n}\n`;
+    check(
+      "multi-line array with flag",
+      "No second flag line is added",
+      `{\n  "args": [\n    "${FLAG}",\n    "-y",\n    "-p",\n    "${FORK}",\n    "cognigy-mcp"\n  ]\n}\n`,
+      resolveManifestText("plugin/mcp.json", src),
+      FLAG_GUIDANCE,
+    );
+  });
+
+  it("(d) a resolved .json file with the inserted flag is valid JSON with the exact args", () => {
+    const o = tryResolve(
+      "plugin/.codex-plugin/mcp.json",
+      `{\n  "mcpServers": {\n    "platform": {\n      "command": "npx",\n      "args": [\n        "-y",\n        "-p",\n        "${ALIAS}",\n        "cognigy-mcp"\n      ]\n    }\n  }\n}\n`,
+    );
+    check(
+      "json stays parseable",
+      "Inserting the flag must not break JSON syntax (commas, quotes)",
+      { ok: true, args: [FLAG, "-y", "-p", FORK, "cognigy-mcp"] },
+      {
+        ok: o.ok,
+        args: o.ok
+          ? JSON.parse(o.value as string).mcpServers.platform.args
+          : null,
+      },
+      FLAG_GUIDANCE,
+    );
+  });
+
+  it("(e) leaves an args array that does not contain the engine spec untouched", () => {
+    const src = `{"args":["-y","some-other-package"]}`;
+    check(
+      "other server args untouched",
+      "Only the engine's args array gets the flag",
+      src,
+      resolveManifestText("plugin/mcp.json", src),
+      "Add the flag only to an args array that contains the fork engine spec.",
+    );
+  });
+
+  it("(e2) in a file with two servers only the engine's array gains the flag", () => {
+    const src = `{"mcpServers":{"other":{"args":["-y","some-other-package"]},"platform":{"args":["-y","-p","${ALIAS}","cognigy-mcp"]}}}`;
+    check(
+      "only the engine array changes",
+      "A sibling server's args must not be modified",
+      `{"mcpServers":{"other":{"args":["-y","some-other-package"]},"platform":{"args":["${FLAG}","-y","-p","${FORK}","cognigy-mcp"]}}}`,
+      resolveManifestText("plugin/mcp.json", src),
+      "Add the flag only to the array holding the fork engine spec.",
+    );
+  });
+
+  it("(e3) leaves an array carrying Cognigy's own upstream github spec untouched", () => {
+    const src = `{"args":["-y","-p","${UPSTREAM}#v1.0.0","cognigy-mcp"]}`;
+    check(
+      "upstream spec array untouched",
+      "Only arrays with the fork engine spec are the fork's launch args",
+      src,
+      resolveManifestText("plugin/mcp.json", src),
+      "Treat only the fork (and legacy fork / npm alias, which normalise to the fork) spec as the engine spec.",
+    );
+  });
+});
+
+describe("resolveManifestText: flag insertion is scoped to the engine launch array", () => {
+  const SCOPE_GUIDANCE =
+    'Only an array in which the element "-p" is immediately followed by the fork spec is the engine launch; insert --allow-git=root as its first element, and only there.';
+  const resolve = (src: string) => resolveManifestText("plugin/mcp.json", src);
+
+  it("(b) an array holding the spec with no -p before it is left unchanged", () => {
+    const src = `{"sources":["${FORK}","x"]}`;
+    check(
+      "spec without -p",
+      "An array that merely lists the fork spec is not an engine launch",
+      src,
+      resolve(src),
+      SCOPE_GUIDANCE,
+    );
+  });
+
+  it("(b2) a -p that is not immediately followed by the spec is not an engine launch", () => {
+    const src = `{"args":["-y","-p","other","${FORK}","cognigy-mcp"]}`;
+    check(
+      "-p followed by something else",
+      "The spec must directly follow -p",
+      src,
+      resolve(src),
+      SCOPE_GUIDANCE,
+    );
+  });
+
+  it("(c) a bracket inside a later string does not confuse the insertion point", () => {
+    check(
+      "bracket in trailing string",
+      "Brackets inside JSON strings are not array delimiters",
+      `["${FLAG}","-y","-p","${FORK}","cognigy-mcp","a]b"]`,
+      resolve(`["-y","-p","${FORK}","cognigy-mcp","a]b"]`),
+      SCOPE_GUIDANCE,
+    );
+  });
+
+  it("(c2) a '[' inside an earlier string does not become the insertion point", () => {
+    check(
+      "bracket in leading string",
+      "The flag goes at the start of the real array, not after a '[' inside a string",
+      `["${FLAG}","-y","[x","-p","${FORK}","cognigy-mcp"]`,
+      resolve(`["-y","[x","-p","${FORK}","cognigy-mcp"]`),
+      SCOPE_GUIDANCE,
+    );
+  });
+
+  it("(d) an engine array containing a nested array is never silently left without the flag", () => {
+    const o = tryResolve(
+      "plugin/mcp.json",
+      `[["x"],"-y","-p","${FORK}","cognigy-mcp"]`,
+    );
+    check(
+      "nested array refused",
+      "A layout the resolver cannot handle must be reported, not skipped",
+      { threw: true, phrases: [true, true] },
+      refusal(o, "--allow-git", "args"),
+      'Throw an Error mentioning "--allow-git" and "args" when the engine launch array cannot be located safely.',
+    );
+  });
+
+  it("(e) the flag present but not first is refused", () => {
+    const o = tryResolve(
+      "plugin/mcp.json",
+      `["-y","${FLAG}","-p","${FORK}","cognigy-mcp"]`,
+    );
+    check(
+      "flag not first refused",
+      "npm needs the flag first; a misplaced flag must not be silently accepted or duplicated",
+      { threw: true, phrases: [true, true] },
+      refusal(o, FLAG, "first"),
+      `Throw an Error mentioning "${FLAG}" and "first" when the flag is present but not the first element.`,
+    );
+  });
+
+  it("(f) the flag already first is unchanged", () => {
+    const src = `["${FLAG}","-y","-p","${FORK}","cognigy-mcp"]`;
+    check(
+      "flag first idempotent",
+      "A correct launch array is a fixed point",
+      src,
+      resolve(src),
+      SCOPE_GUIDANCE,
     );
   });
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * `cognigy-setup` — one-command installer for the NiCE Cognigy Plugin.
- * Run: `npx -y -p github:<fork repo> cognigy-setup` (the fork repository,
+ * Run: `npx --allow-git=root -y -p github:<fork repo> cognigy-setup` (the fork repository,
  * FORK_REPO below).
  *
  * Collects the Cognigy API base URL + key (key masked, never echoed or written

@@ -17,7 +17,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FORK_MARKETPLACE_NAME, enginePin } from "./fork-identity.mjs";
+import {
+  FORK_MARKETPLACE_NAME,
+  FORK_VERSION_RE,
+  engineLaunchArgs,
+} from "./fork-identity.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
@@ -33,8 +37,7 @@ const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
 // The fork's version is always <upstream base>-pb.<n>. Sharing upstream's
 // exact version number is half of what let a client cache serve the stock
 // engine under this fork's install; the marketplace name is the other half.
-const FORK_VERSION_RE = /^\d+\.\d+\.\d+-pb\.\d+$/;
-const expectedArgs = ["-y", "-p", enginePin(pkg.version), "cognigy-mcp"];
+const expectedArgs = engineLaunchArgs(pkg.version);
 
 function checkPlatformServer(platform, errors) {
   if (!platform) {
@@ -215,6 +218,44 @@ if (!FORK_VERSION_RE.test(pkg.version)) {
 }
 
 let failed = false;
+
+// package-lock.json repeats the version at the root and at packages[""]; a
+// stale lockfile makes `npm ci` / installs disagree with package.json.
+const lockPath = join(repoRoot, "package-lock.json");
+if (existsSync(lockPath)) {
+  let lock;
+  let lockErrors;
+  try {
+    lock = JSON.parse(readFileSync(lockPath, "utf-8"));
+  } catch (err) {
+    lockErrors = [
+      `${lockPath} is not valid JSON (${err.message}); restore it from git or regenerate it with npm install`,
+    ];
+  }
+  if (lock !== undefined) {
+    const lockFields = [
+      ["version", lock?.version],
+      ['packages[""].version', lock?.packages?.[""]?.version],
+    ];
+    lockErrors = lockFields
+      .filter(([, value]) => value !== pkg.version)
+      .map(
+        ([field, value]) =>
+          `${field} is ${JSON.stringify(value)} but package.json version is ${pkg.version}`,
+      );
+  }
+  if (lockErrors.length > 0) {
+    failed = true;
+    console.error(`✗ ${lockPath} failed validation:`);
+    for (const error of lockErrors) console.error(`  - ${error}`);
+    if (lock !== undefined) {
+      console.error(
+        "  Re-stamp with: node scripts/fork-version.mjs <base> <n> (never hand-edit)",
+      );
+    }
+  }
+}
+
 for (const [relPath, check] of CHECKS) {
   const manifestPath = join(repoRoot, relPath);
   const errors = [];

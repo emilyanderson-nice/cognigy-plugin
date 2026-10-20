@@ -21,7 +21,7 @@
  * After merging upstream, run it with upstream's new version — that is the one
  * step the merge needs beyond resolving conflicts.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { replaceEnginePin } from "./fork-identity.mjs";
@@ -51,6 +51,46 @@ export function parseForkVersion(version) {
   if (match) return { base: match[1], forkNumber: Number(match[2]) };
   const plain = /^(\d+\.\d+\.\d+)/.exec(version ?? "");
   return { base: plain ? plain[1] : null, forkNumber: 0 };
+}
+
+/**
+ * Rewrite the two version fields package-lock.json carries for the project
+ * itself: the root `version` and `packages[""].version`. A scan of the text
+ * (string- and depth-aware) finds exactly those two values, so no other
+ * entry, URL, line ending or indentation is touched.
+ */
+export function stampLockfileVersion(text, version) {
+  const spans = [];
+  const frames = [];
+  const top = () => frames[frames.length - 1];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "{" || ch === "[") {
+      frames.push({ name: frames.length ? top().key : null, key: null });
+    } else if (ch === "}" || ch === "]") {
+      frames.pop();
+    } else if (ch === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      const value = text.slice(i + 1, j);
+      const isKey = /^\s*:/.test(text.slice(j + 1, j + 64));
+      if (isKey) {
+        top().key = value;
+      } else if (top() && top().key === "version") {
+        const path = frames.slice(1).map((f) => f.name);
+        const root = path.length === 0;
+        const pkgRoot =
+          path.length === 2 && path[0] === "packages" && path[1] === "";
+        if (root || pkgRoot) spans.push([i + 1, j]);
+      }
+      i = j;
+    }
+  }
+  let out = text;
+  for (const [start, end] of spans.reverse()) {
+    out = out.slice(0, start) + version + out.slice(end);
+  }
+  return out;
 }
 
 function main() {
@@ -95,6 +135,13 @@ function main() {
       process.exit(1);
     }
     console.log(`  ${rel} -> ${next}`);
+  }
+
+  const lockPath = join(repoRoot, "package-lock.json");
+  if (existsSync(lockPath)) {
+    const lockSrc = readFileSync(lockPath, "utf-8");
+    writeFileSync(lockPath, stampLockfileVersion(lockSrc, next));
+    console.log(`  package-lock.json -> ${next}`);
   }
 
   console.log(`\nFork version: ${current} -> ${next} (upstream base ${base})`);

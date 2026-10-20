@@ -11,6 +11,18 @@ export const FORK_REPO = "emilyanderson-nice/cognigy-plugin";
 export const FORK_MARKETPLACE_NAME = "cognigy-plugin-v2";
 export const FORK_PLUGIN_ID = `cognigy@${FORK_MARKETPLACE_NAME}`;
 
+/**
+ * npx flags every git-spec engine launch needs (twin of ENGINE_NPX_FLAGS in
+ * scripts/fork-identity.mjs): npm 12 blocks git specs by default. As documented
+ * in npm's configuration reference, `root` is meant to allow only the top-level
+ * spec; observed: npm 12.2.0 booted the pinned engine with `root`, and the
+ * engine has no git dependencies.
+ */
+export const ENGINE_NPX_FLAGS: readonly string[] = ["--allow-git=root"];
+
+/** The one-command installer, as a user types it. */
+export const SETUP_COMMAND = `npx ${ENGINE_NPX_FLAGS.join(" ")} -y -p github:${FORK_REPO} cognigy-setup`;
+
 /** Our own version, from the package.json two levels above src/ and dist/. */
 function packageVersion(): string {
   const dir = dirname(fileURLToPath(import.meta.url));

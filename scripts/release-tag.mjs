@@ -26,13 +26,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { FORK_REPO, enginePin } from "./fork-identity.mjs";
+import { FORK_REPO, FORK_VERSION_RE, enginePin } from "./fork-identity.mjs";
 
 // The repo root is the parent of this script's folder, never the caller's cwd,
 // so running from a subdirectory behaves exactly like running from the root.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-
-const FORK_VERSION_RE = /^\d+\.\d+\.\d+-pb\.\d+$/;
 
 /**
  * Decide whether the tag can be made. Pure: all repository facts come in as
