@@ -1,5 +1,8 @@
 import { describe, it, expect, afterAll, jest } from "@jest/globals";
 import {
+  accessSync,
+  chmodSync,
+  constants,
   cpSync,
   existsSync,
   mkdirSync,
@@ -834,10 +837,25 @@ describe("release-tag CLI (throwaway git sandbox)", () => {
 
   it("--create --push with a rejecting origin: fails, keeps the local tag and says to retry with --push", () => {
     const sb = makeSandbox();
-    writeFileSync(
-      join(sb.origin, "hooks", "pre-receive"),
-      "#!/bin/sh\nexit 1\n",
-    );
+    const hookPath = join(sb.origin, "hooks", "pre-receive");
+    writeFileSync(hookPath, "#!/bin/sh\nexit 1\n");
+    // Linux git silently ignores a hook that is not executable.
+    chmodSync(hookPath, 0o755);
+    if (process.platform !== "win32") {
+      let executable = true;
+      try {
+        accessSync(hookPath, constants.X_OK);
+      } catch {
+        executable = false;
+      }
+      check(
+        "precondition: rejecting hook is executable",
+        "The pre-receive hook that makes origin reject pushes must be executable, or git ignores it and the push succeeds",
+        { executable: true },
+        { executable },
+        "chmod the hook file to 0o755 right after writing it (fs.chmodSync) before running the script under test.",
+      );
+    }
     const r = run(sb, ["--create", "--push"]);
     const exists = localTags(sb).includes(TAG);
     check(
