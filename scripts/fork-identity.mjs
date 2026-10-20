@@ -18,6 +18,21 @@ export function enginePin(version) {
   return `github:${FORK_REPO}#v${version}`;
 }
 
+/** A fork version: <upstream base>-pb.<n>, digits only. */
+export const FORK_VERSION_RE = /^\d+\.\d+\.\d+-pb\.\d+$/;
+
+// npm 12 refuses git specs by default (EALLOWGIT). As documented in npm's
+// configuration reference, `root` is meant to allow only the top-level spec
+// passed on the command line, not git dependencies of dependencies. Observed:
+// npm 12.2.0 booted the pinned engine with `root`; the engine has no git
+// dependencies. It must be the FIRST npx argument.
+export const ENGINE_NPX_FLAGS = ["--allow-git=root"];
+
+/** The full npx argument list that launches the engine for a release. */
+export function engineLaunchArgs(version) {
+  return [...ENGINE_NPX_FLAGS, "-y", "-p", enginePin(version), "cognigy-mcp"];
+}
+
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // A github: spec for this fork or the previous fork, with an optional #v<tag>.

@@ -19,7 +19,7 @@
  *
  * Run: npm run doctor
  */
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -31,12 +31,20 @@ import {
   UPSTREAM_REPO,
   enginePin,
 } from "./fork-identity.mjs";
+import {
+  BOOT_TIMEOUT_MS,
+  bootExitMessage,
+  bootSpawnPlan,
+  bootTimeoutMessage,
+  killPlan,
+} from "./doctor-boot.mjs";
 
 // Manifests are pinned to the release tag, so compare and boot that pin.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const ENGINE_SPEC = enginePin(
-  JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8")).version,
-);
+const ENGINE_VERSION = JSON.parse(
+  readFileSync(join(repoRoot, "package.json"), "utf-8"),
+).version;
+const ENGINE_SPEC = enginePin(ENGINE_VERSION);
 
 const claudeDir = join(homedir(), ".claude");
 const pluginsDir = join(claudeDir, "plugins");
@@ -242,18 +250,19 @@ function safeReaddir(path) {
 // never written and the MCP server silently never appeared. Booting it here
 // is the only check that would have caught that — and it warms the npx cache
 // as a side effect, which matters because every push moves the git HEAD the
-// spec resolves to and a cold boot takes ~30s versus ~3s warm.
+// spec resolves to and a cold boot takes about 2 minutes versus about 13 s warm.
 //
 // Skip with --no-boot when offline or in a hurry.
 async function bootCheck() {
   const started = Date.now();
   return new Promise((done) => {
-    // Detached so the whole process group can be killed: npx spawns the real
-    // server as a child, and killing only the npx wrapper leaves that child
-    // running. A doctor meant to be run routinely must not leak an MCP server
-    // on every invocation.
-    const proc = spawn("npx", ["-y", "-p", ENGINE_SPEC, "cognigy-mcp"], {
-      detached: true,
+    // The plan detaches on POSIX so the whole process group can be killed: npx
+    // spawns the real server as a child, and killing only the npx wrapper
+    // leaves that child running. A doctor meant to be run routinely must not
+    // leak an MCP server on every invocation.
+    const plan = bootSpawnPlan(ENGINE_VERSION, process.platform);
+    const proc = spawn(plan.command, plan.args, {
+      ...plan.options,
       env: {
         ...process.env,
         COGNIGY_API_BASE_URL:
@@ -262,13 +271,32 @@ async function bootCheck() {
       },
       stdio: ["pipe", "pipe", "pipe"],
     });
+    // Writing to a closed pipe raises an unhandled 'error' event on stdin and
+    // would crash doctor; failures are already reported by exit/error below.
+    proc.stdin.on("error", () => {});
     let buf = "";
+    // Only the end of stderr matters (npm prints its reason last); cap it.
+    let tail = "";
+    let finished = false;
     const finish = (result) => {
+      // Idempotent: our own kill below makes the child emit "exit", and the
+      // timer may race a result; only the first outcome counts.
+      if (finished) return;
+      finished = true;
       clearTimeout(timer);
+      // Kill the whole tree so the spawned server dies with the wrapper
+      // rather than outliving it.
+      const kill = killPlan(process.platform, proc.pid);
       try {
-        // Negative pid = the whole group, so the spawned server dies with the
-        // wrapper rather than outliving it.
-        process.kill(-proc.pid, "SIGKILL");
+        if (kill.command) {
+          const res = spawnSync(kill.command, kill.args, {
+            stdio: "ignore",
+            windowsHide: true,
+          });
+          if (res.error || res.status !== 0) proc.kill("SIGKILL");
+        } else {
+          process.kill(kill.pid, kill.signal);
+        }
       } catch {
         try {
           proc.kill("SIGKILL");
@@ -279,12 +307,15 @@ async function bootCheck() {
       done(result);
     };
     const timer = setTimeout(
-      () =>
-        finish({
-          failed:
-            "The engine did not respond within 120s. A cold install takes ~30s; far beyond that usually means an install-time script is hung (see installScripts.test.ts).",
-        }),
-      120000,
+      () => finish({ failed: bootTimeoutMessage() }),
+      BOOT_TIMEOUT_MS,
+    );
+
+    proc.stderr.on("data", (chunk) => {
+      tail = (tail + chunk.toString()).slice(-2000);
+    });
+    proc.on("exit", (code, signal) =>
+      finish({ failed: bootExitMessage(code, signal, tail.trim()) }),
     );
 
     proc.stdout.on("data", (chunk) => {

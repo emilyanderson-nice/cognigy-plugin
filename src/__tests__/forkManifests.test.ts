@@ -51,7 +51,23 @@ const PIN_FILES = [
 const MARKETPLACE = ".claude-plugin/marketplace.json";
 
 const pin = (version: string) => `github:${FORK}#v${version}`;
-const pinArgs = (version: string) => ["-y", "-p", pin(version), "cognigy-mcp"];
+const FLAG = "--allow-git=root";
+/** The full launch args: the git-allow flag FIRST, then the npx invocation. */
+const pinArgs = (version: string) => [
+  FLAG,
+  "-y",
+  "-p",
+  pin(version),
+  "cognigy-mcp",
+];
+/** Index of the engine spec inside pinArgs(). */
+const SPEC_INDEX = 3;
+/** Valid flag-bearing args for `version` with only the spec token replaced. */
+const argsWithSpec = (version: string, spec: string) => {
+  const a = pinArgs(version);
+  a[SPEC_INDEX] = spec;
+  return a;
+};
 
 function readJson(root: string, rel: string): any {
   return JSON.parse(readFileSync(join(root, rel), "utf8"));
@@ -61,6 +77,35 @@ function writeJson(root: string, rel: string, value: unknown): void {
 }
 
 const V: string = readJson(REAL_ROOT, "package.json").version;
+
+const LOCK = "package-lock.json";
+
+/**
+ * A synthetic lockfile (2-space JSON, trailing newline, optional CRLF). The root
+ * `version` and `packages[""].version` carry `version`. A decoy dependency
+ * carries `decoy` both as its own version and inside its `resolved` text, so a
+ * stamper that replaces the old version string anywhere is caught.
+ */
+function lockText(version: string, decoy: string, nl = "\n"): string {
+  const lock = {
+    name: "@cognigy/plugin-engine",
+    version,
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      "": {
+        name: "@cognigy/plugin-engine",
+        version,
+        dependencies: { decoy: "^1.0.0" },
+      },
+      "node_modules/decoy": {
+        version: decoy,
+        resolved: `https://registry.invalid/decoy/-/decoy-${decoy}.tgz`,
+      },
+    },
+  };
+  return (JSON.stringify(lock, null, 2) + "\n").replace(/\n/g, nl);
+}
 
 // ---------------------------------------------------------------- Part 1
 
@@ -73,7 +118,7 @@ describe("fork manifests: real repo files", () => {
         "The platform server must launch the engine from the fork's tagged release matching package.json",
         pinArgs(V),
         args,
-        "Make the platform server args exactly: -y, -p, the fork github spec pinned to the release tag for the current package version, then the cognigy-mcp bin name.",
+        "Make the platform server args exactly: --allow-git=root first (so npm 12 permits the github: spec), then -y, -p, the fork github spec pinned to the release tag for the current package version, then the cognigy-mcp bin name.",
       );
     });
   }
@@ -175,8 +220,17 @@ function manifestFiles(root: string): string[] {
  * real manifests), so a failing script run can only be caused by the single
  * mutation a test applies afterwards.
  */
-function makeValidCopy(version: string = V): string {
+function makeValidCopy(
+  version: string = V,
+  opts: { lock?: boolean; lockNewline?: string } = {},
+): string {
   const root = makeRawCopy();
+  if (opts.lock !== false) {
+    writeFileSync(
+      join(root, LOCK),
+      lockText(version, version, opts.lockNewline ?? "\n"),
+    );
+  }
   const pkg = readJson(root, "package.json");
   pkg.version = version;
   writeJson(root, "package.json", pkg);
@@ -278,12 +332,7 @@ describe("check-plugin-manifest.mjs", () => {
       mutate: (root) => {
         const rel = "plugin/.claude-plugin/plugin.json";
         const j = readJson(root, rel);
-        j.mcpServers.platform.args = [
-          "-y",
-          "-p",
-          `github:${FORK}`,
-          "cognigy-mcp",
-        ];
+        j.mcpServers.platform.args = argsWithSpec(V, `github:${FORK}`);
         writeJson(root, rel, j);
       },
     },
@@ -303,12 +352,10 @@ describe("check-plugin-manifest.mjs", () => {
       mutate: (root) => {
         const rel = "plugin/.claude-plugin/plugin.json";
         const j = readJson(root, rel);
-        j.mcpServers.platform.args = [
-          "-y",
-          "-p",
+        j.mcpServers.platform.args = argsWithSpec(
+          V,
           `github:pb-crackers/cognigy-plugin#v${V}`,
-          "cognigy-mcp",
-        ];
+        );
         writeJson(root, rel, j);
       },
     },
@@ -318,15 +365,65 @@ describe("check-plugin-manifest.mjs", () => {
       mutate: (root) => {
         const rel = "plugin/mcp.json";
         const j = readJson(root, rel);
-        j.mcpServers.platform.args = [
-          "-y",
-          "-p",
+        j.mcpServers.platform.args = argsWithSpec(
+          V,
           "cognigy-engine@npm:@cognigy/plugin-engine@1.22.0",
-          "cognigy-mcp",
-        ];
+        );
         writeJson(root, rel, j);
       },
     },
+    ...PIN_FILES.flatMap((rel) => [
+      {
+        name: `(b7) rejects ${rel} when --allow-git=root is missing`,
+        offender: rel,
+        mutate: (root: string) => {
+          const j = readJson(root, rel);
+          j.mcpServers.platform.args = pinArgs(V).slice(1);
+          writeJson(root, rel, j);
+        },
+      },
+      {
+        name: `(b8) rejects ${rel} when --allow-git=root comes after -y instead of first`,
+        offender: rel,
+        mutate: (root: string) => {
+          const j = readJson(root, rel);
+          j.mcpServers.platform.args = [
+            "-y",
+            FLAG,
+            "-p",
+            pin(V),
+            "cognigy-mcp",
+          ];
+          writeJson(root, rel, j);
+        },
+      },
+      {
+        name: `(b9) rejects ${rel} when the flag is last instead of first`,
+        offender: rel,
+        mutate: (root: string) => {
+          const j = readJson(root, rel);
+          j.mcpServers.platform.args = [
+            "-y",
+            "-p",
+            pin(V),
+            "cognigy-mcp",
+            FLAG,
+          ];
+          writeJson(root, rel, j);
+        },
+      },
+      {
+        name: `(b10) rejects ${rel} when the flag value is --allow-git=all`,
+        offender: rel,
+        mutate: (root: string) => {
+          const j = readJson(root, rel);
+          const args = pinArgs(V);
+          args[0] = "--allow-git=all";
+          j.mcpServers.platform.args = args;
+          writeJson(root, rel, j);
+        },
+      },
+    ]),
     {
       name: "(b5) rejects marketplace name cognigy-plugin-pb",
       offender: MARKETPLACE,
@@ -539,6 +636,28 @@ describe("fork-version.mjs: counter and base arguments", () => {
     expectCheckPasses(root, `after bump to ${to}`);
   });
 
+  it.each(PIN_FILES)(
+    "fork-version keeps --allow-git=root first and rewrites only the spec token in %s",
+    (rel) => {
+      const root = makeValidCopy("1.22.0-pb.1");
+      const r = run(root, "fork-version.mjs");
+      check(
+        "fork-version exit status",
+        "Bumping the version must succeed on manifests that carry the git-allow flag",
+        0,
+        r.status,
+        `Accept flag-bearing args and bump. Output was: ${r.output.slice(0, 300)}`,
+      );
+      check(
+        `${rel} args after fork-version`,
+        "Version stamping rewrites the spec only; the flag stays first and nothing else moves",
+        [FLAG, "-y", "-p", pin("1.22.0-pb.2"), "cognigy-mcp"],
+        readJson(root, rel).mcpServers.platform.args,
+        "Do not drop, move or duplicate --allow-git=root when the pin is rewritten; only the github spec token changes.",
+      );
+    },
+  );
+
   it("a base and a counter argument set <base>-pb.<counter> exactly", () => {
     const root = makeValidCopy();
     const r = run(root, "fork-version.mjs", "1.20.0", "3");
@@ -609,16 +728,37 @@ describe("sync-plugin-version.mjs", () => {
     }
   });
 
+  it.each(PIN_FILES)(
+    "(d3) keeps --allow-git=root first and rewrites only the spec token in %s",
+    (rel) => {
+      const root = makeValidCopy();
+      const r = run(root, "sync-plugin-version.mjs", NEW);
+      check(
+        "sync-plugin-version exit status",
+        "Syncing a version must succeed on manifests that carry the git-allow flag",
+        0,
+        r.status,
+        `Accept flag-bearing args and apply the version. Output was: ${r.output.slice(0, 300)}`,
+      );
+      const args = readJson(root, rel).mcpServers.platform.args;
+      check(
+        `${rel} args after sync`,
+        "Version stamping rewrites the spec only; the flag stays first and nothing else moves",
+        [FLAG, "-y", "-p", pin(NEW), "cognigy-mcp"],
+        args,
+        "Do not drop, move or duplicate --allow-git=root when the pin is rewritten; only the github spec token changes.",
+      );
+    },
+  );
+
   it("(d2) exits 1 when a pin file still holds an npm engine spec", () => {
     const root = makeValidCopy();
     const rel = "plugin/mcp.json";
     const j = readJson(root, rel);
-    j.mcpServers.platform.args = [
-      "-y",
-      "-p",
+    j.mcpServers.platform.args = argsWithSpec(
+      V,
       "cognigy-engine@npm:@cognigy/plugin-engine@1.22.0",
-      "cognigy-mcp",
-    ];
+    );
     writeJson(root, rel, j);
     const r = run(root, "sync-plugin-version.mjs", NEW);
     check(
@@ -636,4 +776,230 @@ describe("sync-plugin-version.mjs", () => {
       `Print the path ${rel} in the error output. Output was: ${r.output.slice(0, 300)}`,
     );
   });
+});
+
+describe("package-lock.json: real repo", () => {
+  const lock = readJson(REAL_ROOT, LOCK);
+
+  it("root version equals package.json version", () => {
+    check(
+      "package-lock.json root version",
+      "The tracked lockfile must carry the same version as package.json",
+      V,
+      lock.version,
+      "Run npm run version:fork (or sync the lockfile) so the lockfile's top-level version equals package.json's version.",
+    );
+  });
+
+  it('packages[""].version equals package.json version', () => {
+    check(
+      'package-lock.json packages[""].version',
+      "The tracked lockfile's root package entry must carry the same version as package.json",
+      V,
+      lock.packages[""].version,
+      'Set packages[""].version in package-lock.json to package.json\'s version.',
+    );
+  });
+});
+
+describe("fork-version.mjs: package-lock.json", () => {
+  const OLD = "1.22.0-pb.1";
+
+  /** Lock bytes after stamping: only the two fields move; the decoy keeps OLD. */
+  function expectLock(root: string, version: string, nl = "\n"): void {
+    check(
+      `package-lock.json after stamping ${version}`,
+      "Only the root version and packages[''].version change; every other byte (decoy dependency, formatting, line endings) is preserved",
+      lockText(version, OLD, nl),
+      readFileSync(join(root, LOCK), "utf8"),
+      "Rewrite exactly the two version fields of the lockfile to the new version. Do not replace the old version text elsewhere and do not reformat or change line endings.",
+    );
+  }
+
+  it("no argument: bumps both lockfile versions and leaves everything else byte-identical", () => {
+    const root = makeValidCopy(OLD);
+    const r = run(root, "fork-version.mjs");
+    check(
+      "fork-version (no args) exit status",
+      "Stamping with a lockfile present must succeed",
+      0,
+      r.status,
+      `Output was: ${r.output.slice(0, 300)}`,
+    );
+    expectLock(root, "1.22.0-pb.2");
+    expectCheckPasses(root, "after no-arg bump with lockfile");
+  });
+
+  it("<base>: sets both lockfile versions to <base>-pb.1", () => {
+    const root = makeValidCopy(OLD);
+    const r = run(root, "fork-version.mjs", "1.23.0");
+    check(
+      "fork-version 1.23.0 exit status",
+      "Stamping with a lockfile present must succeed",
+      0,
+      r.status,
+      `Output was: ${r.output.slice(0, 300)}`,
+    );
+    expectLock(root, "1.23.0-pb.1");
+    expectCheckPasses(root, "after base stamp with lockfile");
+  });
+
+  it("<base> <n>: sets both lockfile versions to <base>-pb.<n>", () => {
+    const root = makeValidCopy(OLD);
+    const r = run(root, "fork-version.mjs", "1.20.0", "3");
+    check(
+      "fork-version 1.20.0 3 exit status",
+      "Stamping with a lockfile present must succeed",
+      0,
+      r.status,
+      `Output was: ${r.output.slice(0, 300)}`,
+    );
+    expectLock(root, "1.20.0-pb.3");
+    expectCheckPasses(root, "after base+counter stamp with lockfile");
+  });
+
+  it("preserves CRLF line endings in the lockfile", () => {
+    const root = makeValidCopy(OLD, { lockNewline: "\r\n" });
+    const r = run(root, "fork-version.mjs");
+    check(
+      "fork-version exit status with CRLF lockfile",
+      "Stamping must succeed on a CRLF lockfile",
+      0,
+      r.status,
+      `Output was: ${r.output.slice(0, 300)}`,
+    );
+    expectLock(root, "1.22.0-pb.2", "\r\n");
+  });
+
+  it("does not crash and creates no lockfile when package-lock.json is absent", () => {
+    const root = makeValidCopy(OLD, { lock: false });
+    const r = run(root, "fork-version.mjs");
+    check(
+      "fork-version exit status without lockfile",
+      "A target with no lockfile must still be stamped",
+      0,
+      r.status,
+      `Treat a missing package-lock.json as nothing to do. Output was: ${r.output.slice(0, 300)}`,
+    );
+    check(
+      "package.json version without lockfile",
+      "Everything else is still stamped",
+      "1.22.0-pb.2",
+      readJson(root, "package.json").version,
+      "Continue stamping package.json and the manifests when there is no lockfile.",
+    );
+    check(
+      "lockfile not created",
+      "Stamping never invents a lockfile",
+      false,
+      existsSync(join(root, LOCK)),
+      "Only rewrite a lockfile that already exists.",
+    );
+  });
+});
+
+describe("check-plugin-manifest.mjs: package-lock.json", () => {
+  const BAD = "0.0.1";
+
+  function mutateLock(root: string, mutate: (lock: any) => void): void {
+    const lock = JSON.parse(readFileSync(join(root, LOCK), "utf8"));
+    mutate(lock);
+    writeFileSync(join(root, LOCK), JSON.stringify(lock, null, 2) + "\n");
+  }
+
+  it("passes when both lockfile versions equal package.json", () => {
+    expectCheckPasses(makeValidCopy(), "lockfile in sync");
+  });
+
+  it("passes when there is no lockfile at all", () => {
+    expectCheckPasses(makeValidCopy(V, { lock: false }), "no lockfile");
+  });
+
+  it.each([
+    ["root version", (l: any) => (l.version = BAD)],
+    ['packages[""].version', (l: any) => (l.packages[""].version = BAD)],
+  ])("rejects a stale lockfile %s and names package-lock.json", (field, fn) => {
+    const root = makeValidCopy();
+    expectCheckPasses(root, "baseline before mutation");
+    mutateLock(root, fn);
+    const r = run(root, CHECK);
+    check(
+      `stale lockfile ${field}: exit is non-zero`,
+      "A lockfile version that differs from package.json must fail the check",
+      true,
+      r.status !== 0 && r.status !== null,
+      `Compare both lockfile version fields with package.json and exit non-zero on a mismatch. Output was: ${r.output.slice(0, 300)}`,
+    );
+    check(
+      `stale lockfile ${field}: output names package-lock.json`,
+      "The failure message must identify the lockfile",
+      true,
+      namesPath(r.output, LOCK),
+      `Print the path ${LOCK}. Output was: ${r.output.slice(0, 300)}`,
+    );
+    for (const other of PIN_FILES) {
+      check(
+        `stale lockfile ${field}: output must not name ${other}`,
+        "Only the lockfile defect is reported",
+        false,
+        namesPath(r.output, other),
+        `Report only failing files. Output was: ${r.output.slice(0, 300)}`,
+      );
+    }
+  });
+
+  // Killing mutation: letting JSON.parse throw uncaught (status 1 but stack trace,
+  // no "not valid JSON" text); or reporting a pin file instead of the lockfile.
+  it.each([
+    ["merge-conflict markers", "<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> main\n"],
+    ["a truncated file", '{"version":'],
+  ])(
+    "reports a lockfile that is %s as not valid JSON, without a stack trace",
+    (label, text) => {
+      const root = makeValidCopy();
+      expectCheckPasses(root, "baseline before mutation");
+      writeFileSync(join(root, LOCK), text);
+      const r = run(root, CHECK);
+      check(
+        `invalid lockfile (${label}): exit is non-zero`,
+        "An unparseable lockfile must fail the check",
+        true,
+        r.status !== 0 && r.status !== null,
+        `Exit non-zero. Output was: ${r.output.slice(0, 300)}`,
+      );
+      check(
+        `invalid lockfile (${label}): output names package-lock.json`,
+        "The failure message must identify the lockfile",
+        true,
+        namesPath(r.output, LOCK),
+        `Print the path ${LOCK}. Output was: ${r.output.slice(0, 300)}`,
+      );
+      check(
+        `invalid lockfile (${label}): output says not valid JSON`,
+        "The failure message must say why",
+        true,
+        r.output.includes("not valid JSON"),
+        `Catch the JSON.parse error and print "${LOCK} is not valid JSON". Output was: ${r.output.slice(0, 300)}`,
+      );
+      check(
+        `invalid lockfile (${label}): no stack trace`,
+        "A parse failure is a reported problem, not an uncaught exception",
+        { stackFrames: false, syntaxError: false },
+        {
+          stackFrames: r.output.includes("    at "),
+          syntaxError: r.output.includes("SyntaxError:"),
+        },
+        `Wrap the lockfile JSON.parse in try/catch and report a one-line problem. Output was: ${r.output.slice(0, 300)}`,
+      );
+      for (const other of PIN_FILES) {
+        check(
+          `invalid lockfile (${label}): output must not name ${other}`,
+          "Only the lockfile defect is reported",
+          false,
+          namesPath(r.output, other),
+          `Report only the lockfile. Output was: ${r.output.slice(0, 300)}`,
+        );
+      }
+    },
+  );
 });

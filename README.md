@@ -30,10 +30,10 @@ One installer covers every client. Run it, pick your client(s), enter your Cogni
 You need [Node.js 20+](https://nodejs.org) and `git` on your PATH. This is a fork of the NiCE Cognigy plugin that installs straight from GitHub (it is not published to npm), so run the installer from this repository:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup
 ```
 
-The first run downloads and builds the engine, which can take 20–30 seconds; later runs use npm's cache.
+The first run downloads and builds the engine, which takes about 2 minutes on a cold start (measured 110-150 s); later runs use npm's cache (about 13 s warm).
 
 > **Do not use** the upstream `install.sh` / `install.ps1` one-liners or `npx -p @cognigy/plugin-engine@latest …` — they install Cognigy's published engine, which does not contain this fork's changes.
 
@@ -42,7 +42,7 @@ The first run downloads and builds the engine, which can take 20–30 seconds; l
 To add the plugin to a single project instead of your whole user profile, run this from the **project's root folder**, in a terminal:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
 ```
 
 It asks for your Cognigy API base URL and API key (the key is hidden as you type). It then:
@@ -66,7 +66,7 @@ Things to know:
 Install the Cognigy plugin for this project. Do not ask me for my API key in
 chat. Tell me to run this in the terminal at the project root, where it asks for
 the URL and key privately:
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
 Then tell me to restart Claude Code and check /mcp.
 ```
 
@@ -97,7 +97,7 @@ Cursor is the one client that needs no installer at all: it collects your creden
 Skip the prompts with flags:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup \
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup \
   --client claude-code --client claude-desktop --client codex \
   --client antigravity --client other-hosts \
   --api-base-url https://api-trial.cognigy.ai --api-key <key>
@@ -107,21 +107,27 @@ npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup \
 
 </details>
 
+### Troubleshooting the first start
+
+**`EALLOWGIT` from npm.** npm 12 refuses `github:` specs by default (its `allow-git` setting). This is an npm security default, not a plugin bug. The engine is installed from GitHub, so it needs the flag `--allow-git=root`, which, as documented in npm's configuration documentation for `allow-git`, allows only the git spec you name on the command line (and git dependencies defined in the project's own `package.json`), not git dependencies of dependencies (the engine has none). Observed on Windows, checked 2026-10-20: on npm 12.2.0, `--allow-git=root` started the pinned engine (20 tools); npm 10.9.9 and 11.21.1 accepted the flag without error. Every command in this README and the plugin manifests already pass `--allow-git=root` as the first `npx` argument, and older npm (10 and 11) accepts it silently. If you see `EALLOWGIT`, you are running a command without the flag.
+
+**The first connection times out.** A first start downloads and builds the engine, which can take about 2 minutes, while Claude Code waits only 30 s for an MCP server to connect. The installer pre-warms npm's cache to avoid this. If you added the plugin without the installer, wait for the first start to finish, then run `/mcp` and reconnect.
+
 ## Staying up to date
 
 See the **Auto-updates** column in the table above for what each client does on its own. To pull a new release now instead of waiting for the client to notice:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
 ```
 
 The installer doubles as a manager:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup status      # what's installed, per client
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update      # pull the latest where it isn't automatic
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall   # remove from every client (--client narrows it; --purge also clears ~/.cognigy-plugin)
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup profile list # manage several Cognigy environments, see "Add another environment" below
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup status      # what's installed, per client
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update      # pull the latest where it isn't automatic
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall   # remove from every client (--client narrows it; --purge also clears ~/.cognigy-plugin)
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup profile list # manage several Cognigy environments, see "Add another environment" below
 ```
 
 Beyond the MCP tools, the plugin ships **skills** and **agents** that surface the workflows automatically:
@@ -153,7 +159,7 @@ A value that arrives as an unexpanded `${...}` placeholder counts as missing. Ho
 
 ### Add another environment
 
-You can keep several Cognigy environments on one machine — for example a classic trial tenant and a newer one — each with its own URL and key. Every command below is shown without its prefix; run each as `npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup <command>`.
+You can keep several Cognigy environments on one machine — for example a classic trial tenant and a newer one — each with its own URL and key. Every command below is shown without its prefix; run each as `npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup <command>`.
 
 > **How the assistant uses them.** Every tool takes an optional `environment` argument. With one environment configured nothing changes. With two or more it is **required** on every call (except `list_environments`), the tool schemas mark it required, and the server never guesses: a call without it, or with an unknown name, is refused with the list of available environments. Every answer says which environment served it (`_environment`). Ask the assistant to run `list_environments` first, and to confirm the environment by name before anything destructive.
 

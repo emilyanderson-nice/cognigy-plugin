@@ -6,13 +6,14 @@
  * first real session boots from cache.
  */
 import { detectOnPath, runCliTool } from "./cliRunner.js";
+import { ENGINE_NPX_FLAGS } from "./forkIdentity.js";
 
 const PREWARM_TIMEOUT_MS = 180_000;
 
 export type PrewarmResult = { ok: true } | { ok: false; reason: string };
 
 export function buildPrewarmArgs(spec: string): string[] {
-  return ["-y", "-p", spec, "node", "--version"];
+  return [...ENGINE_NPX_FLAGS, "-y", "-p", spec, "node", "--version"];
 }
 
 /** Best-effort: never throws; failure is reported, not raised. */
@@ -25,7 +26,10 @@ export function prewarmEngine(spec: string): PrewarmResult {
     });
     if (res.error) return { ok: false, reason: res.error.message };
     if (res.status !== 0)
-      return { ok: false, reason: `npx exited with status ${res.status}` };
+      return {
+        ok: false,
+        reason: `npx exited with status ${res.status} (if npm printed EALLOWGIT, see the README section "Troubleshooting the first start")`,
+      };
     return { ok: true };
   } catch (err) {
     return {

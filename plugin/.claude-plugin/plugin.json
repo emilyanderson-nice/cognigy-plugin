@@ -1,6 +1,6 @@
 {
   "name": "cognigy",
-  "version": "1.22.0-pb.1",
+  "version": "1.22.0-pb.2",
   "description": "NiCE Cognigy Plugin — create, test, and manage AI Agents on the NiCE Cognigy platform",
   "author": {
     "name": "Cognigy",
@@ -30,9 +30,10 @@
     "platform": {
       "command": "npx",
       "args": [
+        "--allow-git=root",
         "-y",
         "-p",
-        "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.1",
+        "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.2",
         "cognigy-mcp"
       ],
       "env": {

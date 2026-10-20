@@ -42,7 +42,13 @@ function check(
 }
 
 const REAL_ROOT = process.cwd();
-const VERSION = "1.22.0-pb.1";
+// Read from the real package.json: the sandbox copies the real plugin/
+// manifests, so a hard-coded version breaks on every `version:fork` bump.
+const VERSION: string = (
+  JSON.parse(readFileSync(join(REAL_ROOT, "package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
 const TAG = `v${VERSION}`;
 const SCRIPT_URL = pathToFileURL(
   join(REAL_ROOT, "scripts", "release-tag.mjs"),
@@ -133,8 +139,8 @@ describe("release-tag planTag (pure)", () => {
   it("unrelated tags in local and remote lists do not block", () => {
     const p = planTag({
       ...GOOD_STATE,
-      localTags: ["v1.0.0-pb.1", "v1.22.0-pb.10"],
-      remoteTags: ["v1.22.0-pb.2"],
+      localTags: ["v0.0.1-pb.1", `${TAG}0`],
+      remoteTags: [`x${TAG}`],
     });
     check(
       "unrelated tags plan",

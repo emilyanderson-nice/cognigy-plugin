@@ -36,7 +36,7 @@ You can also install the plugin here first and run the installer afterwards — 
 ## Uninstall
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client codex
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client codex
 ```
 
 Or in the app: **Plugins** in the sidebar → **⋯** on Cognigy → **Uninstall**.
@@ -83,7 +83,7 @@ codex mcp remove cognigy
 To force it immediately instead of waiting for the next app start:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup update
 ```
 
 **If you are stuck on an old version**, the marketplace is almost certainly pinned to a branch that has stopped moving — auto-upgrade then works perfectly and finds nothing, forever. Check the ref:

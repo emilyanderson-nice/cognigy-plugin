@@ -2,7 +2,7 @@
 # engine (@cognigy/plugin-engine from npm) WITHOUT the changes in this fork
 # (emilyanderson-nice/cognigy-plugin). To install this fork, use the command in
 # the README (Installation):
-#   npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup
+#   npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup
 #
 # NiCE Cognigy Plugin - bootstrap installer (Windows PowerShell).
 #
@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $MinNodeMajor = 20
 $Pkg = '@cognigy/plugin-engine@latest'
 
-[Console]::Error.WriteLine("WARNING: this script installs Cognigy's published engine, without this fork's changes. To install the fork, run: npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup")
+[Console]::Error.WriteLine("WARNING: this script installs Cognigy's published engine, without this fork's changes. To install the fork, run: npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup")
 
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {

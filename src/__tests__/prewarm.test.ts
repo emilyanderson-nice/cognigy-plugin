@@ -16,6 +16,7 @@ const { buildPrewarmArgs, prewarmEngine } = await import(
 );
 
 const SPEC = "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.1";
+const FLAG = "--allow-git=root";
 const NPX_PATH = "C:\\mock\\bin\\npx.cmd";
 
 /** Fail with five labelled lines so a reader without the test source can act. */
@@ -56,9 +57,9 @@ describe("buildPrewarmArgs", () => {
     check(
       "buildPrewarmArgs(spec)",
       "Prewarm argv installs the spec into the npx cache then runs node --version",
-      ["-y", "-p", SPEC, "node", "--version"],
+      [FLAG, "-y", "-p", SPEC, "node", "--version"],
       buildPrewarmArgs(SPEC),
-      "Return exactly -y, -p, the spec, node, --version in that order.",
+      "Return exactly --allow-git=root (first, so npm 12 permits the github: spec), -y, -p, the spec, node, --version in that order.",
     );
   });
 
@@ -67,6 +68,7 @@ describe("buildPrewarmArgs", () => {
       "buildPrewarmArgs(github pin)",
       "A github:owner/repo#tag spec is passed through unchanged",
       [
+        FLAG,
         "-y",
         "-p",
         "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.1",
@@ -82,9 +84,9 @@ describe("buildPrewarmArgs", () => {
     check(
       "buildPrewarmArgs('other@1.0.0')",
       "The spec is interpolated as given, not hard-coded",
-      ["-y", "-p", "other@1.0.0", "node", "--version"],
+      [FLAG, "-y", "-p", "other@1.0.0", "node", "--version"],
       buildPrewarmArgs("other@1.0.0"),
-      "Use the spec parameter at the third position.",
+      "Use the spec parameter right after -p (fourth position, after the git-allow flag and -y).",
     );
   });
 });
@@ -135,7 +137,7 @@ describe("prewarmEngine: runner invocation", () => {
         [
           "npx",
           NPX_PATH,
-          ["-y", "-p", SPEC, "node", "--version"],
+          [FLAG, "-y", "-p", SPEC, "node", "--version"],
           { timeoutMs: 180000 },
         ],
       ],
@@ -193,6 +195,74 @@ describe("prewarmEngine: results", () => {
       true,
       typeof r.reason === "string" && r.reason.length > 0,
       "Provide a non-empty string reason.",
+    );
+  });
+
+  it("non-zero status: reason keeps 'npx exited with status <n>' and adds the EALLOWGIT and README hint", () => {
+    runCliTool.mockReturnValue({ status: 1 });
+    const reason = String(prewarmEngine(SPEC).reason);
+    check(
+      "prewarmEngine non-zero: status text",
+      "The original status text is preserved",
+      "npx exited with status 1",
+      reason,
+      "Keep `npx exited with status <n>` in the reason.",
+      "contains",
+    );
+    check(
+      "prewarmEngine non-zero: EALLOWGIT hint",
+      "npm's stderr is inherited, so the hint about npm 12 blocking github: specs is always appended",
+      "EALLOWGIT",
+      reason,
+      "Append a hint naming EALLOWGIT.",
+      "contains",
+    );
+    check(
+      "prewarmEngine non-zero: README pointer",
+      "The hint points at the README troubleshooting section",
+      "README",
+      reason,
+      "Mention the README in the hint.",
+      "contains",
+    );
+    check(
+      "prewarmEngine non-zero: exact README section title",
+      "The hint names the README section the user must open, verbatim",
+      "Troubleshooting the first start",
+      reason,
+      'Name the README section "Troubleshooting the first start" in the hint.',
+      "contains",
+    );
+  });
+
+  it("status 1 produces exactly the documented reason text", () => {
+    runCliTool.mockReturnValue({ status: 1 });
+    check(
+      "prewarmEngine status 1: exact reason",
+      "The reason is status text plus the EALLOWGIT/README-section hint, byte for byte",
+      'npx exited with status 1 (if npm printed EALLOWGIT, see the README section "Troubleshooting the first start")',
+      prewarmEngine(SPEC).reason,
+      'Format: `npx exited with status <n> (if npm printed EALLOWGIT, see the README section "Troubleshooting the first start")`.',
+    );
+  });
+
+  it("spawn error and missing npx reasons carry no EALLOWGIT hint", () => {
+    runCliTool.mockReturnValue({
+      status: null,
+      error: new Error("spawnSync npx ETIMEDOUT"),
+    });
+    const errReason = String(prewarmEngine(SPEC).reason);
+    detectOnPath.mockReturnValue(null);
+    const missingReason = String(prewarmEngine(SPEC).reason);
+    check(
+      "prewarmEngine non-status failures: no hint",
+      "Only a non-zero exit gets the EALLOWGIT hint",
+      { err: false, missing: false },
+      {
+        err: errReason.includes("EALLOWGIT"),
+        missing: missingReason.includes("EALLOWGIT"),
+      },
+      "Append the hint only on the non-zero-status branch.",
     );
   });
 

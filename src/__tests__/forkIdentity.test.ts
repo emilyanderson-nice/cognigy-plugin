@@ -1,6 +1,8 @@
 import { describe, it, expect } from "@jest/globals";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { spawnSync } from "child_process";
+import { pathToFileURL } from "url";
 
 import * as forkIdentity from "../install/forkIdentity.js";
 
@@ -29,6 +31,10 @@ function check(
     );
   }
 }
+
+const SCRIPT_URL = pathToFileURL(
+  join(process.cwd(), "scripts", "fork-identity.mjs"),
+).href;
 
 const pkgVersion: string = JSON.parse(
   readFileSync(join(process.cwd(), "package.json"), "utf8"),
@@ -97,6 +103,65 @@ describe("forkIdentity", () => {
       true,
       /^github:emilyanderson-nice\/cognigy-plugin#v\d+\.\d+\.\d+/.test(spec),
       "Return github:<repo>#v<semver>.",
+    );
+  });
+
+  it("ENGINE_NPX_FLAGS is exactly ['--allow-git=root']", () => {
+    const flags = (forkIdentity as unknown as Record<string, unknown>)
+      .ENGINE_NPX_FLAGS;
+    check(
+      "ENGINE_NPX_FLAGS",
+      "npm 12 blocks github: specs unless git is allowed for the root package; the installers must pass this flag",
+      JSON.stringify(["--allow-git=root"]),
+      JSON.stringify(flags ?? null),
+      "Export ENGINE_NPX_FLAGS from src/install/forkIdentity.ts as an array holding only the allow-git=root flag.",
+    );
+  });
+
+  it("ENGINE_NPX_FLAGS equals the constant exported by scripts/fork-identity.mjs", () => {
+    const code = `import(${JSON.stringify(SCRIPT_URL)}).then(m=>console.log(JSON.stringify(m.ENGINE_NPX_FLAGS ?? null)))`;
+    const r = spawnSync(process.execPath, ["--input-type=module", "-e", code], {
+      encoding: "utf8",
+    });
+    const mjsFlags = r.status === 0 ? r.stdout.trim() : `exit ${r.status}`;
+    const tsFlags = JSON.stringify(
+      (forkIdentity as unknown as Record<string, unknown>).ENGINE_NPX_FLAGS ??
+        null,
+    );
+    check(
+      "ENGINE_NPX_FLAGS twin equality",
+      "The build-time script and the installer must pass the same npx flags, or manifests and installs would disagree",
+      mjsFlags,
+      tsFlags,
+      "Make src/install/forkIdentity.ts and scripts/fork-identity.mjs export the same ENGINE_NPX_FLAGS value (both must be defined).",
+    );
+    check(
+      "ENGINE_NPX_FLAGS twin is defined",
+      "Equality of two missing values is not agreement",
+      JSON.stringify(["--allow-git=root"]),
+      mjsFlags,
+      "Define ENGINE_NPX_FLAGS in scripts/fork-identity.mjs.",
+    );
+  });
+
+  it("forkIdentity.ts exports only the flags constant, not a launch-args function", () => {
+    check(
+      "engineLaunchArgs export in forkIdentity.ts",
+      "The TypeScript side exposes only the flag constant; the launch-args builder lives in the script module",
+      false,
+      "engineLaunchArgs" in forkIdentity,
+      "Do not export engineLaunchArgs from src/install/forkIdentity.ts.",
+    );
+  });
+
+  it("SETUP_COMMAND is the exact flagged fork setup command", () => {
+    check(
+      "SETUP_COMMAND",
+      "The command users are told to run must carry --allow-git=root first, then -y, for npm 12",
+      "npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup",
+      (forkIdentity as unknown as Record<string, unknown>)
+        .SETUP_COMMAND as string,
+      "Export SETUP_COMMAND from src/install/forkIdentity.ts with exactly that text.",
     );
   });
 

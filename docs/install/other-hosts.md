@@ -23,10 +23,10 @@ Both steps are required, in either order. The standard's portable config deliber
 [Run the installer](../../README.md#installation) and pick **Other hosts**, or:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client other-hosts
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup --client other-hosts
 ```
 
-The installer is fetched from this fork on GitHub and builds on first run (20-30 s). It writes your API base URL and key to `~/.cognigy-plugin/config.json` and stops. Nothing is added to any client config, so it is safe to combine with any other target.
+The installer is fetched from this fork on GitHub and builds on first run (about 2 minutes cold, measured 110-150 s; later runs use the cache, about 13 s). It writes your API base URL and key to `~/.cognigy-plugin/config.json` and stops. Nothing is added to any client config, so it is safe to combine with any other target.
 
 Then install the plugin in your host.
 
@@ -46,7 +46,7 @@ Open the Extensions view, search `@agentPlugins`, install **cognigy**, and resta
 **Anything else** — point the host's MCP config at the engine:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp
 ```
 
 Replace `<version>` with a released version of this fork (the plugin manifests carry the current one). The `#v<version>` git tag must exist on the fork, or npx cannot resolve the pin. Leave the server's `env` empty; the credentials file covers it.
@@ -68,7 +68,7 @@ The host owns the plugin's version. To refresh only the credentials, re-run the 
 Remove the plugin in the host, then:
 
 ```
-npx -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client other-hosts --purge
+npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall --client other-hosts --purge
 ```
 
 There is nothing host-specific to undo, so `--client other-hosts` on its own only reports that. `--purge` is what deletes `~/.cognigy-plugin` — and that file is shared by every client, so don't pass it while another client is still installed.

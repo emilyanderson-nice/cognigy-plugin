@@ -5,9 +5,10 @@
       "type": "stdio",
       "command": "npx",
       "args": [
+        "--allow-git=root",
         "-y",
         "-p",
-        "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.1",
+        "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.2",
         "cognigy-mcp"
       ]
     },
