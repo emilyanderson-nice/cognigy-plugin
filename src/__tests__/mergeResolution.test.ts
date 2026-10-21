@@ -834,3 +834,157 @@ describe("countHunks", () => {
     );
   });
 });
+
+describe("resolveManifestText: package.json keeps the fork's prepare script", () => {
+  const OURS_PREPARE = "node scripts/prepare.mjs";
+  const pkg = (
+    nl: string,
+    scriptsBlock: (nl: string) => string,
+    prepareOutside = false,
+  ) =>
+    [
+      "{",
+      '  "name": "@cognigy/plugin-engine",',
+      hunk(
+        '  "version": "1.22.2-esc.1",',
+        '  "version": "1.23.0",',
+        nl,
+      ).replace(/\r?\n$/, ""),
+      '  "scripts": {',
+      '    "build": "tsc",',
+      ...(prepareOutside ? [`    "prepare": "${OURS_PREPARE}",`] : []),
+      scriptsBlock(nl).replace(/\r?\n$/, ""),
+      '    "lint": "eslint ."',
+      "  }",
+      "}",
+      "",
+    ].join(nl);
+
+  const prepareHunk = (nl: string) =>
+    hunk(
+      `    "prepare": "${OURS_PREPARE}",\n    "test": "jest",`.replace(
+        /\n/g,
+        nl,
+      ),
+      [
+        '    "prepare": "husky",',
+        '    "evals": "claude plugin eval plugin",',
+        '    "test": "jest",',
+      ].join(nl),
+      nl,
+    );
+
+  const bigHunk = (nl: string) =>
+    hunk(
+      `    "prepare": "${OURS_PREPARE}",\n    "test": "jest",`.replace(
+        /\n/g,
+        nl,
+      ),
+      [
+        '    "prepare": "husky",',
+        '    "evals": "claude plugin eval plugin",',
+        '    "evals:compare": "node scripts/evals-compare.mjs",',
+        '    "evals:baseline": "node scripts/evals-baseline.mjs",',
+        '    "test": "jest",',
+      ].join(nl),
+      nl,
+    );
+
+  const noPrepareHunk = (nl: string) =>
+    hunk('    "test": "jest",', '    "test": "jest --ci",', nl);
+
+  const parse = (text: string) => {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return `INVALID JSON: ${String((e as Error).message)}`;
+    }
+  };
+
+  it.each([
+    ["LF", "\n"],
+    ["CRLF", "\r\n"],
+  ])(
+    "R1 (%s): prepare line inside a hunk stays ours, rest of theirs is kept",
+    (_n, nl) => {
+      const out = resolveManifestText("package.json", pkg(nl, prepareHunk));
+      const parsed = parse(out);
+      check(
+        `R1 ${_n} prepare kept`,
+        "scripts.prepare must remain the fork's node scripts/prepare.mjs, never upstream's husky",
+        OURS_PREPARE,
+        parsed?.scripts?.prepare,
+        "In package.json, after taking theirs, restore OUR scripts.prepare value.",
+      );
+      check(
+        `R1 ${_n} theirs-only script kept`,
+        "Theirs-only script lines still arrive",
+        "claude plugin eval plugin",
+        parsed?.scripts?.evals,
+        "Only prepare is protected; every other theirs line is kept.",
+      );
+      check(
+        `R1 ${_n} version takes theirs`,
+        "The version line still takes theirs",
+        "1.23.0",
+        parsed?.version,
+        "Do not protect anything but scripts.prepare.",
+      );
+      check(
+        `R1 ${_n} no markers`,
+        "No conflict markers remain",
+        false,
+        /^(<<<<<<<|=======|>>>>>>>)/m.test(out),
+        "Resolve every hunk.",
+      );
+    },
+  );
+
+  it("R2: prepare inside a larger multi-line hunk keeps ours and all three theirs scripts", () => {
+    const out = resolveManifestText("package.json", pkg("\n", bigHunk));
+    const s = parse(out)?.scripts ?? {};
+    check(
+      "R2 scripts",
+      "Ours prepare kept and every theirs-added script present",
+      {
+        prepare: OURS_PREPARE,
+        evals: "claude plugin eval plugin",
+        compare: "node scripts/evals-compare.mjs",
+        baseline: "node scripts/evals-baseline.mjs",
+      },
+      {
+        prepare: s.prepare,
+        evals: s.evals,
+        compare: s["evals:compare"],
+        baseline: s["evals:baseline"],
+      },
+      "Restore only the prepare value; keep the other theirs lines of the hunk.",
+    );
+  });
+
+  it("R3: a hunk without prepare leaves an outside prepare line untouched and still takes theirs", () => {
+    const out = resolveManifestText(
+      "package.json",
+      pkg("\n", noPrepareHunk, true),
+    );
+    const s = parse(out)?.scripts ?? {};
+    check(
+      "R3 outside prepare",
+      "prepare outside any hunk stays ours; the hunk still resolves to theirs",
+      { prepare: OURS_PREPARE, test: "jest --ci" },
+      { prepare: s.prepare, test: s.test },
+      "Do not change behaviour for hunks that do not touch prepare.",
+    );
+  });
+
+  it("R4: resolving already-resolved output returns it unchanged", () => {
+    const once = resolveManifestText("package.json", pkg("\n", prepareHunk));
+    check(
+      "R4 idempotent",
+      "A second pass over resolved output is a no-op",
+      once,
+      resolveManifestText("package.json", once),
+      "Protection must not rewrite text that has no conflict markers.",
+    );
+  });
+});
