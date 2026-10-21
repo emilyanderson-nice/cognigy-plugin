@@ -34,7 +34,7 @@ const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
 // fork's changes would vanish with no error.
 // The pin is the fork's GitHub repo at the release tag for package.json's
 // version (see fork-identity.mjs).
-// The fork's version is always <upstream base>-pb.<n>. Sharing upstream's
+// The fork's version is always <upstream base>-esc.<n> (legacy: -pb.<n>). Sharing upstream's
 // exact version number is half of what let a client cache serve the stock
 // engine under this fork's install; the marketplace name is the other half.
 const expectedArgs = engineLaunchArgs(pkg.version);
@@ -211,7 +211,7 @@ function checkMarketplaceJson(manifest, errors) {
 
 if (!FORK_VERSION_RE.test(pkg.version)) {
   console.error(
-    `✗ package.json version "${pkg.version}" is not a fork version (expected <base>-pb.<n>).\n` +
+    `✗ package.json version "${pkg.version}" is not a fork version (expected <x.y.z>-esc.<n>; -pb.<n> is the legacy form, still accepted).\n` +
       "  An upstream merge takes their number; re-stamp it with: node scripts/fork-version.mjs <upstream version>",
   );
   process.exit(1);

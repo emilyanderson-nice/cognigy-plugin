@@ -53,7 +53,7 @@ export function planTag(state) {
 
   if (!FORK_VERSION_RE.test(version ?? "")) {
     problems.push(
-      `Version "${version}" is not a fork version (expected <x.y.z>-pb.<n>), so no tag is made.`,
+      `Version "${version}" is not a fork version (expected <x.y.z>-esc.<n>; -pb.<n> is the legacy form, still accepted), so no tag is made.`,
     );
   }
   if (dirty) {

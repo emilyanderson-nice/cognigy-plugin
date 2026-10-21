@@ -469,7 +469,7 @@ describe("check-plugin-manifest.mjs", () => {
 });
 
 describe("fork-version.mjs", () => {
-  it("(c1) with a base version sets <base>-pb.1 everywhere and leaves the check passing", () => {
+  it("(c1) with a base version sets <base>-esc.1 everywhere and leaves the check passing", () => {
     const root = makeValidCopy();
     const r = run(root, "fork-version.mjs", "1.23.0");
     check(
@@ -481,16 +481,16 @@ describe("fork-version.mjs", () => {
     );
     check(
       "package.json version",
-      "The fork release version is the base version with a pb.1 suffix",
-      "1.23.0-pb.1",
+      "The fork release version is the base version with an esc.1 suffix",
+      "1.23.0-esc.1",
       readJson(root, "package.json").version,
-      "Write <base>-pb.1 into package.json when given a new base version.",
+      "Write <base>-esc.1 into package.json when given a new base version.",
     );
     for (const rel of PIN_FILES) {
       check(
         `${rel} args`,
         "Every pin file must follow the new release version",
-        pinArgs("1.23.0-pb.1"),
+        pinArgs("1.23.0-esc.1"),
         readJson(root, rel).mcpServers.platform.args,
         "Rewrite the engine pin in every pin file to the new fork tag.",
       );
@@ -498,7 +498,7 @@ describe("fork-version.mjs", () => {
     expectCheckPasses(root, "after fork-version 1.23.0");
   });
 
-  it("(c2) with no argument bumps the pb counter from 1.22.0-pb.1 to 1.22.0-pb.2", () => {
+  it("(c2) with no argument on a legacy pb version restarts the counter as 1.22.0-esc.1", () => {
     const root = makeValidCopy("1.22.0-pb.1");
     const r = run(root, "fork-version.mjs");
     check(
@@ -510,16 +510,16 @@ describe("fork-version.mjs", () => {
     );
     check(
       "package.json version",
-      "The pb counter increments by one, base version unchanged",
-      "1.22.0-pb.2",
+      "A pb version is read, but the bump is written with the esc suffix and a restarted counter, base unchanged",
+      "1.22.0-esc.1",
       readJson(root, "package.json").version,
-      "Increment the numeric suffix after -pb. and keep the base version.",
+      "Switch the suffix to esc, restart the counter at 1 and keep the base version.",
     );
     for (const rel of PIN_FILES) {
       check(
         `${rel} args`,
         "Every pin file must follow the bumped version",
-        pinArgs("1.22.0-pb.2"),
+        pinArgs("1.22.0-esc.1"),
         readJson(root, rel).mcpServers.platform.args,
         "Rewrite the engine pin in every pin file to the bumped fork tag.",
       );
@@ -620,8 +620,10 @@ describe("fork-version.mjs: counter and base arguments", () => {
   }
 
   it.each([
-    ["1.22.0-pb.4", "1.22.0-pb.5"],
-    ["1.22.0-pb.9", "1.22.0-pb.10"],
+    ["1.22.0-esc.4", "1.22.0-esc.5"],
+    ["1.22.0-esc.9", "1.22.0-esc.10"],
+    ["1.22.0-pb.4", "1.22.0-esc.1"],
+    ["1.22.0-pb.9", "1.22.0-esc.1"],
   ])("no argument bumps %s to %s numerically", (from, to) => {
     const root = makeValidCopy(from);
     const r = run(root, "fork-version.mjs");
@@ -651,14 +653,14 @@ describe("fork-version.mjs: counter and base arguments", () => {
       check(
         `${rel} args after fork-version`,
         "Version stamping rewrites the spec only; the flag stays first and nothing else moves",
-        [FLAG, "-y", "-p", pin("1.22.0-pb.2"), "cognigy-mcp"],
+        [FLAG, "-y", "-p", pin("1.22.0-esc.1"), "cognigy-mcp"],
         readJson(root, rel).mcpServers.platform.args,
         "Do not drop, move or duplicate --allow-git=root when the pin is rewritten; only the github spec token changes.",
       );
     },
   );
 
-  it("a base and a counter argument set <base>-pb.<counter> exactly", () => {
+  it("a base and a counter argument set <base>-esc.<counter> exactly", () => {
     const root = makeValidCopy();
     const r = run(root, "fork-version.mjs", "1.20.0", "3");
     check(
@@ -668,11 +670,11 @@ describe("fork-version.mjs: counter and base arguments", () => {
       r.status,
       `Output was: ${r.output.slice(0, 300)}`,
     );
-    expectAllAt(root, "1.20.0-pb.3");
+    expectAllAt(root, "1.20.0-esc.3");
     expectCheckPasses(root, "after fork-version 1.20.0 3");
   });
 
-  it("the same base as the current version increments the counter", () => {
+  it("the same base as a legacy pb version switches to esc and restarts the counter", () => {
     const root = makeValidCopy("1.22.0-pb.3");
     const r = run(root, "fork-version.mjs", "1.22.0");
     check(
@@ -682,8 +684,184 @@ describe("fork-version.mjs: counter and base arguments", () => {
       r.status,
       `Output was: ${r.output.slice(0, 300)}`,
     );
-    expectAllAt(root, "1.22.0-pb.4");
+    expectAllAt(root, "1.22.0-esc.1");
   });
+});
+
+describe("fork-version.mjs: esc suffix rules (pb is read, never written)", () => {
+  // Killing mutation per row: keeping the pb suffix on a bump; not restarting the
+  // counter on a suffix switch; restarting the counter when the base is unchanged
+  // on an esc version; ignoring an explicit counter; stamping any file with a
+  // stale version (expectAllAt-style checks cover package.json, manifests, lock, pins).
+  it.each([
+    ["1.22.0-pb.3", [], "1.22.0-esc.1"],
+    ["1.22.0-esc.1", [], "1.22.0-esc.2"],
+    ["1.22.0-pb.3", ["1.22.2"], "1.22.2-esc.1"],
+    ["1.22.0-pb.3", ["1.22.0"], "1.22.0-esc.1"],
+    ["1.22.0-esc.2", ["1.22.0"], "1.22.0-esc.3"],
+    ["1.22.0-esc.2", ["1.22.5"], "1.22.5-esc.1"],
+    ["1.22.0-pb.3", ["1.22.2", "5"], "1.22.2-esc.5"],
+    ["1.22.0-esc.2", ["1.22.2", "5"], "1.22.2-esc.5"],
+  ] as Array<[string, string[], string]>)(
+    "from %s with args %j the result is %s everywhere and the check passes",
+    (from, args, to) => {
+      const root = makeValidCopy(from);
+      const r = run(root, "fork-version.mjs", ...args);
+      check(
+        `fork-version ${args.join(" ")} on ${from}: exit status`,
+        "The bump must succeed",
+        0,
+        r.status,
+        `Output was: ${r.output.slice(0, 300)}`,
+      );
+      const pkgVersion = readJson(root, "package.json").version;
+      check(
+        `package.json version after ${from} + ${JSON.stringify(args)}`,
+        "The exact new version, always with the esc suffix",
+        to,
+        pkgVersion,
+        "Write <base>-esc.<n> per the bump rules.",
+      );
+      check(
+        "no generated version contains -pb.",
+        "Nothing may ever generate a pb version again",
+        false,
+        pkgVersion.includes("-pb."),
+        "Never write the legacy suffix.",
+      );
+      for (const rel of PIN_FILES) {
+        check(
+          `${rel} args`,
+          "Every pin file follows the new version",
+          JSON.stringify(pinArgs(to)),
+          JSON.stringify(readJson(root, rel).mcpServers.platform.args),
+          "Rewrite the engine pin in every pin file.",
+        );
+      }
+      for (const rel of manifestFiles(root)) {
+        const j = readJson(root, rel);
+        if ("version" in j) {
+          check(
+            `${rel} version`,
+            "Every manifest version follows the new version",
+            to,
+            j.version,
+            "Stamp every manifest that carries a version.",
+          );
+        }
+      }
+      const lock = JSON.parse(readFileSync(join(root, LOCK), "utf8"));
+      check(
+        "lockfile root version",
+        "Lockfile follows",
+        to,
+        lock.version,
+        "Stamp the lockfile.",
+      );
+      check(
+        'lockfile packages[""].version',
+        "Lockfile root entry follows",
+        to,
+        lock.packages[""].version,
+        "Stamp the lockfile.",
+      );
+      expectCheckPasses(
+        root,
+        `after fork-version ${args.join(" ")} on ${from}`,
+      );
+    },
+  );
+});
+
+describe("check-plugin-manifest.mjs: esc and legacy pb versions", () => {
+  // Killing mutation: the check accepts only pb (esc fails), or only esc (pb fails).
+  it.each(["1.22.2-esc.1", "1.22.0-esc.7", "1.22.0-pb.3"])(
+    "accepts a fully consistent copy at %s",
+    (version) => {
+      expectCheckPasses(makeValidCopy(version), `consistent ${version}`);
+    },
+  );
+
+  // Killing mutation: the check compares versions only for one suffix, or skips
+  // the file for esc; the offender must be named and healthy files must not be.
+  describe.each(["1.22.2-esc.1", "1.22.0-pb.3"])("at %s", (version) => {
+    it.each(["plugin/.codex-plugin/plugin.json", "plugin/plugin.json"])(
+      "rejects a manifest version mismatch in %s and names it",
+      (offender) => {
+        const root = makeValidCopy(version);
+        expectCheckPasses(root, "baseline before mutation");
+        const j = readJson(root, offender);
+        j.version = "0.0.1";
+        writeJson(root, offender, j);
+        const r = run(root, CHECK);
+        check(
+          `${version}: mismatch in ${offender}: exit is non-zero`,
+          "A manifest version that differs from package.json fails for either suffix",
+          true,
+          r.status !== 0 && r.status !== null,
+          `Output was: ${r.output.slice(0, 300)}`,
+        );
+        check(
+          `${version}: output names ${offender}`,
+          "The failure identifies the manifest",
+          true,
+          namesPath(r.output, offender),
+          `Output was: ${r.output.slice(0, 300)}`,
+        );
+      },
+    );
+
+    it.each(PIN_FILES)("rejects a stale pin in %s and names it", (offender) => {
+      const root = makeValidCopy(version);
+      expectCheckPasses(root, "baseline before mutation");
+      const j = readJson(root, offender);
+      j.mcpServers.platform.args = pinArgs("0.0.1");
+      writeJson(root, offender, j);
+      const r = run(root, CHECK);
+      check(
+        `${version}: stale pin in ${offender}: exit is non-zero`,
+        "A pin that is not the package version's tag fails for either suffix",
+        true,
+        r.status !== 0 && r.status !== null,
+        `Output was: ${r.output.slice(0, 300)}`,
+      );
+      check(
+        `${version}: output names ${offender}`,
+        "The failure identifies the pin file",
+        true,
+        namesPath(r.output, offender),
+        `Output was: ${r.output.slice(0, 300)}`,
+      );
+    });
+  });
+
+  // Killing mutation: error text still says only <x.y.z>-pb.<n>; or the version
+  // is accepted. Each fixture mutates only package.json's version; manifests,
+  // pins and lock are rewritten by the fixture to carry the same non-fork value.
+  it.each(["1.22.0", "1.22.0-beta.1"])(
+    "rejects the non-fork package version %s and the message names both forms",
+    (version) => {
+      const root = makeValidCopy(version);
+      const r = run(root, CHECK);
+      check(
+        `${version}: exit is non-zero`,
+        "A version that is neither -esc.<n> nor legacy -pb.<n> is not a fork version",
+        true,
+        r.status !== 0 && r.status !== null,
+        `Output was: ${r.output.slice(0, 300)}`,
+      );
+      check(
+        `${version}: message mentions the esc form and the legacy pb form`,
+        "The error must tell the maintainer the expected form <x.y.z>-esc.<n> and that pb is legacy",
+        { esc: true, pb: true },
+        {
+          esc: r.output.includes("<x.y.z>-esc.<n>"),
+          pb: r.output.includes("pb") && /legacy/i.test(r.output),
+        },
+        `Print the expected form <x.y.z>-esc.<n> and mention the legacy -pb.<n> form. Output was: ${r.output.slice(0, 400)}`,
+      );
+    },
+  );
 });
 
 describe("sync-plugin-version.mjs", () => {
@@ -826,11 +1004,11 @@ describe("fork-version.mjs: package-lock.json", () => {
       r.status,
       `Output was: ${r.output.slice(0, 300)}`,
     );
-    expectLock(root, "1.22.0-pb.2");
+    expectLock(root, "1.22.0-esc.1");
     expectCheckPasses(root, "after no-arg bump with lockfile");
   });
 
-  it("<base>: sets both lockfile versions to <base>-pb.1", () => {
+  it("<base>: sets both lockfile versions to <base>-esc.1", () => {
     const root = makeValidCopy(OLD);
     const r = run(root, "fork-version.mjs", "1.23.0");
     check(
@@ -840,11 +1018,11 @@ describe("fork-version.mjs: package-lock.json", () => {
       r.status,
       `Output was: ${r.output.slice(0, 300)}`,
     );
-    expectLock(root, "1.23.0-pb.1");
+    expectLock(root, "1.23.0-esc.1");
     expectCheckPasses(root, "after base stamp with lockfile");
   });
 
-  it("<base> <n>: sets both lockfile versions to <base>-pb.<n>", () => {
+  it("<base> <n>: sets both lockfile versions to <base>-esc.<n>", () => {
     const root = makeValidCopy(OLD);
     const r = run(root, "fork-version.mjs", "1.20.0", "3");
     check(
@@ -854,7 +1032,7 @@ describe("fork-version.mjs: package-lock.json", () => {
       r.status,
       `Output was: ${r.output.slice(0, 300)}`,
     );
-    expectLock(root, "1.20.0-pb.3");
+    expectLock(root, "1.20.0-esc.3");
     expectCheckPasses(root, "after base+counter stamp with lockfile");
   });
 
@@ -868,7 +1046,7 @@ describe("fork-version.mjs: package-lock.json", () => {
       r.status,
       `Output was: ${r.output.slice(0, 300)}`,
     );
-    expectLock(root, "1.22.0-pb.2", "\r\n");
+    expectLock(root, "1.22.0-esc.1", "\r\n");
   });
 
   it("does not crash and creates no lockfile when package-lock.json is absent", () => {
@@ -884,7 +1062,7 @@ describe("fork-version.mjs: package-lock.json", () => {
     check(
       "package.json version without lockfile",
       "Everything else is still stamped",
-      "1.22.0-pb.2",
+      "1.22.0-esc.1",
       readJson(root, "package.json").version,
       "Continue stamping package.json and the manifests when there is no lockfile.",
     );

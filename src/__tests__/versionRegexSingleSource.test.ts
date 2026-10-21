@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { pathToFileURL } from "url";
 
@@ -109,6 +109,81 @@ describe("FORK_VERSION_RE has a single definition", () => {
       [],
       copies,
       "Use FORK_VERSION_RE directly, or keep only a capture-group parser that differs from it.",
+    );
+  });
+
+  // Killing mutation: release-tag.mjs or check-plugin-manifest.mjs grows its own
+  // /-esc\./ or /(esc|pb)/ literal instead of using the shared regex.
+  it.each(["release-tag.mjs", "check-plugin-manifest.mjs"])(
+    "(e) %s has no local regex literal naming the esc suffix",
+    (file) => {
+      const literals = (
+        read(file).match(/\/(?![/*])(?:\\.|[^/\\\n])+\/[a-z]*/g) ?? []
+      ).filter(
+        (l) =>
+          l.includes("-esc\\.") || l.includes("esc|pb") || l.includes("pb|esc"),
+      );
+      check(
+        `${file} has no local esc regex literal`,
+        "A second copy of the suffix pattern can drift from FORK_VERSION_RE",
+        [],
+        literals,
+        `Delete the local regex literal in ${file} and use FORK_VERSION_RE.`,
+      );
+    },
+  );
+});
+
+describe("FORK_VERSION_SUFFIX has a single definition", () => {
+  const SUFFIX_ASSIGN =
+    /\b(?:FORK_SUFFIX|FORK_VERSION_SUFFIX)\s*=\s*(["'`])(?:esc|pb)\1/;
+
+  // Killing mutation: the suffix constant is removed from fork-identity.mjs or
+  // assigned something other than the literal "esc".
+  it('(f) scripts/fork-identity.mjs defines FORK_VERSION_SUFFIX = "esc"', () => {
+    check(
+      "fork-identity.mjs defines FORK_VERSION_SUFFIX",
+      "The write suffix is defined once, in fork-identity.mjs",
+      true,
+      /export\s+const\s+FORK_VERSION_SUFFIX\s*=\s*["']esc["']/.test(
+        read("fork-identity.mjs"),
+      ),
+      'Add export const FORK_VERSION_SUFFIX = "esc" to scripts/fork-identity.mjs.',
+    );
+  });
+
+  // Killing mutation: fork-version.mjs defines its own FORK_SUFFIX = "pb"/"esc"
+  // literal (a second definition that can drift) or does not import the shared one.
+  it("(g) fork-version.mjs imports FORK_VERSION_SUFFIX and defines no suffix literal constant", () => {
+    const src = read("fork-version.mjs");
+    check(
+      "fork-version.mjs imports FORK_VERSION_SUFFIX from ./fork-identity.mjs",
+      "The writer uses the shared suffix constant",
+      true,
+      importsFromIdentity(src, "FORK_VERSION_SUFFIX"),
+      'Add FORK_VERSION_SUFFIX to the import { ... } from "./fork-identity.mjs" in fork-version.mjs.',
+    );
+    check(
+      "fork-version.mjs has no literal assignment to FORK_SUFFIX / FORK_VERSION_SUFFIX",
+      "One definition of the suffix",
+      false,
+      SUFFIX_ASSIGN.test(src),
+      "Delete the local constant and use the imported FORK_VERSION_SUFFIX.",
+    );
+  });
+
+  // Killing mutation: any other script (release-tag, check, sync, merge helpers)
+  // assigns the quoted literal "esc" to a *SUFFIX* constant.
+  it('(h) no script other than fork-identity.mjs assigns the literal "esc" to a suffix constant', () => {
+    const offenders = readdirSync(join(process.cwd(), "scripts"))
+      .filter((f) => f.endsWith(".mjs") && f !== "fork-identity.mjs")
+      .filter((f) => /\b\w*SUFFIX\w*\s*=\s*["'`]esc["'`]/i.test(read(f)));
+    check(
+      "scripts other than fork-identity.mjs with an esc suffix literal",
+      "The esc suffix literal is defined only in fork-identity.mjs",
+      [],
+      offenders,
+      "Import FORK_VERSION_SUFFIX from ./fork-identity.mjs instead of redefining it.",
     );
   });
 });

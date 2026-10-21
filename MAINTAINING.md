@@ -23,7 +23,7 @@ npx -y -p cognigy-engine@npm:@cognigy/plugin-engine@<version> cognigy-mcp
 npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin#v<version> cognigy-mcp
 ```
 
-`<version>` is the `version` in `package.json`, in the form `<x.y.z>-pb.<n>` (for example `v1.22.0-pb.1`). npm clones the repo at that tag, installs its dependencies, runs the `prepare` hook (`scripts/prepare.mjs`), which compiles `src/` to `dist/`, and then runs the `cognigy-mcp` bin. So the engine that runs **is this repo's source at that tag**.
+`<version>` is the `version` in `package.json`, in the form `<x.y.z>-esc.<n>` (for example `v1.22.2-esc.1`). npm clones the repo at that tag, installs its dependencies, runs the `prepare` hook (`scripts/prepare.mjs`), which compiles `src/` to `dist/`, and then runs the `cognigy-mcp` bin. So the engine that runs **is this repo's source at that tag**.
 
 Consequences worth knowing:
 
@@ -33,9 +33,11 @@ Consequences worth knowing:
 
 ### Versions
 
-The fork's version is always `<upstream base>-pb.<n>`; the current value is the `version` in `package.json`. The base names the upstream release this is built on; the suffix keeps the number distinct from upstream's, which is the second half of the cache collision described below.
+The fork's version is `<upstream base>-esc.<n>`; the current value is the `version` in `package.json`. The base names the upstream release this is built on; the suffix keeps the number distinct from upstream's, which is the second half of the cache collision described below.
 
-`npm run version:fork` stamps it: no argument bumps the suffix, an upstream version rebases onto it (`npm run version:fork 1.20.0` becomes `1.20.0-pb.1`), and `npm run version:fork 1.20.0 3` sets both. It rewrites the `version` in `package.json` and the plugin manifests that carry one, **and** the engine pin in the four files that carry a pin:
+`-pb.<n>` is the legacy form: it stays valid for existing tags and history, but nothing generates it any more.
+
+`npm run version:fork` stamps it: no argument bumps the suffix (`-esc.1` becomes `-esc.2`; a legacy `-pb.<n>` restarts at `-esc.1`), an upstream version rebases onto it (`npm run version:fork 1.20.0` becomes `1.20.0-esc.1`; `npm run version:fork 1.22.2` becomes `1.22.2-esc.1`), and `npm run version:fork 1.20.0 3` sets both. It rewrites the `version` in `package.json` and the plugin manifests that carry one, **and** the engine pin in the four files that carry a pin:
 
 - `plugin/.claude-plugin/plugin.json`
 - `plugin/mcp.json`
@@ -57,7 +59,7 @@ Claude Code caches a plugin at `<marketplace>/<plugin>/<version>`. While the for
 - plugin enabled, no error anywhere
 - and the **stock engine** running, with none of the fork's behaviour
 
-Nothing in the repo could detect it, because nothing in the repo was wrong. `npm run check:manifest` enforces the name so an upstream merge cannot quietly restore the collision. A distinct marketplace name plus a distinct version form (`-pb.<n>`) is what keeps the cache keys apart.
+Nothing in the repo could detect it, because nothing in the repo was wrong. `npm run check:manifest` enforces the name so an upstream merge cannot quietly restore the collision. A distinct marketplace name plus a distinct version form (`-esc.<n>`) is what keeps the cache keys apart.
 
 ### Check what is actually installed
 
@@ -141,7 +143,7 @@ There is no automated release on this fork. Never publish or tag without the mai
    npm run release:tag -- --create --push
    ```
 
-   `--create` makes an annotated tag `v<version>` at `HEAD`; `--push` pushes only that one tag (`refs/tags/v<version>`, never `--tags` and never a branch). `--push` alone pushes an existing local tag. The script refuses (non-zero exit) when: the working tree is dirty, the tag already exists locally or on origin, any of the four pin files does not carry this version's pin (run `version:fork`), the version is not a `<x.y.z>-pb.<n>` fork version, `HEAD` is not contained in an `origin/*` branch (judged from the last fetch), origin's tags cannot be read, or, for `--push` alone, the local tag does not point at `HEAD`.
+   `--create` makes an annotated tag `v<version>` at `HEAD`; `--push` pushes only that one tag (`refs/tags/v<version>`, never `--tags` and never a branch). `--push` alone pushes an existing local tag. The script refuses (non-zero exit) when: the working tree is dirty, the tag already exists locally or on origin, any of the four pin files does not carry this version's pin (run `version:fork`), the version is not a `<x.y.z>-esc.<n>` fork version (legacy `-pb.<n>` also passes), `HEAD` is not contained in an `origin/*` branch (judged from the last fetch), origin's tags cannot be read, or, for `--push` alone, the local tag does not point at `HEAD`.
 
    **The tag is created before the merge, never after.** Until the tag exists on origin, every install from `main` fails to start the engine.
 
@@ -187,7 +189,7 @@ To merge from Cognigy's repository directly, add it as a further remote (`https:
 | `src/tools/definitions.ts`                                             | Medium            | `errorTrace` / `errorGuard` / `errorHandlerFlowId` in the `manage_flow_nodes` input schema.                                                                                                                                                                                 |
 | `src/tools/nodeRegistry.ts`                                            | Low               | The `executeFlow` entry.                                                                                                                                                                                                                                                    |
 | `src/schemas/tools.ts`                                                 | Low               | The three Zod fields.                                                                                                                                                                                                                                                       |
-| `plugin/*/plugin.json`, `plugin/*/mcp.json`, `package.json`            | **Every release** | Upstream bumps the version and restores the npm alias pin. `merge:resolve` takes their version, restores the fork's `github:` spec and re-stamps `-pb.<n>`.                                                                                                                 |
+| `plugin/*/plugin.json`, `plugin/*/mcp.json`, `package.json`            | **Every release** | Upstream bumps the version and restores the npm alias pin. `merge:resolve` takes their version, restores the fork's `github:` spec and re-stamps `-esc.<n>`.                                                                                                                |
 | `.claude-plugin/marketplace.json`                                      | Medium            | The marketplace name must stay `cognigy-plugin-v2`; `merge:resolve` keeps our side and `check:manifest` enforces it.                                                                                                                                                        |
 | `scripts/check-plugin-manifest.mjs`, `scripts/sync-plugin-version.mjs` | Medium            | Both derive the expected engine spec from `scripts/fork-identity.mjs` (`enginePin`) instead of hardcoding it; keep that import when upstream's version of the file comes in.                                                                                                |
 | `.releaserc.json`                                                      | Low               | The fork's file keeps `@semantic-release/npm` with `npmPublish: false` and a `prepareCmd` that only runs `sync-plugin-version.mjs`. Re-check against upstream's version on each merge (`@semantic-release/git` assets must list the manifests that carry a version or pin). |
