@@ -1,3 +1,66 @@
+## 1.22.1-pb.5 (2026-10-19)
+
+### Features
+
+* **agent-prompts:** changing an existing agent starts from the whole prompt: fetch the agent and tools fresh, read every field end to end, name the behavior as a general rule, fix the existing rule that should cover it before adding a line, re-read the result and report any growth; replies show before/after per changed field
+
+## 1.22.1-pb.4 (2026-10-16)
+
+### Features
+
+* **agent-prompts:** new skill for writing AI Agent prompts — which section goes in which field, 12 writing rules (number only real sequences, `##` headings, XML only for data and examples, calm wording, each rule once, tool and handover rules, sample-phrase variants, voice output), a standard knowledge-search section, a checklist, and chat and voice examples
+* **agent-creation / create_ai_agent / update_ai_agent:** field guidance and examples follow the new layout; numbered "step-by-step" job instructions and "use ALL fields" are gone
+* **tools-setup:** tool descriptions say what, when and when not
+
+## 1.22.1-pb.3 (2026-10-16)
+
+### Bug Fixes
+
+* **status line:** the `cognigy:<profile>` segment no longer disappears after a plugin update or `/reload-plugins`; the old server only removes the session file while it still owns it
+
+## 1.22.1-pb.2 (2026-10-16)
+
+### Features
+
+* **flow-nodes:** 10 code node readability guidelines in the `flow-nodes` skill (descriptive names, one statement per line, data one entry per line, constants at the top, read → decide → write, small helpers, early returns, named types, why-comments) with a before/after example; the create example is now multi-line, and the `manage_flow_nodes` description points at the guidelines
+
+## 1.22.1-pb.1 (2026-10-16)
+
+### Chores
+
+* merge upstream Cognigy/cognigy-plugin 1.22.1 into the fork
+
+## 1.22.0-pb.4 (2026-10-16)
+
+### Features
+
+* **environments:** show the session's environment in the Claude Code status line — the server writes `~/.cognigy-plugin/sessions/<claude pid>.json` (pin, source, host, last-used environment, configured count; never keys) at boot, on pin changes and when the last-used environment changes, removes it on shutdown, and installs `~/.cognigy-plugin/statusline-segment.sh`, which prints `cognigy:<name>` / `cognigy:unpinned (last <name>)`; `COGNIGY_SESSION_STATE=0` opts out, `COGNIGY_SESSION_KEY` names the file
+* **environments:** "Default Cognigy profile" plugin setting in Claude Code (`cognigy_profile`, passed as `COGNIGY_DEFAULT_PROFILE`) pins each new session; `COGNIGY_ENVIRONMENT` overrides it, a bad value warns and fails pin-reliant calls with `pin_invalid`, and `list_environments` reports source `plugin-settings`. The API URL and key settings are no longer required, since profiles can supply credentials
+
+## 1.22.0-pb.3 (2026-10-16)
+
+### Features
+
+* **environments:** pin a session to one environment — `COGNIGY_ENVIRONMENT=<name>` at launch or the new `use_environment` tool (`{ name }` / `{ clear: true }`); calls without `environment` go to the pin, an explicit argument still wins, a pin that stops resolving fails closed, and `list_environments` marks the pinned environment and its source
+
+## 1.22.0-pb.2 (2026-10-16)
+
+### Features
+
+* **environments:** named environment profiles and per-call `environment` routing — one MCP server serves every configured Cognigy environment, each tool takes an optional `environment` argument (required once two or more are configured), results carry an `_environment` marker, `list_environments` lists them, and `talk_to_agent` endpoint URLs are host-guarded per environment. By Emily Anderson ([emilyanderson-nice/cognigy-plugin#1](https://github.com/emilyanderson-nice/cognigy-plugin/pull/1), [emilyanderson-nice/cognigy-plugin#2](https://github.com/emilyanderson-nice/cognigy-plugin/pull/2))
+
+### Bug Fixes
+
+* **api:** redact the API key from client error logs and rejected errors, so an upstream error body that echoes the key no longer reaches the "API Response Error" or "Tool call failed" logs ([6e0f59f](https://github.com/pb-crackers/cognigy-plugin/commit/6e0f59f))
+* **talk_to_agent:** refuse redirects that leave the endpoint host, so one environment's endpoint cannot forward the message body to another host ([98abedd](https://github.com/pb-crackers/cognigy-plugin/commit/98abedd))
+* **profiles:** derive legacy fields and named profiles from one read of the credential file, so a replace during loading cannot yield a mixed snapshot ([cd72e2f](https://github.com/pb-crackers/cognigy-plugin/commit/cd72e2f))
+
+## [1.22.1](https://github.com/Cognigy/cognigy-plugin/compare/v1.22.0...v1.22.1) (2026-10-12)
+
+### Bug Fixes
+
+* **flow-nodes:** support Copilot wait/status nodes, wrap adaptive cards, flag duplicate imports ([#57](https://github.com/Cognigy/cognigy-plugin/issues/57)) ([bbf474e](https://github.com/Cognigy/cognigy-plugin/commit/bbf474e093d8cc53b12535986ff7ef2229a9bec8))
+
 ## [1.22.0](https://github.com/Cognigy/cognigy-plugin/compare/v1.21.0...v1.22.0) (2026-10-09)
 
 ### Features

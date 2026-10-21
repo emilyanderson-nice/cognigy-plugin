@@ -48,7 +48,7 @@ export const tools: ToolDefinition[] = [
         description: {
           type: "string",
           description:
-            "Agent description — defines the agent's persona and behavior",
+            "Agent persona (max 1000 chars): who the agent is, who it serves and how it comes across, in prose. The agent-prompts skill has the layout and writing rules for every prompt field.",
         },
         knowledgeStoreReferenceId: {
           type: "string",
@@ -75,7 +75,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "update_ai_agent",
     description:
-      "Update an AI Agent's configuration. This tool updates both the AI Agent resource and the AI Agent Job Node config.\n\nUSE ALL RELEVANT FIELDS — do not put everything in description alone. Distribute configuration across the appropriate fields:\n\nAGENT-LEVEL FIELDS (the agent's identity):\n- name: Display name\n- description: Agent PERSONA — who the agent is, personality, tone, and high-level behavior. This is the primary identity field.\n- instructions: Agent GUARDRAILS — high-level constraints and policies (up to 1000 chars). Things the agent must always/never do.\n\nJOB-LEVEL FIELDS (jobConfig — how the agent performs its job):\n- jobName: Job title / role name (e.g., 'Customer Support Specialist')\n- jobDescription: Detailed responsibilities, scope, expertise areas, and what tools are available for this job\n- jobInstructions: Step-by-step procedures, output format requirements, decision trees for the job\n- llmProviderReferenceId: LLM to use (from setup_llm or list_resources { resourceType: 'llm_model' })\n- temperature: 0-1, lower = more deterministic (default: 0.7)\n- maxTokens: 100-8000 (default: 4000)\n\nKNOWLEDGE: Always use create_tool { toolType: 'knowledge' } to attach knowledge stores as tools. Only use persona-level knowledge if the user explicitly requests it.\n\nRequires: aiAgentId (from create_ai_agent or list_resources { resourceType: 'agent' }).\nAfter updating, use talk_to_agent to test the changes.",
+      "Update an AI Agent's configuration. This tool updates both the AI Agent resource and the AI Agent Job Node config.\n\nDistribute the prompt across the fields below, each fact in one field (the agent-prompts skill has the layout and the writing rules):\n\nAGENT-LEVEL FIELDS (the agent's identity):\n- name: Display name\n- description: Agent PERSONA (max 1000 chars) — who the agent is, who it serves, personality as behaviors. Prose, no headings or lists.\n- instructions: COMMUNICATION and GUARDRAILS — '## Communication' and '## Guardrails' sections with one rule per bullet.\n\nJOB-LEVEL FIELDS (jobConfig — how the agent performs its job):\n- jobName: Job title / role name (e.g., 'Customer Support Specialist')\n- jobDescription: Goal and scope in prose — name every topic the job covers and what goes elsewhere\n- jobInstructions: How to do the job in '##' sections (Conversation flow, Using tools, When something goes wrong, Handing over, Voice output). Number only steps that happen in order; rules that apply any time are bullets.\n- llmProviderReferenceId: LLM to use (from setup_llm or list_resources { resourceType: 'llm_model' })\n- temperature: 0-1, lower = more deterministic (default: 0.7)\n- maxTokens: 100-8000 (default: 4000)\n\nKNOWLEDGE: Always use create_tool { toolType: 'knowledge' } to attach knowledge stores as tools. Only use persona-level knowledge if the user explicitly requests it.\n\nRequires: aiAgentId (from create_ai_agent or list_resources { resourceType: 'agent' }).\nAfter updating, use talk_to_agent to test the changes.",
     annotations: {
       title: "Update AI Agent",
       readOnlyHint: false,
@@ -95,17 +95,17 @@ export const tools: ToolDefinition[] = [
         description: {
           type: "string",
           description:
-            "Agent PERSONA — who the agent is, its personality, tone, and high-level behavior. This is the primary field for shaping agent identity. Example: 'You are a friendly customer support agent for Acme Corp...'",
+            "Agent PERSONA (max 1000 chars) — who the agent is, who it serves, and its personality as behaviors, in prose, no headings or lists. Example: 'You are the order assistant for Acme Outdoor's online store. You help customers track orders and start returns. You're friendly and efficient: acknowledge a problem in one sentence, then fix it.'",
         },
         instructions: {
           type: "string",
           description:
-            "Agent GUARDRAILS — high-level constraints and policies that apply regardless of the job (up to 1000 chars). Example: 'Never share internal pricing. Always verify identity before account changes.'",
+            "COMMUNICATION and GUARDRAILS that apply regardless of the job (keep near 1000 chars): '## Communication' and '## Guardrails' sections, one rule per bullet. Don't restate Safety Settings rules. Example: '## Guardrails\\n- Help only with Acme orders, returns and products.\\n- Never share another customer's details.'",
         },
         jobConfig: {
           type: "object",
           description:
-            "AI Agent Job Node configuration — controls the job role, procedures, LLM, and model parameters. Use ALL relevant fields to fully configure agent behavior.",
+            "AI Agent Job Node configuration — the job role, scope, procedures, LLM, and model parameters. Fill the fields the agent needs, each fact in one field.",
           properties: {
             jobName: {
               type: "string",
@@ -115,12 +115,12 @@ export const tools: ToolDefinition[] = [
             jobDescription: {
               type: "string",
               description:
-                "Job SCOPE — detailed description of responsibilities, expertise areas, available tools, and what to escalate. Example: 'Handle customer inquiries about orders, returns, and shipping. Use the search tool for order lookups. Escalate billing disputes to human agents.'",
+                "Job SCOPE in prose — every topic the job covers and what goes elsewhere. Tool details belong in the tool descriptions. Example: 'You handle order tracking, delivery questions, returns within 30 days and product questions. Payment disputes go to the support team.'",
             },
             jobInstructions: {
               type: "string",
               description:
-                "Job PROCEDURES — step-by-step instructions, output format requirements, and decision trees. Example: '1. Greet the customer. 2. Ask for order number. 3. Look up order. 4. Provide status update.'",
+                "How to do the job, in '##' sections: Conversation flow, Using tools, When something goes wrong, Handing over, Voice output. Number only steps that happen in order; rules that apply any time are bullets. Example: '## Conversation flow\\n1. Find out what the customer needs.\\n2. Get the order number and look it up.\\n\\n## Using tools\\n- Say one short line before a lookup, and vary it.\\n- If a tool fails, try once more, then offer the support team.'",
             },
             llmProviderReferenceId: {
               type: "string",
@@ -691,7 +691,7 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
             description: {
               type: "string",
               description:
-                "Tool description for the LLM (tool, knowledge, send_email, http)",
+                "Tool description for the LLM (tool, knowledge, send_email, http): what it does, when to use it and when not to, in 1-3 sentences (see the agent-prompts skill)",
             },
             parameters: {
               type: "string",
@@ -913,7 +913,7 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
             description: {
               type: "string",
               description:
-                "Tool description for the LLM (tool, knowledge, send_email, http)",
+                "Tool description for the LLM (tool, knowledge, send_email, http): what it does, when to use it and when not to, in 1-3 sentences (see the agent-prompts skill)",
             },
             parameters: {
               type: "string",
@@ -1145,7 +1145,7 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
   {
     name: "manage_flow_nodes",
     description:
-      'Manage the logic nodes inside a flow (list/get/create/update/delete) and render the flow as a diagram. Nodes are helpers that live INSIDE AI Agent tool branches: create a tool first (create_tool { toolType: "tool" }), then add nodes with parentNodeId = toolNodeId, mode = "appendChild". NEVER add standalone nodes before the AI Agent Job node. The flow-nodes skill owns the full workflow — placement, branching (ifThenElse/lookup), node config, and case values.\n\nOPERATIONS:\n- list: all nodes in a flow (id, type, label, parentId, isEntryPoint, isDisabled when true — NO config).\n- get: one node in full incl. config (requires nodeId); disabled nodes report isDisabled: true. Read before editing. For code nodes the config reports `hasError`; the large server-computed `transpiled` output is omitted.\n- create: add a node (requires nodeType + config). parentNodeId + mode place it — see the flow-nodes skill. Returns nodeId; `placeholderToolsRemoved` lists auto-created placeholder tool nodes removed for llmPrompt nodes. For nodeType "code", config.code must open with a 1-3 line comment saying what the node does. config.code that lacks one, or uses something the Code Node runtime does not have (api.httpRequest, fetch, require/import, the removed api.setState/getState/resetState — see the flow-nodes skill) is written anyway and flagged in _hints.warning.\n- update: change a node\'s config or label (only provided fields change). For switch/lookup nodes, pass a `cases` array to set case values. For an existing code node the same config.code hints as create apply.\n- delete: remove a node.\n- render (read-only): visualize the flow. Disabled nodes (and their child branches) are left out, since the flow skips them at runtime. Returns an `ascii` tree (display inline in any client incl. terminal) and a `mermaid` string. Deliver the mermaid ONLY as a native Mermaid/diagram artifact — do NOT wrap it in HTML or paste it as an inline ```mermaid fence (both break the zoomable, mobile-friendly viewer). Options: focus=<nodeId|nodeId[]> highlights nodes; writeHtml writes a self-contained rich HTML graph to a local tmp file and opens it in the browser (returns htmlUrl/htmlPath — the file is already on the user\'s machine, just hand them the link). See the flow-nodes skill for details.\n\nSupported node types come from the server node registry; an unsupported nodeType returns the current list. For AI Agent tool nodes (knowledge, send_email, mcp, http) use create_tool / update_tool instead.\n\nLLM PROMPT EXCEPTION: llmPrompt is a top-level raw LLM node, not a tool-branch helper. Create it only when the user asks for an LLM Prompt node by name; reading/updating existing llmPromptV2 nodes is fine.',
+      'Manage the logic nodes inside a flow (list/get/create/update/delete) and render the flow as a diagram. Nodes are helpers that live INSIDE AI Agent tool branches: create a tool first (create_tool { toolType: "tool" }), then add nodes with parentNodeId = toolNodeId, mode = "appendChild". NEVER add standalone nodes before the AI Agent Job node. The flow-nodes skill owns the full workflow — placement, branching (ifThenElse/lookup), node config, and case values.\n\nOPERATIONS:\n- list: all nodes in a flow (id, type, label, parentId, isEntryPoint, isDisabled when true — NO config).\n- get: one node in full incl. config (requires nodeId); disabled nodes report isDisabled: true. Read before editing. For code nodes the config reports `hasError`; the large server-computed `transpiled` output is omitted.\n- create: add a node (requires nodeType + config). parentNodeId + mode place it — see the flow-nodes skill. Returns nodeId; `placeholderToolsRemoved` lists auto-created placeholder tool nodes removed for llmPrompt nodes. For nodeType "code", config.code must open with a 1-3 line comment saying what the node does. Write it for a person to read: descriptive names, one statement per line, 2-space indent, data one entry per line (the flow-nodes skill lists the 10 guidelines). config.code that lacks one, or uses something the Code Node runtime does not have (api.httpRequest, fetch, require/import, the removed api.setState/getState/resetState — see the flow-nodes skill) is written anyway and flagged in _hints.warning.\n- update: change a node\'s config or label (only provided fields change). For switch/lookup nodes, pass a `cases` array to set case values. For an existing code node the same config.code hints as create apply.\n- delete: remove a node.\n- render (read-only): visualize the flow. Disabled nodes (and their child branches) are left out, since the flow skips them at runtime. Returns an `ascii` tree (display inline in any client incl. terminal) and a `mermaid` string. Deliver the mermaid ONLY as a native Mermaid/diagram artifact — do NOT wrap it in HTML or paste it as an inline ```mermaid fence (both break the zoomable, mobile-friendly viewer). Options: focus=<nodeId|nodeId[]> highlights nodes; writeHtml writes a self-contained rich HTML graph to a local tmp file and opens it in the browser (returns htmlUrl/htmlPath — the file is already on the user\'s machine, just hand them the link). See the flow-nodes skill for details.\n\nSupported node types come from the server node registry; an unsupported nodeType returns the current list. For AI Agent tool nodes (knowledge, send_email, mcp, http) use create_tool / update_tool instead.\n\nLLM PROMPT EXCEPTION: llmPrompt is a top-level raw LLM node, not a tool-branch helper. Create it only when the user asks for an LLM Prompt node by name; reading/updating existing llmPromptV2 nodes is fine.',
     annotations: {
       title: "Manage Flow Nodes",
       readOnlyHint: false,
@@ -1174,7 +1174,7 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
         nodeType: {
           type: "string",
           description:
-            "Node type key (required for create). The authoritative set comes from the server node registry; an unsupported value returns an error listing the current types. Common types: say, question, ifThenElse, lookup, setSessionContext, code, goTo, sleep, httpRequest. xApp nodes: initAppSession, showXAppAdaptiveCard, showXAppHtml, setXAppState, getXAppSessionPin.",
+            "Node type key (required for create). The authoritative set comes from the server node registry; an unsupported value returns an error listing the current types. Common types: say, question, ifThenElse, lookup, setSessionContext, code, goTo, sleep, wait (Wait for Input), httpRequest. CXone Agent Copilot: cxOneSendCopilotStatus. xApp nodes: initAppSession, showXAppAdaptiveCard, showXAppHtml, setXAppState, getXAppSessionPin.",
         },
         label: {
           type: "string",

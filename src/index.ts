@@ -21,7 +21,8 @@ async function main() {
       version: settings.serverVersion,
     });
 
-    const { dispatcher, rateLimiter, startupNotices } = buildServerParts();
+    const { dispatcher, rateLimiter, sessionState, startupNotices } =
+      buildServerParts();
     for (const notice of startupNotices()) logger.warn(notice);
 
     const server = new Server(
@@ -54,6 +55,7 @@ async function main() {
       // listener, where a rejection would otherwise be unhandled.
       try {
         logger.info("Shutting down NiCE Cognigy Plugin");
+        sessionState.remove();
         rateLimiter.destroy();
         await server.close();
       } catch (error: any) {

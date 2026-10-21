@@ -9,6 +9,11 @@ import {
   type EnvironmentRuntime,
 } from "../../environments/registry.js";
 import {
+  USE_ENVIRONMENT_TOOL,
+  createSessionPin,
+  createUseEnvironment,
+} from "../../environments/sessionPin.js";
+import {
   createDispatcher,
   type ToolDefinition,
   type ToolResult,
@@ -86,6 +91,8 @@ export interface HarnessOptions {
   impl?: Record<string, HandlerImpl>;
   /** Passed to the dispatcher as deps.taskContext when given. */
   taskContext?: () => { taskId?: string; sessionId?: string };
+  /** Wire a session pin and the use_environment tool, as bootstrap does. */
+  session?: boolean;
 }
 
 export function harness(opts: HarnessOptions) {
@@ -133,6 +140,7 @@ export function harness(opts: HarnessOptions) {
     (a: Record<string, unknown>) => Promise<Record<string, unknown>>
   >(async () => ({ environments: [] }));
   const tools = opts.tools ?? [tool("alpha"), tool("talk_to_agent")];
+  const pin = createSessionPin();
   const dispatcher = createDispatcher({
     registry,
     tools,
@@ -144,6 +152,15 @@ export function harness(opts: HarnessOptions) {
     listEnvironments,
     listEnvironmentsTool: LIST_ENV_TOOL,
     ...(opts.taskContext ? { taskContext: opts.taskContext } : {}),
+    ...(opts.session
+      ? {
+          session: {
+            pin,
+            tool: USE_ENVIRONMENT_TOOL,
+            use: createUseEnvironment({ registry, pin }),
+          },
+        }
+      : {}),
   });
   return {
     dispatcher,
@@ -153,6 +170,7 @@ export function harness(opts: HarnessOptions) {
     runWithTask,
     listEnvironments,
     handlerCalls,
+    pin,
     loadCount: () => loads,
     setSet(next: ProfileSet) {
       current = next;

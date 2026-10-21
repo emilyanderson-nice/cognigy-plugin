@@ -8,7 +8,7 @@ A plugin that connects your AI assistant to the [Cognigy.AI](https://www.cognigy
 
 ## Features
 
-- **20 workflow tools** (including `list_environments`, for working with several Cognigy environments at once) for flow building, agent creation, deployment, packaging, backup, voice setup, and agent-to-agent (A2A) delegation
+- **21 workflow tools** (including `list_environments` and `use_environment`, for working with several Cognigy environments at once) for flow building, agent creation, deployment, packaging, backup, voice setup, and agent-to-agent (A2A) delegation
 - **Flow building without an agent**: create standalone Flows (shared subroutines, error handlers, classic Node dialogs) and chain nodes onto them directly
 - **One-call agent setup**: creates Agent + Flow + AI Agent Job Node + REST Endpoint automatically
 - **Self-improvement loop**: talk to your agent, evaluate responses, update the job description, repeat
@@ -129,6 +129,8 @@ npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setu
 npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup uninstall   # remove from every client (--client narrows it; --purge also clears ~/.cognigy-plugin)
 npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup profile list # manage several Cognigy environments, see "Add another environment" below
 ```
+
+With several environments, a session can be pinned to one (`use_environment`, `COGNIGY_ENVIRONMENT`, or the **Default Cognigy profile** plugin setting in Claude Code), and the Claude Code status line can show which one the session uses: see [Show the environment in the Claude Code status line](docs/install/multiple-environments.md#show-the-environment-in-the-claude-code-status-line).
 
 Beyond the MCP tools, the plugin ships **skills** and **agents** that surface the workflows automatically:
 
