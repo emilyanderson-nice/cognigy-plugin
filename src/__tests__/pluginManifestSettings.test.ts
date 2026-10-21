@@ -47,4 +47,90 @@ describe("Claude Code plugin settings", () => {
       "${user_config.cognigy_profile}",
     );
   });
+
+  // Changed 2026-10-21: a default trial URL made a blank key reuse the credentials-file key against the trial host
+  // (the old manifest shipped default "https://api-trial.cognigy.ai"; no earlier assertion pinned it, the contract is now pinned explicitly).
+  describe("API base URL has no default", () => {
+    const urlSpec = manifest.userConfig.cognigy_api_base_url;
+
+    it("has no default property at all (not empty, not null)", () => {
+      expect(Object.prototype.hasOwnProperty.call(urlSpec, "default")).toBe(
+        false,
+      );
+    });
+
+    it("keeps its type, title and optional status", () => {
+      expect(urlSpec.type).toBe("string");
+      expect(urlSpec.title).toBe("Cognigy API base URL");
+      expect(urlSpec.required).toBe(false);
+    });
+
+    it("tells the user that leaving it blank uses a saved profile or the credentials file", () => {
+      expect(urlSpec.description).toContain("blank");
+      expect(urlSpec.description).toMatch(/profile|credentials file/);
+    });
+
+    it("keeps the API key optional and sensitive", () => {
+      expect(manifest.userConfig.cognigy_api_key.required).toBe(false);
+      expect(manifest.userConfig.cognigy_api_key.sensitive).toBe(true);
+    });
+  });
+});
+
+const TRIAL_HOST = "api-trial.cognigy.ai";
+
+/** Paths of every default/value field whose string contains the trial host. */
+function trialDefaults(node: unknown, path = ""): string[] {
+  if (Array.isArray(node)) {
+    return node.flatMap((item, i) => trialDefaults(item, `${path}[${i}]`));
+  }
+  if (node && typeof node === "object") {
+    return Object.entries(node).flatMap(([key, child]) => {
+      const here = path ? `${path}.${key}` : key;
+      if (
+        (key === "default" || key === "value") &&
+        typeof child === "string" &&
+        child.includes(TRIAL_HOST)
+      ) {
+        return [here];
+      }
+      return trialDefaults(child, here);
+    });
+  }
+  return [];
+}
+
+describe("no tracked manifest defaults an API base URL to the trial host", () => {
+  const pluginDir = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "plugin",
+  );
+  const files = [
+    ".claude-plugin/plugin.json",
+    ".cursor-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    ".codex-plugin/mcp.json",
+    "plugin.json",
+    "mcp.json",
+  ];
+
+  it("the scanner flags a trial host in default and value but not in description", () => {
+    expect(
+      trialDefaults({
+        a: { default: `https://${TRIAL_HOST}` },
+        b: [{ value: `https://${TRIAL_HOST}` }],
+        c: { description: `Use https://${TRIAL_HOST} for trials` },
+      }),
+    ).toEqual(["a.default", "b[0].value"]);
+  });
+
+  it.each(files)("%s has no trial-host default", (file) => {
+    const json = JSON.parse(readFileSync(join(pluginDir, file), "utf8"));
+    expect({ file, trialDefaults: trialDefaults(json) }).toEqual({
+      file,
+      trialDefaults: [],
+    });
+  });
 });

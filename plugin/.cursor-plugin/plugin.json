@@ -21,8 +21,7 @@
       "COGNIGY_API_BASE_URL": {
         "type": "string",
         "title": "Cognigy API base URL",
-        "description": "Your Cognigy instance API URL. Use https://api-trial.cognigy.ai if you are on the trial.",
-        "default": "https://api-trial.cognigy.ai"
+        "description": "Your Cognigy instance API URL. Use https://api-trial.cognigy.ai if you are on the trial."
       },
       "COGNIGY_API_KEY": {
         "type": "string",
