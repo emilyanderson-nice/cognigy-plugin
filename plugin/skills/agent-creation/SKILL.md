@@ -102,6 +102,22 @@ update_ai_agent {
 
 Always use ALL relevant fields when configuring an agent. Do not put everything in `description` alone — distribute the configuration across the appropriate fields for best results.
 
+### Check that the agent and its tools agree
+
+After you create or change a tool, or edit the agent's `instructions`, `jobDescription` or `jobInstructions`, read the agent's instruction fields and every tool's description side by side. Look for rules that contradict each other, especially:
+
+- whether the user must be authenticated or authorized before a tool is used
+- who may see which data
+- when to escalate to a human
+- which parameters are required
+- language or tone
+
+State each rule once, normally in the agent's global `instructions`, and edit the tool descriptions to match. Do not leave two versions of a rule and rely on ordering.
+
+Example: the `instructions` say knowledge lookups need no authorization, but the knowledge tool's description says the user must be authorized first. The agent then dithers: it tries to authorize the user, answers inconsistently, or claims it has no knowledge and offers to escalate. Fix it by deciding the rule once, stating it in `instructions`, and making the tool description say the same.
+
+Then test both paths with `talk_to_agent`: one question before authorization and one after.
+
 ## LLM Prompt node — explicit request ONLY
 
 Use the **LLM Prompt** node only when the user asks for it by name, e.g. "create an agent using an LLM Prompt node." Otherwise, build agents with the AI Agent node.

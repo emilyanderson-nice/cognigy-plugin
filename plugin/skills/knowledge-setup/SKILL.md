@@ -51,6 +51,8 @@ description: "Use when the user wants to add knowledge, RAG, or a knowledge stor
      This creates a dedicated search tool the agent can invoke to query the knowledge store.
    - IMPORTANT: Always use the tool-based approach unless the user explicitly asks to attach knowledge to the agent persona.
 
+After attaching the knowledge tool, run **Check that the agent and its tools agree** in the `agent-creation` skill, so the knowledge tool's description does not contradict the agent's instructions (for example about whether the user must be authorized before a lookup).
+
 ## File Upload Notes
 
 - Supported formats: PDF, TXT, DOCX, CTXT, PPTX
