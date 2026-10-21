@@ -163,7 +163,7 @@ A value that arrives as an unexpanded `${...}` placeholder counts as missing. Ho
 
 You can keep several Cognigy environments on one machine — for example a classic trial tenant and a newer one — each with its own URL and key. Every command below is shown without its prefix; run each as `npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup <command>`.
 
-> **How the assistant uses them.** Every tool takes an optional `environment` argument. With one environment configured nothing changes. With two or more it is **required** on every call (except `list_environments`), the tool schemas mark it required, and the server never guesses: a call without it, or with an unknown name, is refused with the list of available environments. Every answer says which environment served it (`_environment`). Ask the assistant to run `list_environments` first, and to confirm the environment by name before anything destructive.
+> **How the assistant uses them.** Every tool takes an optional `environment` argument. With one environment configured nothing changes. With two or more it is **required** on every call (except `list_environments`) unless the session is pinned to one environment (see `use_environment` below). The tool schemas never mark it required; the server enforces it and never guesses: a call without it (and without a pin), or with an unknown name, is refused with the list of available environments. Every answer says which environment served it (`_environment`). Ask the assistant to run `list_environments` first, and to confirm the environment by name before anything destructive.
 
 1. **Add it.** Pick a short lower-case name and give the base URL:
 
@@ -181,7 +181,7 @@ You can keep several Cognigy environments on one machine — for example a class
    profile show v4-staging   # hosts and key length, never the key
    ```
 
-3. **Optionally mark a default.** `list_environments` shows it, but with two or more environments the assistant must still name the environment on every call, and it is told not to treat the marker as consent.
+3. **Optionally mark a default.** `list_environments` shows it, but with two or more environments the assistant must still name the environment on every call (unless the session is pinned, see `use_environment` below), and it is told not to treat the marker as consent.
 
    ```
    profile default v4-staging    # or: profile default --clear
@@ -200,6 +200,8 @@ You can keep several Cognigy environments on one machine — for example a class
    ```
 
 Profiles live in `~/.cognigy-plugin/config.json` (readable only by you). Re-running the installer keeps them. You can also define them with `COGNIGY_PROFILE_<NAME>_API_BASE_URL` and `_API_KEY` environment variables. See [docs/install/multiple-environments.md](docs/install/multiple-environments.md) for the details, file protection and troubleshooting.
+
+**Pin a session to one environment.** Instead of naming the environment on every call, ask the assistant to call `use_environment` once per task. It pins the session to that environment, and an explicit `environment` argument on a later call still overrides the pin. Call `use_environment` alone in its own turn, not alongside other tool calls. The pin is per session and held in memory. Pinning at launch with `COGNIGY_ENVIRONMENT` or the plugin's profile setting is a standing default for every session, so unset it when you move work between tenants.
 
 ### Audit attribution
 

@@ -44,7 +44,7 @@ The fork's version is `<upstream base>-esc.<n>`; the current value is the `versi
 - `plugin/.codex-plugin/mcp.json`
 - `plugin/.cursor-plugin/plugin.json`
 
-`npm run merge:resolve` calls it for you during a merge. `npm run check:manifest` fails if `package.json` is not a fork version, if any manifest pin differs from `github:emilyanderson-nice/cognigy-plugin#v<package.json version>`, if a manifest version differs from `package.json`, or if the marketplace name is not the fork's. It therefore also rejects the npm alias form. Never hand-bump versions in any file: use `version:fork`.
+The merge resolver (`node scripts/resolve-upstream-merge.mjs`) calls it for you during a merge. `npm run check:manifest` fails if `package.json` is not a fork version, if any manifest pin differs from `github:emilyanderson-nice/cognigy-plugin#v<package.json version>`, if a manifest version differs from `package.json`, or if the marketplace name is not the fork's. It therefore also rejects the npm alias form. Never hand-bump versions in any file: use `version:fork`.
 
 The `Release` GitHub workflow (`.github/workflows/release.yml`) and `.releaserc.json` are upstream's semantic-release setup. On this fork the workflow needs secrets the fork does not have, so it fails harmlessly; the fork versions by hand with `version:fork`. `.releaserc.json` has been adjusted so that, were it ever to run, it would not publish to npm (`@semantic-release/npm` with `npmPublish: false`). If the workflow is ever made to succeed, semantic-release would compute its own number; `check:manifest` is what catches a non-fork version.
 
@@ -108,7 +108,7 @@ The figures in the table were measured on 2026-10-20 with the tag pin on npm 12.
 
 ### The trap to watch for
 
-If an upstream merge restores the npm pin in any manifest, the plugin silently runs **Cognigy's stock engine** instead of this fork: no error, the error tracing just quietly stops happening. `scripts/check-plugin-manifest.mjs` fails the build if that happens (it requires the exact `github:emilyanderson-nice/cognigy-plugin#v<version>` args), `scripts/sync-plugin-version.mjs` aborts if it sees `@cognigy/plugin-engine@`, and `merge:resolve` rewrites alias and previous-fork specs back to this fork's spec. Do not "fix" a failure by relaxing the check.
+If an upstream merge restores the npm pin in any manifest, the plugin silently runs **Cognigy's stock engine** instead of this fork: no error, the error tracing just quietly stops happening. `scripts/check-plugin-manifest.mjs` fails the build if that happens (it requires the exact `github:emilyanderson-nice/cognigy-plugin#v<version>` args), `scripts/sync-plugin-version.mjs` aborts if it sees `@cognigy/plugin-engine@`, and the resolver script rewrites alias and previous-fork specs back to this fork's spec. Do not "fix" a failure by relaxing the check.
 
 ## Fork identity
 
@@ -159,15 +159,17 @@ Nothing arrives automatically. Pull when you want to.
 ```bash
 git fetch upstream
 git merge upstream/main     # conflicts are expected: see below
-npm run merge:resolve       # resolves the manifest/version boilerplate
+node scripts/resolve-upstream-merge.mjs   # resolves the manifest/version boilerplate
 # resolve any remaining SOURCE conflicts by hand
 npm test && npm run check:manifest && npm run build
 git commit                  # complete the merge
 ```
 
+Run the script directly, not through `npm run merge:resolve`: while the merge leaves `package.json` with conflict markers, npm cannot start and exits with EJSONPARSE. The npm script name is only a convenience for when `package.json` parses.
+
 Then follow [Releasing a version](#releasing-a-version) (branch, PR, tag, merge); do not push merge results straight to `main`.
 
-`npm run merge:resolve` handles the conflicts that are identical every time: the plugin manifests, `package.json`, `package-lock.json`, `.claude-plugin/marketplace.json`. For the manifests it takes the incoming side, normalises every engine spec form it can meet (the npm alias, the previous fork's `github:` spec, this fork's pinned spec) to this fork's unpinned `github:emilyanderson-nice/cognigy-plugin`, and then re-stamps the fork version onto the incoming base with `version:fork <base> 1`, which re-applies the tag pin. For `.claude-plugin/marketplace.json` it keeps **our** side (marketplace identity is the fork's) and warns if it did. It deliberately refuses to touch source conflicts: those need judgement, and quietly picking a side is how a merge loses a feature. A manifest that still holds a conflict marker or no longer parses as JSON is left untouched and reported.
+The resolver script (`node scripts/resolve-upstream-merge.mjs`) handles the conflicts that are identical every time: the plugin manifests, `package.json`, `package-lock.json`, `.claude-plugin/marketplace.json`. For the manifests it takes the incoming side, normalises every engine spec form it can meet (the npm alias, the previous fork's `github:` spec, this fork's pinned spec) to this fork's unpinned `github:emilyanderson-nice/cognigy-plugin`, and then re-stamps the fork version onto the incoming base with `version:fork <base> 1`, which re-applies the tag pin. For `.claude-plugin/marketplace.json` it keeps **our** side (marketplace identity is the fork's) and warns if it did. It deliberately refuses to touch source conflicts: those need judgement, and quietly picking a side is how a merge loses a feature. A manifest that still holds a conflict marker or no longer parses as JSON is left untouched and reported.
 
 The rules live in `scripts/merge-resolution.mjs`; `resolve-upstream-merge.mjs` applies them to the files git reports as conflicted.
 
@@ -177,7 +179,7 @@ The `upstream` remote is already configured. If it is ever missing:
 git remote add upstream https://github.com/pb-crackers/cognigy-plugin.git
 ```
 
-To merge from Cognigy's repository directly, add it as a further remote (`https://github.com/Cognigy/cognigy-plugin.git`) and merge from that; `merge:resolve` handles both sources (see its header comment).
+To merge from Cognigy's repository directly, add it as a further remote (`https://github.com/Cognigy/cognigy-plugin.git`) and merge from that; the resolver script handles both sources (see its header comment).
 
 ### Where conflicts will happen
 
@@ -189,8 +191,8 @@ To merge from Cognigy's repository directly, add it as a further remote (`https:
 | `src/tools/definitions.ts`                                             | Medium            | `errorTrace` / `errorGuard` / `errorHandlerFlowId` in the `manage_flow_nodes` input schema.                                                                                                                                                                                 |
 | `src/tools/nodeRegistry.ts`                                            | Low               | The `executeFlow` entry.                                                                                                                                                                                                                                                    |
 | `src/schemas/tools.ts`                                                 | Low               | The three Zod fields.                                                                                                                                                                                                                                                       |
-| `plugin/*/plugin.json`, `plugin/*/mcp.json`, `package.json`            | **Every release** | Upstream bumps the version and restores the npm alias pin. `merge:resolve` takes their version, restores the fork's `github:` spec and re-stamps `-esc.<n>`.                                                                                                                |
-| `.claude-plugin/marketplace.json`                                      | Medium            | The marketplace name must stay `cognigy-plugin-v2`; `merge:resolve` keeps our side and `check:manifest` enforces it.                                                                                                                                                        |
+| `plugin/*/plugin.json`, `plugin/*/mcp.json`, `package.json`            | **Every release** | Upstream bumps the version and restores the npm alias pin. The resolver script takes their version, restores the fork's `github:` spec and re-stamps `-esc.<n>`.                                                                                                            |
+| `.claude-plugin/marketplace.json`                                      | Medium            | The marketplace name must stay `cognigy-plugin-v2`; the resolver script keeps our side and `check:manifest` enforces it.                                                                                                                                                    |
 | `scripts/check-plugin-manifest.mjs`, `scripts/sync-plugin-version.mjs` | Medium            | Both derive the expected engine spec from `scripts/fork-identity.mjs` (`enginePin`) instead of hardcoding it; keep that import when upstream's version of the file comes in.                                                                                                |
 | `.releaserc.json`                                                      | Low               | The fork's file keeps `@semantic-release/npm` with `npmPublish: false` and a `prepareCmd` that only runs `sync-plugin-version.mjs`. Re-check against upstream's version on each merge (`@semantic-release/git` assets must list the manifests that carry a version or pin). |
 | `plugin/skills/flow-nodes/SKILL.md`                                    | Low               | The error-handling section under `### code`.                                                                                                                                                                                                                                |
@@ -212,7 +214,7 @@ Upstream's new hint analyses `data.config.code` (the author's code, not the wrap
 
 Upstream's new hint test asserted `api.post` was called exactly once, which the fork's guard node breaks. It now counts posts of `type: "code"` instead. Prefer that shape over raw call counts: the node chain grows, and positional or count-based assertions fail for the wrong reason when it does.
 
-Rehearsed against a simulated upstream 1.20.0 at the time: seven conflicts, all of them manifest boilerplate, all resolved by `merge:resolve`, with upstream's change to `src/tools/handlers.ts` merging cleanly on its own and every fork feature intact.
+Rehearsed against a simulated upstream 1.20.0 at the time: seven conflicts, all of them manifest boilerplate, all resolved by the resolver script, with upstream's change to `src/tools/handlers.ts` merging cleanly on its own and every fork feature intact.
 
 ### After any merge, check these three things
 
