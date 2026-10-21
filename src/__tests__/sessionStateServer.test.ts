@@ -40,7 +40,12 @@ const boot = async (sessionKey: string, extra: Record<string, string> = {}) => {
 
 describe("session state file through the real server", () => {
   for (const how of ["SIGTERM", "SIGINT", "stdin-end"] as const) {
-    it(
+    // On win32 Node implements child.kill("SIGTERM"|"SIGINT") as an
+    // unconditional TerminateProcess, so the server's signal handlers never run
+    // and the file cannot be removed. stdin-end is the Windows shutdown path.
+    const itCase =
+      how !== "stdin-end" && process.platform === "win32" ? it.skip : it;
+    itCase(
       `is written at boot and removed on ${how}`,
       async () => {
         const { s, home, file } = await boot(`e2e-${how}`);
