@@ -189,6 +189,23 @@ describe("SERVER_INSTRUCTIONS session pin guidance", () => {
   });
 });
 
+describe("SERVER_INSTRUCTIONS use_environment ordering rule", () => {
+  it("says to call use_environment alone, in its own turn, before other tools", () => {
+    const hit = sentences(SERVER_INSTRUCTIONS).find(
+      (s) => /use_environment/.test(s) && /alone/i.test(s) && /turn/i.test(s),
+    );
+    ok(
+      hit !== undefined,
+      "instructions::pin_alone_own_turn",
+      "Rule: same-turn tool calls run in undefined order, so a pin issued with another call can lose the race",
+      "one sentence containing 'use_environment', 'alone' and 'turn'",
+      "no such sentence",
+      "Add one terse sentence: call use_environment alone, in its own turn, before any other tool call.",
+    );
+    // Killing mutation: sentence absent, or its three terms split across sentences.
+  });
+});
+
 describe("SERVER_INSTRUCTIONS existing content", () => {
   it.each([
     "NiCE Cognigy Plugin — builds and iteratively improves LLM-powered AI Agents.",

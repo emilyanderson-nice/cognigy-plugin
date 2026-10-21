@@ -21,6 +21,7 @@ ENVIRONMENTS:
 - When more than one environment is configured, \`environment\` is required on every call except list_environments and use_environment, unless the session is pinned. Keep it constant within a task.
 - A session can be pinned to one environment (use_environment, or at launch by COGNIGY_ENVIRONMENT or the plugin setting; list_environments shows the pin). When the session is pinned, do not pass \`environment\` (or pass the pinned name).
 - When the user names a tenant or profile, call use_environment once at the start of the task.
+- Call use_environment alone, in its own turn, before any other tool call: calls issued in the same turn can run before the pin changes.
 - Switch the pin only when the user asks, and say so.
 - When more than one environment exists, confirm the target environment with the user before any destructive operation (delete, restore, overwrite).
 - Even when the session is pinned, confirm the target environment with the user by name before any destructive operation (delete, snapshot restore, overwrite).
