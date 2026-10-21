@@ -80,6 +80,9 @@ const V: string = readJson(REAL_ROOT, "package.json").version;
 
 const LOCK = "package-lock.json";
 
+/** The only prepare script that builds dist/ for a GitHub-installed engine. */
+const PREPARE = "node scripts/prepare.mjs";
+
 /**
  * A synthetic lockfile (2-space JSON, trailing newline, optional CRLF). The root
  * `version` and `packages[""].version` carry `version`. A decoy dependency
@@ -233,6 +236,7 @@ function makeValidCopy(
   }
   const pkg = readJson(root, "package.json");
   pkg.version = version;
+  pkg.scripts = { ...(pkg.scripts ?? {}), prepare: PREPARE };
   writeJson(root, "package.json", pkg);
   for (const rel of PIN_FILES) {
     const j = readJson(root, rel);
@@ -463,6 +467,103 @@ describe("check-plugin-manifest.mjs", () => {
         true,
         r.output.includes(c.offender),
         `Print the path ${c.offender} in the error output for the manifest that failed. Output was: ${r.output.slice(0, 300)}`,
+      );
+    });
+  }
+});
+
+describe("check-plugin-manifest.mjs: prepare script guard", () => {
+  it("the real repo package.json has scripts.prepare exactly 'node scripts/prepare.mjs'", () => {
+    check(
+      "real package.json scripts.prepare",
+      "The engine is installed from GitHub; npm builds dist/ only through this exact prepare script",
+      PREPARE,
+      readJson(REAL_ROOT, "package.json").scripts?.prepare,
+      "Set scripts.prepare in package.json to exactly 'node scripts/prepare.mjs' (an upstream merge may have replaced it with 'husky').",
+    );
+  });
+
+  it("a valid copy with the exact prepare script passes", () => {
+    const root = makeValidCopy();
+    check(
+      "valid copy carries the exact prepare script",
+      "The fixture must carry the expected prepare script",
+      PREPARE,
+      readJson(root, "package.json").scripts.prepare,
+      "makeValidCopy must write scripts.prepare = 'node scripts/prepare.mjs'.",
+    );
+    expectCheckPasses(root, "exact prepare script");
+  });
+
+  const cases: Array<{
+    name: string;
+    mutate: (pkg: any) => void;
+  }> = [
+    {
+      name: "prepare = husky (upstream's value)",
+      mutate: (pkg) => {
+        pkg.scripts.prepare = "husky";
+      },
+    },
+    {
+      name: "prepare removed, scripts object present",
+      mutate: (pkg) => {
+        delete pkg.scripts.prepare;
+      },
+    },
+    {
+      name: "scripts object absent entirely",
+      mutate: (pkg) => {
+        delete pkg.scripts;
+      },
+    },
+    {
+      name: "prepare has a trailing command appended",
+      mutate: (pkg) => {
+        pkg.scripts.prepare = `${PREPARE} && echo x`;
+      },
+    },
+    {
+      name: "prepare has a leading space",
+      mutate: (pkg) => {
+        pkg.scripts.prepare = ` ${PREPARE}`;
+      },
+    },
+  ];
+
+  for (const c of cases) {
+    it(`fails when ${c.name}`, () => {
+      const root = makeValidCopy();
+      expectCheckPasses(root, "baseline before mutation");
+      const pkg = readJson(root, "package.json");
+      c.mutate(pkg);
+      writeJson(root, "package.json", pkg);
+      const r = run(root, CHECK);
+      const name = `${c.name}`;
+      check(
+        `${name}: exit is non-zero`,
+        "A package.json whose scripts.prepare is not exactly 'node scripts/prepare.mjs' leaves the engine unbuilt and must fail the check",
+        true,
+        r.status !== 0 && r.status !== null,
+        "Exit non-zero whenever package.json scripts.prepare is missing or differs from the expected value.",
+      );
+      check(
+        `${name}: output names package.json, prepare and the expected value`,
+        "The failure message must identify the offending file, script and expected value",
+        { packageJson: true, prepare: true, expected: true },
+        {
+          packageJson: r.output.includes("package.json"),
+          prepare: r.output.includes("prepare"),
+          expected: r.output.includes(PREPARE),
+        },
+        `Print package.json, the word prepare and '${PREPARE}' in the error. Output was: ${r.output.slice(0, 300)}`,
+      );
+      check(
+        `${name}: output does not blame a plugin manifest`,
+        "Only package.json is defective, so no plugin manifest may be named",
+        false,
+        r.output.includes("plugin.json") || r.output.includes("mcp.json"),
+        `Report only the prepare script defect. Output was: ${r.output.slice(0, 300)}`,
       );
     });
   }

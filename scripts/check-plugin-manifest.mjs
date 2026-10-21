@@ -23,6 +23,8 @@ import {
   engineLaunchArgs,
 } from "./fork-identity.mjs";
 
+const EXPECTED_PREPARE_SCRIPT = "node scripts/prepare.mjs";
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
 
@@ -218,6 +220,16 @@ if (!FORK_VERSION_RE.test(pkg.version)) {
 }
 
 let failed = false;
+
+// The engine is installed straight from GitHub and npm builds dist/ through
+// the `prepare` script; an upstream merge once replaced it with `husky`.
+if (pkg.scripts?.prepare !== EXPECTED_PREPARE_SCRIPT) {
+  failed = true;
+  console.error(
+    `✗ package.json scripts.prepare must be ${JSON.stringify(EXPECTED_PREPARE_SCRIPT)} (got ${JSON.stringify(pkg.scripts?.prepare)}).\n` +
+      "  The engine is built by prepare when installed from GitHub, so any other value ships a server that cannot start.",
+  );
+}
 
 // package-lock.json repeats the version at the root and at packages[""]; a
 // stale lockfile makes `npm ci` / installs disagree with package.json.

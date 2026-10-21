@@ -50,6 +50,9 @@ const VERSION: string = (
   }
 ).version;
 const TAG = `v${VERSION}`;
+// check:manifest requires scripts.prepare to be exactly this, so the sandbox
+// package.json must carry it or release-tag refuses inside the sandbox.
+const SANDBOX_PREPARE_SCRIPT = "node scripts/prepare.mjs";
 const SCRIPT_URL = pathToFileURL(
   join(REAL_ROOT, "scripts", "release-tag.mjs"),
 ).href;
@@ -458,7 +461,15 @@ function makeSandbox(): Sandbox {
   git(clone, ["checkout", "-B", "main"]);
   writeFileSync(
     join(clone, "package.json"),
-    JSON.stringify({ name: "sandbox", version: VERSION }, null, 2) + "\n",
+    JSON.stringify(
+      {
+        name: "sandbox",
+        version: VERSION,
+        scripts: { prepare: SANDBOX_PREPARE_SCRIPT },
+      },
+      null,
+      2,
+    ) + "\n",
   );
   writeFileSync(join(clone, "notes.txt"), "one\n");
   cpSync(join(REAL_ROOT, "scripts"), join(clone, "scripts"), {
