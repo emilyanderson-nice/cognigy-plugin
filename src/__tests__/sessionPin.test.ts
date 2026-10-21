@@ -187,11 +187,24 @@ describe("routing with a pin", () => {
     expect(h.handlerCalls.a).toBeUndefined();
   });
 
-  it("an empty environment argument counts as absent and uses the pin", async () => {
+  // Changed 2026-10-21: a blank value used to count as absent and route to the pin; under a pin that silently serves a call that tried to name an environment, so it is refused (see dispatchEmptyEnvironment.test.ts).
+  it("a blank environment argument under a pin is refused, not routed to the pin", async () => {
     const h = harness({ set: TWO(), session: true });
     await h.dispatcher.callTool("use_environment", { name: "b" });
     const r = await h.dispatcher.callTool("alpha", { environment: " " });
-    expect((parse(r)._environment as { name: string }).name).toBe("b");
+    expect(r.isError).toBe(true);
+    const body = parse(r);
+    expect(body.code).toBe("blank_argument");
+    expect(String(body.error)).toMatch(/empty/i);
+    expect(String(body.error)).toMatch(/environment/i);
+    expect(body._environment).toBeUndefined();
+    expect(
+      Object.values(h.handlerCalls).every((m) => m.mock.calls.length === 0),
+    ).toBe(true);
+
+    const omitted = await h.dispatcher.callTool("alpha", { x: "1" });
+    expect(omitted.isError).toBeUndefined();
+    expect((parse(omitted)._environment as { name: string }).name).toBe("b");
   });
 
   it("an explicit environment argument wins over the pin and leaves it in place", async () => {

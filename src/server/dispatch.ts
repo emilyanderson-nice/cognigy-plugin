@@ -192,11 +192,24 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
       );
     }
 
-    // An explicit argument wins; otherwise the pin, if any, decides.
+    // An explicit argument wins; otherwise the pin, if any, decides. A blank
+    // value is NOT treated as omitted when a pin is set: silently routing a
+    // call that tried to name an environment to the pinned one is unsafe when
+    // work moves between tenants, so it is refused. Without a pin a blank
+    // value still counts as omitted (the registry then decides).
+    const blank = typeof environment === "string" && environment.trim() === "";
+    if (blank && session?.pin.get() !== undefined) {
+      return text(
+        {
+          error:
+            'The "environment" argument is empty. Omit the argument to use the session\'s pinned environment, or pass a valid environment name.',
+          code: "blank_argument",
+        },
+        true,
+      );
+    }
     const explicit =
-      typeof environment === "string" && environment.trim() !== ""
-        ? environment
-        : undefined;
+      typeof environment === "string" && !blank ? environment : undefined;
     const pin = explicit === undefined ? session?.pin.get() : undefined;
     const rejected =
       explicit === undefined && pin === undefined
