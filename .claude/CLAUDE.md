@@ -101,6 +101,7 @@ Endpoints under `/v2.0/flows/{flowId}/chart`:
 - Lint: `npm run lint`. Format: `npx prettier --write <file>`.
 - The manifests' engine pin is `github:emilyanderson-nice/cognigy-plugin#v<package.json version>` (built by the `prepare` hook; the tag must exist on origin). Upstream's **npm alias** form (`cognigy-engine@npm:@cognigy/plugin-engine@<pin>`) must not come back on a merge — it would run Cognigy's stock engine instead of this fork — and `npm run check:manifest` rejects it (it requires the exact `github:` args; `merge:resolve` rewrites alias specs back). Update pins only with `npm run version:fork`.
 - Local plugin testing: `npm run plugin:dev` installs a generated dev marketplace (`.dev-plugin/`, gitignored) serving the working tree — engine runs from `src/` via tsx (no build), skills/agents symlinked; iterate with `/reload-plugins`. `npm run plugin:dev:off` restores the GitHub install. Never edit the tracked `plugin.json` for testing — `npm run check:manifest` guards it in pre-commit and CI.
+- Evals: `npm run evals` runs `claude plugin eval` on `plugin/evals/` (paid); `npm run evals:compare` diffs the newest run against the committed `plugin/evals/baseline.json` and exits 1 on a drop. Run both after changing a skill, agent or tool description. Writing cases, mocks, graders and re-baselining: dev skill `.claude/skills/add-eval/SKILL.md`.
 
 ## Conventions
 
