@@ -6,7 +6,7 @@
         "--allow-git=root",
         "-y",
         "-p",
-        "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.2",
+        "github:emilyanderson-nice/cognigy-plugin#v1.22.0-pb.3",
         "cognigy-mcp"
       ]
     },
