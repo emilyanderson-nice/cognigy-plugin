@@ -22,6 +22,10 @@ description: "Use when a Cognigy agent returns empty responses, a tool call or c
    the llm_model). A connectionless LLM fails silently — the node's default error
    handling is "continue" with an empty message, which looks like an empty response.
 
+## Agent behaves inconsistently or says it has no knowledge
+
+The agent says it has no knowledge about a topic that is in the knowledge store, offers to escalate to a human, or tries to authorize the user before answering. This usually means the agent's instructions and a tool's description conflict (for example, the instructions say no authorization is needed but the tool's description requires it). Run **Check that the agent and its tools agree** in the `agent-creation` skill, and fix the rule in one place.
+
 ## talk_to_agent fails (any HTTP error or timeout)
 
 talk_to_agent sends through Cognigy Endpoint Test Mode (`/test/<token>`) so test

@@ -166,6 +166,38 @@ describe("SERVER_INSTRUCTIONS existing content", () => {
     );
   });
 
+  it("states the agent/tool alignment check as one always-on sentence", () => {
+    const hit = sentences(SERVER_INSTRUCTIONS).find(
+      (s) =>
+        /re-read/i.test(s) &&
+        /tool description/i.test(s) &&
+        /authentication/i.test(s),
+    );
+    ok(
+      hit !== undefined,
+      "instructions::alignment_rule",
+      "Rule: always-on guidance tells the model to re-read the agent's instructions against its tool descriptions on authentication",
+      "one sentence containing 're-read', 'tool description' and 'authentication'",
+      "no such sentence",
+      "Add one terse sentence covering all three; the skill owns the detail.",
+    );
+    // Killing mutation: sentence absent, or its three terms split across sentences.
+  });
+
+  it("grew by at most 400 characters over the pre-alignment length", () => {
+    // Length measured at test-write time, before the alignment sentence: 13150.
+    const BASELINE = 13150;
+    ok(
+      SERVER_INSTRUCTIONS.length <= BASELINE + 400,
+      "instructions::alignment_growth",
+      "Rule: the alignment rule is one terse line, not a section",
+      `length <= ${BASELINE + 400}`,
+      `length ${SERVER_INSTRUCTIONS.length}`,
+      "Keep the always-on addition to one short sentence.",
+    );
+    // Killing mutation: add a multi-sentence paragraph (>400 chars) to the instructions.
+  });
+
   it("stays under the size bound", () => {
     ok(
       SERVER_INSTRUCTIONS.length <= MAX_LENGTH,

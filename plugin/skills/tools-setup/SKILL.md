@@ -17,6 +17,8 @@ Tools give an AI Agent capabilities beyond conversation — calling APIs, execut
 3. The tool is automatically wired into the agent's flow
 4. Test with talk_to_agent
 
+Before step 4, and again after every `update_tool` that changes a description, run **Check that the agent and its tools agree** in the `agent-creation` skill. A tool description that sets its own rules (authorization, escalation, required parameters) can contradict the agent's `instructions`.
+
 Rule of thumb: each tool in an agent flow should have a unique `toolId`. If you need more logic, parameters, validation, or HTTP calls for that tool, add them inside the same tool branch instead of creating another tool with the same `toolId`.
 
 ## Parameter schema rules (config.parameters)

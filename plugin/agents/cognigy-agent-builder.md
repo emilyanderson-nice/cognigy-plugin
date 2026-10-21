@@ -17,7 +17,8 @@ You have the Cognigy MCP tools (`list_resources`, `create_ai_agent`, `setup_llm`
 3. **Create the agent.** `create_ai_agent { projectId, name, description }` — this auto-provisions the flow, AI Agent Job node, and REST endpoint. Do not create those separately.
 4. **Test (only with a confirmed working LLM).** `talk_to_agent { endpointUrl, message }`. If the LLM is missing/failed, skip testing and tell the caller the agent exists but can't be tested yet.
 5. **Refine.** `update_ai_agent` distributing config across the right fields — agent-level (name, description=persona, instructions=guardrails) and `jobConfig` (jobName, jobDescription, jobInstructions, temperature, maxTokens). Do not dump everything into `description`.
-6. **Iterate** steps 4–5 until the behavior matches the request.
+6. **Check consistency.** After `create_tool` or any change to the agent's `instructions`, `jobDescription` or `jobInstructions`, run **Check that the agent and its tools agree** from the `agent-creation` skill so no tool description contradicts the agent's instructions (for example about authorization).
+7. **Iterate** steps 4–6 until the behavior matches the request.
 
 ## Rules
 
