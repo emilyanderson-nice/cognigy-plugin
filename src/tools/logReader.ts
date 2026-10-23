@@ -138,6 +138,25 @@ function successHint(
   return { action: count === 0 ? EMPTY_ACTION : RETENTION_ACTION };
 }
 
+const LOOK_FURTHER =
+  "pass startDate (log retention is typically about 24 hours) to look further back.";
+
+// States the default window when the caller did not choose a start, so a
+// quiet result is not mistaken for "nothing happened". Window path only.
+function withWindowNote(
+  hint: LogReadResult["hint"],
+  args: LogReadArgs,
+): LogReadResult["hint"] {
+  if (args.startDate !== undefined) return hint;
+  const shown = args.endDate
+    ? "Showing the hour before endDate by default"
+    : "Showing the last hour by default";
+  return {
+    ...hint,
+    action: `${hint?.action ?? ""} ${shown}; ${LOOK_FURTHER}`,
+  };
+}
+
 function withPagingNote(
   hint: LogReadResult["hint"],
   ignored: boolean,
@@ -254,7 +273,7 @@ async function readEntries(
       returned: entries.length,
       entries,
     },
-    hint: successHint(entries.length, false),
+    hint: withWindowNote(successHint(entries.length, false), args),
   };
 }
 
@@ -311,7 +330,7 @@ async function readSummary(
       ...summarizeEntries(entries, { total, truncated }),
     },
     hint: withPagingNote(
-      successHint(entries.length, truncated, warning),
+      withWindowNote(successHint(entries.length, truncated, warning), args),
       args.limit !== undefined || args.skip !== undefined,
     ),
   };
