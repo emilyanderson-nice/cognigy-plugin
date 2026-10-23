@@ -47,10 +47,19 @@ Pass an explicit `parentNodeId` whenever you need to branch or insert rather tha
 2. Get the flowId — from create_ai_agent response, or list_resources { resourceType: 'flow', projectId }
 3. Add a node inside the tool — manage_flow_nodes { operation: 'create', flowId, parentNodeId: '<toolNodeId>', mode: 'appendChild', nodeType: 'code', label: 'Validate Order', config: { code: '...' } }
 4. Add more nodes — manage_flow_nodes { operation: 'create', flowId, parentNodeId: '<previousNodeId>', mode: 'append', nodeType: 'say', label: 'Confirm', config: { text: 'Order processed!' } }
-5. List all nodes — manage_flow_nodes { operation: 'list', flowId }
+5. List all nodes — manage_flow_nodes { operation: 'list', flowId } (not capped at 25, observed up to 36 nodes; no config — use `get` for that)
 6. Update a node — manage_flow_nodes { operation: 'update', flowId, nodeId: '<id>', config: { text: 'Updated!' } }
 7. Delete a node — manage_flow_nodes { operation: 'delete', flowId, nodeId: '<id>' }
 ```
+
+`list` entries carry `id`, `referenceId`, `type`, `label`, `parentId`, `isEntryPoint`, `isDisabled` (only when true), `children` and `next`:
+
+- `parentId` is the node whose branch holds this one (`null` for top-level nodes); `children` lists a node's branch children in order.
+- `next` is the chain link. Top-level order is a `next` chain, so walk `next` from the `start` node to read the flow in execution order.
+- `isEntryPoint` is a per-node-type flag, true for every AI Agent node, so it does not mean "first node".
+- If `GET /chart` is unavailable the result has a warning and `parentId` is null for every node, with no `children`/`next`.
+- A partial list carries `truncated: true` and `totalAvailable` (the platform's node count) plus a `_hints.action`: do not treat it as complete; use `get` with a specific `nodeId` or narrow the request.
+- Use `id` for API calls (get/update/delete, `parentNodeId`). `goTo` and `executeFlow` targets use `referenceId` instead (see those sections).
 
 ## Naming and comments
 
@@ -581,7 +590,7 @@ target flow are visible after it returns.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | flowId | string | No | Target flow reference ID |
-| nodeId | string | No | Target node ID; must be marked as an Entrypoint in the target flow |
+| nodeId | string | No | Target node; must be marked as an Entrypoint in the target flow. Reported (NA1, unverified): this takes the node's `referenceId` from `list`/`get`, not the 24-hex `id`; verify in the UI if the call misbehaves |
 | parseIntents | boolean | No | Re-parse intents in the target flow (default on in Cognigy) |
 | parseKeyphrases | boolean | No | Re-parse slots/keyphrases in the target flow |
 | absorbContext | boolean | No | Apply the target flow's default context on entry |
@@ -598,7 +607,7 @@ Jump execution to another flow or a specific node. The conversation does NOT com
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | flowId | string | No | Target flow reference ID (for cross-flow jumps) |
-| nodeId | string | No | Target node ID within the flow |
+| nodeId | string | No | Target node within the flow. Reported (NA1, unverified): this takes the node's `referenceId` (UUID) from `list`/`get`, not the 24-hex `id`; verify in the UI if the jump misbehaves |
 | executionMode | string | No | `execute` (default) or `goAndDontReturn` |
 
 ---
@@ -892,6 +901,6 @@ After a node create/update/delete, offer a render once, in one short line (do no
 
 - **Tool parameters**: Inside AI Agent tool branches, the LLM's tool call parameters are available at `input.aiAgent.toolArgs`, **NOT** `input.data`. For example, if the tool defines a `city` parameter, access it as `input.aiAgent.toolArgs.city` in Code nodes or `{{input.aiAgent.toolArgs.city}}` in CognigyScript fields. **Under an LLM Prompt (`llmPromptV2`) node the parameters live at `input.llmPrompt.toolArgs` instead** — `input.aiAgent` is `null` there, so reading `input.aiAgent.toolArgs` returns `undefined` and the tool runs with no arguments (a silent fallback, no error). For a tool that may run under either node type, read defensively: `const args = (input.llmPrompt && input.llmPrompt.toolArgs) || (input.aiAgent && input.aiAgent.toolArgs) || {};`.
 - **CognigyScript**: Use `{{expression}}` syntax in text/message fields to reference runtime data (`input`, `context`, `profile`). For condition fields (ifThenElse, lookup), use plain expressions without `{{ }}` — e.g. `context.isVIP === true`.
-- **Node IDs**: All node IDs are 24-char hex strings. Get them from `manage_flow_nodes { operation: 'list' }`.
+- **Node IDs**: All node IDs are 24-char hex strings (referenceId is reportedly a UUID). Get them from `manage_flow_nodes { operation: 'list' }`.
 - **Ordering**: Nodes execute top-to-bottom within a branch. Use `parentNodeId` to control placement.
 - **Nodes belong inside tools**: ALWAYS create a tool first (`create_tool { toolType: "tool" }`), then add nodes inside the tool branch using `parentNodeId` = toolNodeId and `mode` = `appendChild`. NEVER add standalone nodes before the AI Agent Job node — this is an anti-pattern that breaks conversations.

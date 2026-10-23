@@ -189,6 +189,9 @@ export function filterFlowNodeDetail(raw: any): any {
   }
   return {
     id: rid(raw),
+    ...(typeof raw.referenceId === "string" && raw.referenceId
+      ? { referenceId: raw.referenceId }
+      : {}),
     type: raw.type,
     label: raw.label,
     parentId: raw.parentId ?? null,

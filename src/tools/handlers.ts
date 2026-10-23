@@ -31,6 +31,7 @@ import {
   withHints,
   type ResponseHints,
 } from "./filters.js";
+import { listFlowNodes } from "./flowNodeList.js";
 import { buildWebchatSettings, deepMerge } from "./webchatSettings.js";
 import { isPlainObject, normalizeToolParameters } from "./toolParameters.js";
 import {
@@ -5878,27 +5879,8 @@ export class ToolHandlers {
 
     switch (operation) {
       // ----- LIST -----
-      case "list": {
-        const nodes: any = await this.apiClient.get(
-          `/v2.0/flows/${flowId}/chart/nodes`,
-          {
-            params: { limit: 200 },
-          },
-        );
-        const items = nodes.items ?? nodes;
-        if (!Array.isArray(items)) return { nodes: [] };
-
-        return {
-          nodes: items.map((n: any) => ({
-            id: n._id || n.id,
-            type: n.type,
-            label: n.label,
-            parentId: n.parentId ?? null,
-            isEntryPoint: n.isEntryPoint ?? false,
-            ...(n.isDisabled ? { isDisabled: true } : {}),
-          })),
-        };
-      }
+      case "list":
+        return listFlowNodes(this.apiClient, flowId);
 
       // ----- GET -----
       case "get": {
