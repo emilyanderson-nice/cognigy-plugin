@@ -2945,10 +2945,11 @@ describe("ToolHandlers v2", () => {
 
     it("reports isDisabled in list and get only when the node is disabled", async () => {
       api.get.mockResolvedValueOnce({
-        items: [
+        nodes: [
           { _id: sayNodeId, type: "say", label: "Off", isDisabled: true },
           { _id: "60d5ec49f1a2c8b1a4e0f022", type: "say", label: "On" },
         ],
+        relations: [],
       });
 
       const list = await h.handleToolCall("manage_flow_nodes", {
@@ -2956,6 +2957,8 @@ describe("ToolHandlers v2", () => {
         flowId: ID.flow,
       });
 
+      expect(api.get).toHaveBeenCalledTimes(1);
+      expect(api.get).toHaveBeenCalledWith(`/v2.0/flows/${ID.flow}/chart`);
       expect(list.nodes[0].isDisabled).toBe(true);
       expect(list.nodes[1]).not.toHaveProperty("isDisabled");
 

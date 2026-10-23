@@ -5,7 +5,7 @@ environments differ, with the evidence behind each claim. v4 has very little pub
 nothing here is assumed.
 
 **Evidence classes**: `documented` (cite page) | `observed` (a request/response we made; shape in `probes/`) |
-`inferred` (reasoning, may be wrong).
+`reported` (second-hand: another session or person saw it, not verified here) | `inferred` (reasoning, may be wrong).
 
 **Environments probed** (all GET-only; see `scripts/discovery/probe.mjs`)
 
@@ -54,6 +54,19 @@ flowchart LR
   E1 --> M["plugin: level = type ?? metadata.type"]
   E2 --> M
 ```
+
+### Flow nodes, conversations and field limits (probed 2026-10-23 UTC, one classic-line production tenant, GET only)
+
+| #   | Class      | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N1  | observed   | `GET /v2.0/flows/{id}/chart/nodes` returns `referenceId` on every item (25 of 25), and the per-node GET returns it too. reported (Itau session, not verified here): Go To and Execute Flow target a node by `referenceId`, not by `_id`.                                                                                                                                                                                                                                                                                          |
+| N2  | observed   | `/chart/nodes` reports `parentId: null` for every node (0 of 25 set). `GET /v2.0/flows/{id}/chart` returns `{ nodes, relations }`: `nodes` was not capped (36 where `/chart/nodes` returned 25) and each relation is `{ _id, node, children: [ids], next }` (8 of 36 had children, 20 of 36 had a next).                                                                                                                                                                                                                          |
+| N3  | documented | `/chart/nodes` returns 25 by default and at most 100 per page (https://docs.cognigy.com/api-reference/nodes/get-nodes). observed: limit 200 is honoured, limit 500 silently falls back to 25.                                                                                                                                                                                                                                                                                                                                     |
+| N4  | observed   | `GET /v2.0/conversations` ignores `limit` and every date parameter tried (`startDate`, `endDate`, `from`, `start`, `after`): `limit: 3` returned all 3737 items. The OpenAPI documents only `projectId` and `contactIds`. Items carry `_id` (the session id, `mcp-session-<uuid>` shaped), `channel`, `startTime`, `endTime`, `flowName`, `endpointName`, `messages` (a number) and rating fields. `GET /v2.0/conversations/{sessionId}?projectId=...` returned `{ items, total }`; the spec marks `projectId` as required there. |
+| N5  | observed   | The OpenAPI declares `maxLength: 1000` for `description` and `instructions` of the AI Agent resource (IAiAgent_2_0). documented: the Code editor limit is 200K characters (https://docs.cognigy.com/ai/for-developers/code/overview#limitations). reported (Itau session, not verified here): about 10,000 characters of instructions succeeded through the node config and failed above that, and Code nodes failed at about 56-60 KB of JSON. inferred: limits differ per surface.                                              |
+| N6  | observed   | Over one sample of the newest 100 log entries from a 24 h window (one tenant), `meta` keys were `URLToken` (5), `channel` (5), `data` (58), `flowId` (94), `flowName` (89), `messageSize` (2), `projectName` (6), `sessionId` (79), `text` (67), `traceId` (95), `userId` (95). `traceId` has the shape `endpoint-httpIncomingMessage-<id>`. In this sample no entry carried an endpoint id or name. inferred: `URLToken` is the endpoint's secret token (the name and the entries that carry it suggest so; not confirmed).      |
+
+Known gap (not fixed): other call sites in `src/tools/handlers.ts` read `/chart/nodes` with a fixed limit (10, 50, 100 or 200) and would silently truncate on a flow larger than that limit. `manage_flow_nodes list` no longer does.
 
 ### F5 detail: spec differences, classic 2026.20.1 -> v4-staging 2026.21.0
 
