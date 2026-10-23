@@ -111,7 +111,7 @@ Send a text message to the user. Supports rich output types.
 | audio | object | No | Audio output `{ url }` |
 | video | object | No | Video output `{ url }` |
 | image | object | No | Image output `{ url }` |
-| adaptiveCard | object | No | Microsoft Adaptive Card JSON |
+| adaptiveCard | object | No | Microsoft Adaptive Card JSON (the card object itself — the plugin wraps it for the Designer). `text` is still required; pass `""` for a card-only message |
 | data | object | No | Custom data payload attached to the message |
 
 **Example:**
@@ -129,6 +129,59 @@ Send a text message to the user. Supports rich output types.
       { "title": "Talk to human", "payload": "handover" }
     ]
   }
+}
+```
+
+---
+
+### wait — Wait for Input
+
+Category: logic
+
+Stops the flow and waits for the next input, with no timeout. On that input the flow continues at the node after `wait`, using the same per-session mechanism as `question`. Unlike `question`, it stores no answer at `input.result`: read the incoming message directly (`input.text`, or `input.data` for a data payload such as a submitted Adaptive Card).
+
+It only resumes if the session's flow state survives until the next input. It does **not** resume, and the next input starts the flow at Start, when:
+- the flow is a Tool Flow, which runs once per tool call and keeps no state between turns. Tool branches under an AI Agent node run in the normal session, so they are expected to resume (not yet verified live)
+- the flow is reset between turns. For example, a REST endpoint resets when the user's last flow, entrypoint or locale differs, and a new `sessionId` also starts fresh
+
+Intended Copilot pattern: `say` (Adaptive Card with `actions`) → `wait` → nodes that read the submission from `input.data`. Resumption has not been verified end-to-end on the Copilot channel, so test the flow there (or in the Interaction Panel) before relying on it.
+
+**Config:** none.
+
+```json
+{
+  "operation": "create",
+  "flowId": "<flowId>",
+  "parentNodeId": "<adaptiveCardSayNodeId>",
+  "mode": "append",
+  "nodeType": "wait",
+  "label": "Wait for Input"
+}
+```
+
+---
+
+### cxOneSendCopilotStatus — Send Status to CXone Copilot
+
+Category: handover (extension `@cognigy/cxone`, beta; only available when the CXone Send Copilot Status feature is enabled for the organisation)
+
+Reports the workflow outcome to CXone Agent Copilot. Without it Copilot never learns that the workflow finished or failed.
+
+**Config:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| status | string | Yes | `Complete` or `Failed` (case-sensitive) |
+| data | object | No | Optional JSON object sent with the status |
+
+```json
+{
+  "operation": "create",
+  "flowId": "<flowId>",
+  "parentNodeId": "<precedingNodeId>",
+  "mode": "append",
+  "nodeType": "cxOneSendCopilotStatus",
+  "label": "Send Status - Complete",
+  "config": { "status": "Complete" }
 }
 ```
 
@@ -287,6 +340,62 @@ const items = context.cartItems || [];
 
 Code that does not open with a comment is written anyway and flagged in `_hints.warning`.
 
+**Write it for the next person.** Someone will open this node in the Cognigy
+editor to work out what it does. Working code that takes ten minutes to read
+is not done. Follow these in every code node:
+
+1. **Purpose comment first** (above): what the node does and why.
+2. **Descriptive names.** `teamName`, `callerZip`, `openSlots`, never `t`, `z`,
+   `x`, `i` (use `slot`, `index`). Booleans read as questions: `isVerified`,
+   `hasOpenSlot`. No abbreviations except well-known ones (`id`, `url`).
+3. **One statement per line, 2-space indent, lines under ~100 characters.**
+   The code goes in a JSON string, so write the `\n` line breaks and spaces;
+   never pack logic onto one line.
+4. **Data one entry per line.** Lookup tables, arrays and objects with more
+   than a couple of entries put each entry on its own line.
+5. **Constants at the top** in `UPPER_SNAKE_CASE` (mappings, limits, fixed
+   wording). No unexplained numbers or strings inside the logic.
+6. **Read → decide → write.** Read inputs once at the top into named variables
+   with defaults (`input.aiAgent?.toolArgs ?? {}`), then the logic, then write
+   results (`input.x`, `context.y`, `api.output`) together at the end.
+7. **Small named helpers.** A step that does one thing becomes a function named
+   for it (`formatSlot()`, `pickTeam()`). Past ~60 lines the node is probably
+   doing two jobs: split it.
+8. **Return early instead of nesting.** Handle missing data and edge cases
+   first, then write the main path flat. No nested ternaries.
+9. **Name your shapes.** Declare a small `type` for objects you build or read.
+   `any` only at the platform boundary, never for your own data.
+10. **Comments say why, not what.** Explain the non-obvious business rule
+    ("Cash Services handles wires over $10k"), not what the code plainly does.
+    No commented-out code, no leftover debug logging.
+
+Not this:
+
+```ts
+const t: any = context.transfer || {}; const T: Record<string, string> = {"cash_services": "Cash Services", "uma": "UMA", "helpdesk": "the HelpDesk"}; input.say = `Transferring you to ${T[t.team] || "the HelpDesk"}.`;
+```
+
+This:
+
+```ts
+// Turns the chosen team into the words the agent says before transferring.
+// Unknown team ids fall back to the HelpDesk, which can route anything.
+type Transfer = { team?: string };
+
+const TEAM_NAMES: Record<string, string> = {
+  cash_services: "Cash Services",
+  uma: "UMA",
+  helpdesk: "the HelpDesk",
+};
+const FALLBACK_TEAM = "helpdesk";
+
+const transfer: Transfer = context.transfer ?? {};
+const teamId = transfer.team ?? FALLBACK_TEAM;
+const teamName = TEAM_NAMES[teamId] ?? TEAM_NAMES[FALLBACK_TEAM];
+
+input.transferLine = `Transferring you to ${teamName}.`;
+```
+
 **Runtime constraints — the Code Node runtime does not have these. `manage_flow_nodes` and `create_tool`/`update_tool` write the code anyway and flag them in `_hints.warning`; don't use them:**
 
 - `api.httpRequest()` — exists only in Cognigy Functions, not Code Nodes. Use an HTTP Request node and read `input.httprequest`.
@@ -325,7 +434,7 @@ Then send the full new `code` string on `update` (config is merged; `code` is re
   "nodeType": "code",
   "label": "Format Response",
   "config": {
-    "code": "// Builds the cart summary the agent reads back to the caller.\nconst items = context.cartItems || [];\ninput.cartSummary = items.map((i: { name: string; price: number }) => `${i.name}: $${i.price}`).join('\\n');"
+    "code": "// Builds the cart summary the agent reads back to the caller.\n// An empty cart gives an empty summary, so the agent can say there is nothing to order.\ntype CartItem = { name: string; price: number };\n\nconst items: CartItem[] = context.cartItems ?? [];\n\nconst lines = items.map((item) => `${item.name}: $${item.price}`);\n\ninput.cartSummary = lines.join(\"\\n\");"
   }
 }
 ```

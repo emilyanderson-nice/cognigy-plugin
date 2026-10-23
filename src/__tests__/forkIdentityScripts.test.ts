@@ -212,6 +212,104 @@ describe("scripts/fork-identity.mjs", () => {
     });
   });
 
+  describe("version suffix (esc is written, pb stays readable)", () => {
+    // Killing mutation: FORK_VERSION_SUFFIX = "pb" (or any other literal), or not exported.
+    it("FORK_VERSION_SUFFIX is exactly 'esc'", () => {
+      check(
+        "FORK_VERSION_SUFFIX",
+        "New releases are written with the esc suffix, defined once in fork-identity.mjs",
+        JSON.stringify("esc"),
+        JSON.stringify(evalInScript("m.FORK_VERSION_SUFFIX ?? null")),
+        "Export const FORK_VERSION_SUFFIX = 'esc' from scripts/fork-identity.mjs.",
+      );
+    });
+
+    // Killing mutation: LEGACY_VERSION_SUFFIXES = [] (pb no longer readable), ["pb","esc"], or a string.
+    it("LEGACY_VERSION_SUFFIXES is exactly ['pb']", () => {
+      check(
+        "LEGACY_VERSION_SUFFIXES",
+        "pb versions stay valid as input (existing tags and history) but are legacy",
+        JSON.stringify(["pb"]),
+        JSON.stringify(evalInScript("m.LEGACY_VERSION_SUFFIXES ?? null")),
+        "Export const LEGACY_VERSION_SUFFIXES = ['pb'] from scripts/fork-identity.mjs.",
+      );
+    });
+
+    const ACCEPT = [
+      "1.22.0-esc.1",
+      "1.22.2-esc.5",
+      "10.200.3-esc.45",
+      "1.22.0-pb.1",
+      "1.22.0-pb.3",
+      "10.200.3-pb.45",
+    ];
+    const REJECT = [
+      "1.22.0",
+      "1.22.0-esc",
+      "1.22.0-esc.",
+      "1.22.0-esx.1",
+      "1.22.0-ESC.1",
+      "1.22.0-esc.1; calc",
+      "v1.22.0-esc.1",
+      "1.22.0-esc.1\n",
+      "1.22.0-pb.1-esc.1",
+      "1.22.0-pb.",
+      "1.22-esc.1",
+      "1.22.0-esc.1x",
+      "1.22.0-beta.1",
+    ];
+    const matches = (versions: string[]): unknown =>
+      evalInScript(
+        `(() => { const re = new RegExp(m.FORK_VERSION_RE.source, m.FORK_VERSION_RE.flags.replace(/[gy]/g, "")); return ${JSON.stringify(versions)}.map(v => re.test(v)); })()`,
+      );
+
+    // Killing mutation: regex still pb-only (esc rejected), or esc-only (pb rejected).
+    it("FORK_VERSION_RE accepts exactly the esc and legacy pb forms", () => {
+      check(
+        "FORK_VERSION_RE accepts",
+        "Both <x.y.z>-esc.<n> and legacy <x.y.z>-pb.<n> are valid fork versions",
+        JSON.stringify(ACCEPT.map(() => true)),
+        JSON.stringify(matches(ACCEPT)),
+        "Make FORK_VERSION_RE /^\\d+\\.\\d+\\.\\d+-(esc|pb)\\.\\d+$/ (built from the suffix constants).",
+      );
+    });
+
+    // Killing mutation: unanchored regex, case-insensitive flag, loose suffix, or `$` replaced by `\s*$`.
+    it("FORK_VERSION_RE rejects look-alikes, injection text and other suffixes", () => {
+      check(
+        "FORK_VERSION_RE rejects",
+        "Nothing but digits.digits.digits-(esc|pb).digits may match",
+        JSON.stringify(REJECT.map(() => false)),
+        JSON.stringify(matches(REJECT)),
+        "Anchor at both ends, no i flag, require three numeric parts, a lowercase esc or pb suffix and a numeric counter.",
+      );
+    });
+
+    // Killing mutation: enginePin/engineLaunchArgs hard-code pb or validate against the pb-only form.
+    it("enginePin and engineLaunchArgs carry an esc version into the tag unchanged", () => {
+      check(
+        "enginePin(1.22.2-esc.1)",
+        "The pin tag is v plus the version, whatever the suffix",
+        `${FORK}#v1.22.2-esc.1`,
+        evalInScript(`m.enginePin("1.22.2-esc.1")`),
+        "Return `github:${FORK_REPO}#v${version}` without touching the suffix.",
+      );
+      check(
+        "engineLaunchArgs(1.22.2-esc.1)",
+        "The launch args pin the esc tag",
+        JSON.stringify([
+          "--allow-git=root",
+          "-y",
+          "-p",
+          `${FORK}#v1.22.2-esc.1`,
+          "cognigy-mcp",
+        ]),
+        JSON.stringify(evalInScript(`m.engineLaunchArgs("1.22.2-esc.1")`)),
+        "Derive the spec from the version argument.",
+      );
+    });
+  });
+
   describe("replaceEnginePin", () => {
     it("pins an unpinned fork spec", () => {
       check(

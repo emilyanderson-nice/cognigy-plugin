@@ -183,8 +183,9 @@ if (checkedManifests === 0) {
 
 // --- 4. Required userConfig, as the CLIENT sees it ------------------------
 //
-// The manifest's env block expands ${user_config.*}, and both options are
-// declared required. Claude Code will not start a server whose required
+// The manifest's env block expands ${user_config.*}; any option declared
+// required (none are today, since profiles can supply credentials) is checked
+// here. Claude Code will not start a server whose required
 // userConfig is unset — so the engine can be perfectly healthy while the
 // client never launches it. The boot check below cannot see this, because it
 // supplies the environment itself; only the stored config tells you whether

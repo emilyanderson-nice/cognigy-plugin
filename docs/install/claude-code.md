@@ -32,7 +32,7 @@ Run the installer with `--project` from the project's root folder to declare the
 npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup install --project
 ```
 
-Your key is stored in Claude Code's per-user credential store, never in the project, so the settings file is safe to commit. Credentials are per user: every project on the machine sees the same set of Cognigy environments, and when more than one is configured the assistant names the environment on each request (see [multiple environments](multiple-environments.md)). The plugin declares its URL and key as required settings and Claude Code does not start the server until both are set, which is why the installer passes them even at project scope. See the [README](../../README.md#install-for-one-project-claude-code) for the full walkthrough.
+Your key is stored in Claude Code's per-user credential store, never in the project, so the settings file is safe to commit. Credentials are per user: every project on the machine sees the same set of Cognigy environments, and when more than one is configured the assistant names the environment on each request unless the session is pinned to one with `use_environment`, `COGNIGY_ENVIRONMENT` or the plugin's profile setting (see [multiple environments](multiple-environments.md)). The plugin's URL and key settings are optional (leaving them blank uses saved profiles or the credentials file), but the installer still passes them at project scope so the project gets its own credentials. See the [README](../../README.md#install-for-one-project-claude-code) for the full walkthrough.
 
 ## Turn on auto-updates
 

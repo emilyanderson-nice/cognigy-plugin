@@ -8,7 +8,7 @@ A plugin that connects your AI assistant to the [Cognigy.AI](https://www.cognigy
 
 ## Features
 
-- **20 workflow tools** (including `list_environments`, for working with several Cognigy environments at once) for flow building, agent creation, deployment, packaging, backup, voice setup, and agent-to-agent (A2A) delegation
+- **21 workflow tools** (including `list_environments` and `use_environment`, for working with several Cognigy environments at once) for flow building, agent creation, deployment, packaging, backup, voice setup, and agent-to-agent (A2A) delegation
 - **Flow building without an agent**: create standalone Flows (shared subroutines, error handlers, classic Node dialogs) and chain nodes onto them directly
 - **One-call agent setup**: creates Agent + Flow + AI Agent Job Node + REST Endpoint automatically
 - **Self-improvement loop**: talk to your agent, evaluate responses, update the job description, repeat
@@ -130,6 +130,8 @@ npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setu
 npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup profile list # manage several Cognigy environments, see "Add another environment" below
 ```
 
+With several environments, a session can be pinned to one (`use_environment`, `COGNIGY_ENVIRONMENT`, or the **Default Cognigy profile** plugin setting in Claude Code), and the Claude Code status line can show which one the session uses: see [Show the environment in the Claude Code status line](docs/install/multiple-environments.md#show-the-environment-in-the-claude-code-status-line).
+
 Beyond the MCP tools, the plugin ships **skills** and **agents** that surface the workflows automatically:
 
 - **Skills** (`/skills`) — one per workflow (agent creation, knowledge/RAG, voice gateway, voice go-live checklist, webchat, flow nodes, packages, settings, LLM providers, tools, red-teaming, troubleshooting). Claude loads the matching skill automatically when your request fits. Red-teaming runs in your main session — not as a subagent — so it can agree the scope contract, get approval before applying fixes, and open the finished report for you.
@@ -161,7 +163,7 @@ A value that arrives as an unexpanded `${...}` placeholder counts as missing. Ho
 
 You can keep several Cognigy environments on one machine — for example a classic trial tenant and a newer one — each with its own URL and key. Every command below is shown without its prefix; run each as `npx --allow-git=root -y -p github:emilyanderson-nice/cognigy-plugin cognigy-setup <command>`.
 
-> **How the assistant uses them.** Every tool takes an optional `environment` argument. With one environment configured nothing changes. With two or more it is **required** on every call (except `list_environments`), the tool schemas mark it required, and the server never guesses: a call without it, or with an unknown name, is refused with the list of available environments. Every answer says which environment served it (`_environment`). Ask the assistant to run `list_environments` first, and to confirm the environment by name before anything destructive.
+> **How the assistant uses them.** Every tool takes an optional `environment` argument. With one environment configured nothing changes. With two or more it is **required** on every call (except `list_environments`) unless the session is pinned to one environment (see `use_environment` below). The tool schemas never mark it required; the server enforces it and never guesses: a call without it (and without a pin), or with an unknown name, is refused with the list of available environments. Every answer says which environment served it (`_environment`). Ask the assistant to run `list_environments` first, and to confirm the environment by name before anything destructive.
 
 1. **Add it.** Pick a short lower-case name and give the base URL:
 
@@ -179,7 +181,7 @@ You can keep several Cognigy environments on one machine — for example a class
    profile show v4-staging   # hosts and key length, never the key
    ```
 
-3. **Optionally mark a default.** `list_environments` shows it, but with two or more environments the assistant must still name the environment on every call, and it is told not to treat the marker as consent.
+3. **Optionally mark a default.** `list_environments` shows it, but with two or more environments the assistant must still name the environment on every call (unless the session is pinned, see `use_environment` below), and it is told not to treat the marker as consent.
 
    ```
    profile default v4-staging    # or: profile default --clear
@@ -198,6 +200,8 @@ You can keep several Cognigy environments on one machine — for example a class
    ```
 
 Profiles live in `~/.cognigy-plugin/config.json` (readable only by you). Re-running the installer keeps them. You can also define them with `COGNIGY_PROFILE_<NAME>_API_BASE_URL` and `_API_KEY` environment variables. See [docs/install/multiple-environments.md](docs/install/multiple-environments.md) for the details, file protection and troubleshooting.
+
+**Pin a session to one environment.** Instead of naming the environment on every call, ask the assistant to call `use_environment` once per task. It pins the session to that environment, and an explicit `environment` argument on a later call still overrides the pin. Call `use_environment` alone in its own turn, not alongside other tool calls. The pin is per session and held in memory. Pinning at launch with `COGNIGY_ENVIRONMENT` or the plugin's profile setting is a standing default for every session, so unset it when you move work between tenants.
 
 ### Audit attribution
 

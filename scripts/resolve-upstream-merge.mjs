@@ -20,6 +20,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseForkVersion } from "./fork-version.mjs";
 import { countHunks, resolveManifestText } from "./merge-resolution.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -87,9 +88,16 @@ for (const file of handled) {
 }
 
 // Re-stamp the fork version onto whatever base upstream just moved to.
-const base = JSON.parse(
+const currentVersion = JSON.parse(
   readFileSync(join(repoRoot, "package.json"), "utf-8"),
-).version.replace(/-pb\.\d+$/, "");
+).version;
+const { base } = parseForkVersion(currentVersion);
+if (base === null) {
+  console.error(
+    `Cannot derive the upstream base from package.json version "${currentVersion}"; fix it by hand, then re-run npm run version:fork.`,
+  );
+  process.exit(1);
+}
 console.log(`\nRe-stamping fork version on upstream base ${base}:`);
 execFileSync(
   "node",

@@ -18,8 +18,15 @@ export function enginePin(version) {
   return `github:${FORK_REPO}#v${version}`;
 }
 
-/** A fork version: <upstream base>-pb.<n>, digits only. */
-export const FORK_VERSION_RE = /^\d+\.\d+\.\d+-pb\.\d+$/;
+/** The suffix every newly stamped fork version carries: <base>-esc.<n>. */
+export const FORK_VERSION_SUFFIX = "esc";
+/** Older suffixes, still valid for reading (existing tags, history), never generated. */
+export const LEGACY_VERSION_SUFFIXES = ["pb"];
+
+/** A fork version: <upstream base>-(esc|pb).<n>, digits only. */
+export const FORK_VERSION_RE = new RegExp(
+  `^\\d+\\.\\d+\\.\\d+-(?:${[FORK_VERSION_SUFFIX, ...LEGACY_VERSION_SUFFIXES].join("|")})\\.\\d+$`,
+);
 
 // npm 12 refuses git specs by default (EALLOWGIT). As documented in npm's
 // configuration reference, `root` is meant to allow only the top-level spec

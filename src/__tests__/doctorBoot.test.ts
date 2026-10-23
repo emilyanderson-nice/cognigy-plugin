@@ -361,21 +361,27 @@ describe("bootSpawnPlan(version, platform): version validation", () => {
     "1.22.0-pb.",
     "v1.22.0-pb.2",
     "1.22.0-pb.2\n",
+    "1.22.2-esc.1; calc",
+    "1.22.2-esc.1 && echo x",
+    "1.22.2-ESC.1",
+    "1.22.2-esc.",
+    "v1.22.2-esc.1",
+    "1.22.2-esc.1\n",
   ];
 
   for (const platform of ["win32", "linux"]) {
     it.each(BAD)(`rejects %j on ${platform}`, (version) => {
       check(
         `bootSpawnPlan(${JSON.stringify(version)}, ${platform})`,
-        "Only <x.y.z>-pb.<n> may reach the spawned command line (shell is on for win32)",
+        "Only <x.y.z>-esc.<n> (or legacy <x.y.z>-pb.<n>) may reach the spawned command line (shell is on for win32)",
         { threw: true, isError: true, hasVersion: true, hasWord: true },
         probe(version, platform),
-        "Throw an Error whose message contains the offending version text and the word 'version' unless it matches digits.digits.digits-pb.digits.",
+        "Throw an Error whose message contains the offending version text and the word 'version' unless it matches digits.digits.digits-(esc|pb).digits.",
       );
     });
   }
 
-  it.each(["1.22.0-pb.2", "10.0.123-pb.10"])(
+  it.each(["1.22.0-pb.2", "10.0.123-pb.10", "1.22.2-esc.1", "10.0.123-esc.10"])(
     "accepts the valid fork version %s on both platforms",
     (version) => {
       check(
@@ -383,7 +389,44 @@ describe("bootSpawnPlan(version, platform): version validation", () => {
         "A well-formed fork version still produces a plan",
         [{ threw: false }, { threw: false }],
         [probe(version, "win32"), probe(version, "linux")],
-        "Accept <x.y.z>-pb.<n> with digits only.",
+        "Accept <x.y.z>-esc.<n> and legacy <x.y.z>-pb.<n> with digits only.",
+      );
+    },
+  );
+
+  // Killing mutation: the plan args hard-code or mangle the suffix, or are not
+  // exactly the shared engineLaunchArgs(version).
+  it.each([
+    ["1.22.2-esc.1", "win32"],
+    ["1.22.2-esc.1", "linux"],
+    ["1.22.0-pb.3", "win32"],
+    ["1.22.0-pb.3", "linux"],
+  ])(
+    "bootSpawnPlan(%s, %s) args deep-equal engineLaunchArgs(version)",
+    (version, platform) => {
+      const v = value(
+        `{ args: b.bootSpawnPlan(${JSON.stringify(version)},${JSON.stringify(platform)}).args, expected: id.engineLaunchArgs(${JSON.stringify(version)}) }`,
+        "bootSpawnPlan args for esc/pb",
+      ) as { args: string[]; expected: string[] };
+      check(
+        `bootSpawnPlan(${version}, ${platform}) args`,
+        "The plan's args are the shared launch args at that version's tag",
+        [
+          "--allow-git=root",
+          "-y",
+          "-p",
+          `github:emilyanderson-nice/cognigy-plugin#v${version}`,
+          "cognigy-mcp",
+        ],
+        v.args,
+        "Use engineLaunchArgs(version) from fork-identity.mjs as args.",
+      );
+      check(
+        `bootSpawnPlan(${version}, ${platform}) equals engineLaunchArgs`,
+        "Args come from the shared helper",
+        v.expected,
+        v.args,
+        "Use engineLaunchArgs(version) from fork-identity.mjs as args.",
       );
     },
   );

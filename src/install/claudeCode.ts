@@ -46,7 +46,8 @@ export function buildPluginInstallArgs(
   creds: UserConfigFile,
   scope: InstallScope = "user",
 ): string[] {
-  // Both scopes pass --config: the manifest's userConfig options are required,
+  // Both scopes pass --config so the install gets its own credentials (the
+  // manifest's settings are optional, blank would fall back to saved profiles),
   // and the sensitive key lands in Claude Code's user-level credential store,
   // never in the project's .claude/settings.json.
   return [

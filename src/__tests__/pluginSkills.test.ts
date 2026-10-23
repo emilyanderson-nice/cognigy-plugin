@@ -172,6 +172,33 @@ describe("plugin skill: environments", () => {
     );
   });
 
+  it("body covers pinning a session with use_environment", () => {
+    need(
+      "body_use_environment",
+      "body mentions the use_environment tool",
+      body,
+      /use_environment/,
+    );
+    need(
+      "body_launch_pin",
+      "body mentions the COGNIGY_ENVIRONMENT launch pin",
+      body,
+      /COGNIGY_ENVIRONMENT/,
+    );
+    need(
+      "body_pinned_no_arg",
+      "body says a pinned session does not pass environment",
+      body,
+      /pinned[\s\S]{0,200}(do not|don't) pass `environment`/i,
+    );
+    need(
+      "body_confirm_when_pinned",
+      "body says destructive operations are confirmed by name even when pinned",
+      body,
+      /destructive[\s\S]{0,300}even when (the session is )?pinned|even when (the session is )?pinned[\s\S]{0,300}destructive/i,
+    );
+  });
+
   it("body says the default marker is not consent and to carry the same environment through every step (G6)", () => {
     need(
       "body_default_not_consent",

@@ -2,20 +2,23 @@
 /**
  * Stamp the fork's version across package.json and every plugin manifest.
  *
- * The fork's version is always `<upstream version>-pb.<n>`:
+ * The fork's version is always `<upstream version>-esc.<n>`:
  *
- *   upstream 1.19.0  ->  1.19.0-pb.1
+ *   upstream 1.19.0  ->  1.19.0-esc.1
+ *
+ * `-pb.<n>` is the legacy form: it stays valid for reading (existing tags,
+ * history) but is never written. A legacy current version restarts at -esc.1.
  *
  * The base number says which upstream release this fork is built on, which is
- * the thing you actually want to know during a merge. The `-pb.N` suffix keeps
+ * the thing you actually want to know during a merge. The `-esc.N` suffix keeps
  * the fork's version distinct from upstream's, so a client can never confuse
  * the two — the plugin cache is keyed partly on version, and a shared
  * marketplace name plus a shared version once caused the stock engine to be
  * served under this fork's install.
  *
  * Usage:
- *   node scripts/fork-version.mjs                 # bump the suffix: -pb.1 -> -pb.2
- *   node scripts/fork-version.mjs 1.20.0          # rebase onto upstream 1.20.0, reset to -pb.1
+ *   node scripts/fork-version.mjs                 # bump the suffix: -esc.1 -> -esc.2 (-pb.N -> -esc.1)
+ *   node scripts/fork-version.mjs 1.20.0          # rebase onto upstream 1.20.0, reset to -esc.1
  *   node scripts/fork-version.mjs 1.20.0 3        # explicit base and suffix
  *
  * After merging upstream, run it with upstream's new version — that is the one
@@ -24,10 +27,16 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { replaceEnginePin } from "./fork-identity.mjs";
+import {
+  FORK_VERSION_SUFFIX,
+  LEGACY_VERSION_SUFFIXES,
+  replaceEnginePin,
+} from "./fork-identity.mjs";
 
-export const FORK_SUFFIX = "pb";
-const FORK_VERSION_RE = /^(\d+\.\d+\.\d+)-pb\.(\d+)$/;
+// Reads every accepted suffix (current and legacy); only the current one is written.
+const PARSE_RE = new RegExp(
+  `^(\\d+\\.\\d+\\.\\d+)-(${[FORK_VERSION_SUFFIX, ...LEGACY_VERSION_SUFFIXES].join("|")})\\.(\\d+)$`,
+);
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -47,10 +56,16 @@ const FILES = [
 
 /** Split a version into its upstream base and fork suffix number. */
 export function parseForkVersion(version) {
-  const match = FORK_VERSION_RE.exec(version ?? "");
-  if (match) return { base: match[1], forkNumber: Number(match[2]) };
+  const match = PARSE_RE.exec(version ?? "");
+  if (match) {
+    return {
+      base: match[1],
+      forkNumber: Number(match[3]),
+      legacy: match[2] !== FORK_VERSION_SUFFIX,
+    };
+  }
   const plain = /^(\d+\.\d+\.\d+)/.exec(version ?? "");
-  return { base: plain ? plain[1] : null, forkNumber: 0 };
+  return { base: plain ? plain[1] : null, forkNumber: 0, legacy: false };
 }
 
 /**
@@ -109,14 +124,16 @@ function main() {
     process.exit(1);
   }
 
-  // A new base restarts the count; without one, bump the existing suffix.
+  // A new base or a legacy-suffix current version restarts the count at 1;
+  // otherwise bump the existing esc number.
+  const restart = parsed.legacy || (baseArg && baseArg !== parsed.base);
   const forkNumber = numberArg
     ? Number(numberArg)
-    : baseArg && baseArg !== parsed.base
+    : restart
       ? 1
       : parsed.forkNumber + 1;
 
-  const next = `${base}-${FORK_SUFFIX}.${forkNumber}`;
+  const next = `${base}-${FORK_VERSION_SUFFIX}.${forkNumber}`;
 
   for (const rel of FILES) {
     const path = join(repoRoot, rel);
@@ -147,4 +164,5 @@ function main() {
   console.log(`\nFork version: ${current} -> ${next} (upstream base ${base})`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  main();

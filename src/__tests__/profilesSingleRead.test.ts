@@ -268,3 +268,41 @@ describe("loadProfilesFromSystem corrupt file", () => {
     );
   });
 });
+
+// Upstream's case, kept: a legacy-only file replaced by a profiles-only one
+// (and the reverse) never mixes the two versions.
+const LEGACY_ONLY = JSON.stringify({
+  COGNIGY_API_BASE_URL: URL_A,
+  COGNIGY_API_KEY: KEY_A,
+});
+const PROFILES_ONLY = JSON.stringify({
+  profiles: { after: { apiBaseUrl: URL_B, apiKey: KEY_B } },
+});
+
+describe.each(MODES)(
+  "legacy-only and profiles-only replacement (%s)",
+  (_m, strict) => {
+    it("legacy-only then profiles-only yields only the default profile from one read", () => {
+      script = [LEGACY_ONLY, PROFILES_ONLY];
+      eq(
+        snapshot(load(strict)).names,
+        ["default"],
+        `${_m} legacy first`,
+        "S4: the first-read document builds the whole snapshot",
+        "Derive both sections from the one document that was read.",
+      );
+      eq(credentialReads, 1, `${_m} reads`, "S4: one read", "Read once.");
+    });
+
+    it("profiles-only then legacy-only yields only the named profile", () => {
+      script = [PROFILES_ONLY, LEGACY_ONLY];
+      eq(
+        snapshot(load(strict)).names,
+        ["after"],
+        `${_m} profiles first`,
+        "S4: the first-read document builds the whole snapshot",
+        "Derive both sections from the one document that was read.",
+      );
+    });
+  },
+);

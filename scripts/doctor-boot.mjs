@@ -18,7 +18,7 @@ export function bootSpawnPlan(version, platform) {
   // The version reaches a shell on Windows; accept nothing but a fork version.
   if (typeof version !== "string" || !FORK_VERSION_RE.test(version)) {
     throw new Error(
-      `Refusing to boot the engine: version "${String(version)}" is not a fork version (<base>-pb.<n>).`,
+      `Refusing to boot the engine: version "${String(version)}" is not a fork version (<x.y.z>-esc.<n>, or legacy -pb.<n>).`,
     );
   }
   const win = platform === "win32";

@@ -130,7 +130,7 @@ function ensureEngineFlags(text) {
  * by the chosen side (1 = ours, 2 = theirs) and the number of such hunks.
  * Unterminated hunks are left untouched.
  */
-function walkHunks(src, side) {
+function walkHunks(src, side, pick) {
   const lines = src.split(/(?<=\n)/);
   const out = [];
   let hunks = 0;
@@ -160,10 +160,46 @@ function walkHunks(src, side) {
       continue;
     }
     hunks++;
-    out.push(...(side === 1 ? ours : theirs));
+    out.push(...(pick ? pick(ours, theirs) : side === 1 ? ours : theirs));
     i = end + 1;
   }
   return { text: out.join(""), hunks };
+}
+
+const PREPARE_LINE_RE = /^\s*"prepare"\s*:/;
+
+/**
+ * package.json hunk resolver: take THEIRS, except the `"prepare"` script keeps
+ * OUR value. Upstream's is `husky`; the fork's is `node scripts/prepare.mjs`,
+ * which builds dist/ when the engine is installed straight from GitHub, so
+ * taking theirs would break every install. If theirs dropped the entry, ours is
+ * appended, fixing trailing commas so the JSON stays valid.
+ */
+function pickKeepingOurPrepare(ours, theirs) {
+  const ourPrepare = ours.find((l) => PREPARE_LINE_RE.test(l));
+  if (ourPrepare === undefined) return theirs;
+  const eolOf = (l) => /\r?\n$/.exec(l)?.[0] ?? "";
+  const bodyOf = (l) => l.replace(/\r?\n$/, "");
+  const hasComma = (l) => /,\s*$/.test(bodyOf(l));
+  const withComma = (l, comma) =>
+    bodyOf(l).replace(/,\s*$/, "") + (comma ? "," : "") + eolOf(l);
+
+  const at = theirs.findIndex((l) => PREPARE_LINE_RE.test(l));
+  if (at !== -1) {
+    const out = [...theirs];
+    // Our value, but theirs' trailing comma and line ending.
+    out[at] =
+      bodyOf(withComma(ourPrepare, hasComma(theirs[at]))) + eolOf(theirs[at]);
+    return out;
+  }
+  if (theirs.length === 0) return [ourPrepare];
+  const eol = eolOf(theirs[theirs.length - 1]) || eolOf(ourPrepare) || "\n";
+  const out = [...theirs];
+  const last = out.length - 1;
+  const ourComma = hasComma(ourPrepare);
+  out[last] = withComma(out[last] + (eolOf(out[last]) ? "" : eol), true);
+  out.push(bodyOf(withComma(ourPrepare, ourComma)) + eol);
+  return out;
 }
 
 /** Number of complete conflict hunks in `src`. */
@@ -175,7 +211,11 @@ export function countHunks(src) {
 export function resolveManifestText(file, src) {
   const name = String(file).replace(/\\/g, "/");
   const side = KEEP_OURS.has(name) ? 1 : 2;
-  let out = walkHunks(src, side).text;
+  const pick =
+    name.split("/").pop() === "package.json"
+      ? pickKeepingOurPrepare
+      : undefined;
+  let out = walkHunks(src, side, pick).text;
 
   if (MARKER_RE.test(out)) {
     throw new Error(

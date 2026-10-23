@@ -50,6 +50,9 @@ const VERSION: string = (
   }
 ).version;
 const TAG = `v${VERSION}`;
+// check:manifest requires scripts.prepare to be exactly this, so the sandbox
+// package.json must carry it or release-tag refuses inside the sandbox.
+const SANDBOX_PREPARE_SCRIPT = "node scripts/prepare.mjs";
 const SCRIPT_URL = pathToFileURL(
   join(REAL_ROOT, "scripts", "release-tag.mjs"),
 ).href;
@@ -180,6 +183,55 @@ describe("release-tag planTag (pure)", () => {
       { tag: "v10.200.3-pb.45", ok: true, problems: [] },
       p,
       "Use \\d+ for every numeric part.",
+    );
+  });
+
+  // Killing mutation: planTag still validates against the pb-only pattern, so an
+  // esc version is flagged "not a fork version" and ok is false; or the tag is
+  // rewritten (e.g. suffix changed) instead of v plus version.
+  it.each(["1.22.2-esc.1", "10.200.3-esc.45"])(
+    "an esc version %s plans tag v<version> and is ready",
+    (version) => {
+      check(
+        `esc plan for ${version}`,
+        "An esc fork version is releasable and tagged v plus the version",
+        { tag: `v${version}`, ok: true, problems: [] },
+        planTag({ ...GOOD_STATE, version }),
+        "Validate with the shared FORK_VERSION_RE (esc or legacy pb) and compute the tag as v plus the version.",
+      );
+    },
+  );
+
+  // Killing mutation: pb dropped from the accepted forms (legacy versions and their tags break).
+  it("a legacy pb version still plans its tag and is ready", () => {
+    check(
+      "legacy pb plan",
+      "pb versions stay valid for existing tags and history",
+      { tag: "v1.22.0-pb.3", ok: true, problems: [] },
+      planTag({ ...GOOD_STATE, version: "1.22.0-pb.3" }),
+      "Keep accepting <x.y.z>-pb.<n>.",
+    );
+  });
+
+  // Killing mutation: an unanchored or case-insensitive pattern, or a loose suffix.
+  it("rejects esc look-alikes and other suffixes as not a fork version", () => {
+    const bad = [
+      "1.22.2-esc",
+      "1.22.2-esc.",
+      "1.22.2-ESC.1",
+      "1.22.2-esx.1",
+      "v1.22.2-esc.1",
+      "1.22.2-esc.1x",
+      "1.22.2-pb.1-esc.1",
+    ];
+    check(
+      "esc look-alikes",
+      "Only digits.digits.digits-(esc|pb).digits is a fork version",
+      bad.map(() => true),
+      bad.map((version) =>
+        hasPhrase(planTag({ ...GOOD_STATE, version }), "not a fork version"),
+      ),
+      "Use the shared anchored FORK_VERSION_RE without the i flag.",
     );
   });
 
@@ -409,7 +461,15 @@ function makeSandbox(): Sandbox {
   git(clone, ["checkout", "-B", "main"]);
   writeFileSync(
     join(clone, "package.json"),
-    JSON.stringify({ name: "sandbox", version: VERSION }, null, 2) + "\n",
+    JSON.stringify(
+      {
+        name: "sandbox",
+        version: VERSION,
+        scripts: { prepare: SANDBOX_PREPARE_SCRIPT },
+      },
+      null,
+      2,
+    ) + "\n",
   );
   writeFileSync(join(clone, "notes.txt"), "one\n");
   cpSync(join(REAL_ROOT, "scripts"), join(clone, "scripts"), {

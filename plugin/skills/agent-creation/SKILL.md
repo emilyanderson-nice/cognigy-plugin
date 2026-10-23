@@ -54,53 +54,39 @@ Important: before creating a new tool, inspect the existing agent flow/tools fir
 
 update_ai_agent updates two layers: the **AI Agent resource** and the **AI Agent Job Node**.
 
+Write every prompt field with the **agent-prompts** skill: it shows which section goes in which field, and the writing rules.
+
 ### Agent-level fields (the agent's identity)
 
-| Field        | Purpose                                                                                                                                             | Example                                                                                                 |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| name         | Agent display name                                                                                                                                  | "Acme Support Bot"                                                                                      |
-| description  | **Agent persona** — defines who the agent is, its personality, tone, and high-level behavior. This is the primary field for shaping agent identity. | "You are a friendly customer support agent for Acme Corp. You speak in a professional yet warm tone..." |
-| instructions | **Agent instructions** — high-level guidance and constraints (up to 1000 chars). Use for guardrails and policies that apply regardless of the job.  | "Never share internal pricing. Always verify customer identity before account changes."                 |
+| Field        | Purpose                                                                                                   | Example                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| name         | Agent display name                      | "Maya"                                                                                                        |
+| description  | **Persona** (max 1000 chars) — who the agent is, who it serves, personality as behaviors. Prose, no lists | "You are the order assistant for Acme Outdoor's online store. You help customers track orders and start..." |
+| instructions | **Communication and guardrails** — `## Communication` and `## Guardrails` sections with bullets          | "## Guardrails\n- Help only with Acme Outdoor orders, returns and products..."                               |
 
 ### Job-level fields (jobConfig — how the agent performs its job)
 
-| Field                  | Purpose                                                                                                               | Example                                                                                                                |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| jobName                | **Job title** — the role the agent is performing                                                                      | "Customer Support Specialist"                                                                                          |
-| jobDescription         | **Job description** — detailed description of responsibilities, scope, and expertise areas for this job               | "Handle customer inquiries about orders, returns, and product information. Escalate billing disputes to human agents." |
-| jobInstructions        | **Job instructions** — specific behavioral rules, step-by-step procedures, and output format requirements for the job | "1. Greet the customer. 2. Ask for their order number. 3. Look up the order using the search tool..."                  |
-| llmProviderReferenceId | Which LLM the agent uses (from setup_llm or list_resources { resourceType: "llm_model" })                             | "abc-123-def-456"                                                                                                      |
-| temperature            | LLM temperature (0-1). Lower = more deterministic, higher = more creative. Default: 0.7                               | 0.3                                                                                                                    |
-| maxTokens              | Max tokens for LLM response (100-8000). Default: 4000                                                                 | 2000                                                                                                                   |
+| Field                  | Purpose                                                                                                      | Example                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| jobName                | **Job title** — the role the agent is performing                                                             | "Order assistant"                                                                             |
+| jobDescription         | **Goal and scope** — prose naming every topic in scope and what goes elsewhere    | "You handle order tracking, returns within 30 days and product questions. Payment disputes..." |
+| jobInstructions        | **How to do the job** — `##` sections: conversation flow, using tools, when something goes wrong, handing over | "## Conversation flow\n1. Find out what the customer needs.\n..."                           |
+| llmProviderReferenceId | Which LLM the agent uses (from setup_llm or list_resources { resourceType: "llm_model" })                    | "abc-123-def-456"                                                                             |
+| temperature            | LLM temperature (0-1). Lower = more deterministic, higher = more creative. Default: 0.7                      | 0.3                                                                                           |
+| maxTokens              | Max tokens for LLM response (100-8000). Default: 4000                                                        | 2000                                                                                          |
 
-### Example: fully configured agent
-
-```
-update_ai_agent {
-  aiAgentId: "...",
-  name: "Acme Support Bot",
-  description: "You are a friendly and professional customer support agent for Acme Corp. You help customers with orders, returns, and product questions. You maintain a warm but efficient tone.",
-  instructions: "Never share internal pricing or competitor comparisons. Always verify identity before account changes.",
-  jobConfig: {
-    jobName: "Customer Support Specialist",
-    jobDescription: "Handle customer inquiries about orders, returns, shipping, and product information. You have access to the order database and knowledge base.",
-    jobInstructions: "1. Greet the customer warmly. 2. Identify their issue. 3. Use the search tool to look up relevant information. 4. Provide a clear answer. 5. Ask if there is anything else you can help with.",
-    temperature: 0.3,
-    maxTokens: 2000
-  }
-}
-```
+The agent-prompts skill has a full example for a chat agent and a voice agent.
 
 ### How the fields work together
 
-- **description** (persona): "Who am I?" — The agent's identity, personality, and tone
-- **instructions** (guardrails): "What must I always/never do?" — Global constraints and policies
-- **jobName**: "What is my role?" — The job title
-- **jobDescription**: "What is my scope?" — What the job covers, what tools are available, what to escalate
-- **jobInstructions**: "How do I do my job?" — Step-by-step procedures, output formats, decision trees
+- **description** (persona): "Who am I, who do I serve, how do I come across?"
+- **instructions**: "How do I communicate, and what are my limits?"
+- **jobName** / **jobDescription**: "What is my job, and what does it cover?"
+- **jobInstructions**: "How do I do it?" — the flow (numbered only when it's a real sequence), tool use, failures, handover
+- **tool descriptions**: "What does this tool do, and when do I use it?"
 - **temperature/maxTokens**: "How do I think?" — LLM generation parameters
 
-Always use ALL relevant fields when configuring an agent. Do not put everything in `description` alone — distribute the configuration across the appropriate fields for best results.
+Each fact lives in one field. Fill the fields the agent needs; don't repeat a rule across fields or restate what the tool descriptions already say.
 
 ### Check that the agent and its tools agree
 

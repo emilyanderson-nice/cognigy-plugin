@@ -23,6 +23,8 @@ import {
   engineLaunchArgs,
 } from "./fork-identity.mjs";
 
+const EXPECTED_PREPARE_SCRIPT = "node scripts/prepare.mjs";
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
 
@@ -34,7 +36,7 @@ const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
 // fork's changes would vanish with no error.
 // The pin is the fork's GitHub repo at the release tag for package.json's
 // version (see fork-identity.mjs).
-// The fork's version is always <upstream base>-pb.<n>. Sharing upstream's
+// The fork's version is always <upstream base>-esc.<n> (legacy: -pb.<n>). Sharing upstream's
 // exact version number is half of what let a client cache serve the stock
 // engine under this fork's install; the marketplace name is the other half.
 const expectedArgs = engineLaunchArgs(pkg.version);
@@ -211,13 +213,23 @@ function checkMarketplaceJson(manifest, errors) {
 
 if (!FORK_VERSION_RE.test(pkg.version)) {
   console.error(
-    `✗ package.json version "${pkg.version}" is not a fork version (expected <base>-pb.<n>).\n` +
+    `✗ package.json version "${pkg.version}" is not a fork version (expected <x.y.z>-esc.<n>; -pb.<n> is the legacy form, still accepted).\n` +
       "  An upstream merge takes their number; re-stamp it with: node scripts/fork-version.mjs <upstream version>",
   );
   process.exit(1);
 }
 
 let failed = false;
+
+// The engine is installed straight from GitHub and npm builds dist/ through
+// the `prepare` script; an upstream merge once replaced it with `husky`.
+if (pkg.scripts?.prepare !== EXPECTED_PREPARE_SCRIPT) {
+  failed = true;
+  console.error(
+    `✗ package.json scripts.prepare must be ${JSON.stringify(EXPECTED_PREPARE_SCRIPT)} (got ${JSON.stringify(pkg.scripts?.prepare)}).\n` +
+      "  The engine is built by prepare when installed from GitHub, so any other value ships a server that cannot start.",
+  );
+}
 
 // package-lock.json repeats the version at the root and at packages[""]; a
 // stale lockfile makes `npm ci` / installs disagree with package.json.
