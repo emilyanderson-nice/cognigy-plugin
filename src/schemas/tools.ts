@@ -288,6 +288,15 @@ export const AUDIT_EVENT_TYPES = [
   "authorization",
 ] as const;
 
+export const LOG_LEVELS = [
+  "fatal",
+  "error",
+  "warn",
+  "info",
+  "debug",
+  "trace",
+] as const;
+
 // Tool 5: list_resources
 export const listResourcesSchema = z
   .object({
@@ -303,6 +312,7 @@ export const listResourcesSchema = z
       "function",
       "tool",
       "audit_event",
+      "log",
     ]),
     projectId: idSchema.optional(),
     aiAgentId: idSchema.optional(),
@@ -311,6 +321,12 @@ export const listResourcesSchema = z
     endDate: z.string().optional(),
     channel: z.string().optional(),
     useCase: z.string().optional(),
+    // log-only filters (resourceType 'log').
+    logLevel: z.array(z.enum(LOG_LEVELS)).nonempty().optional(),
+    search: z.string().min(1).max(200).optional(),
+    flowName: z.string().min(1).max(100).optional(),
+    sessionId: z.string().min(1).max(128).optional(),
+    view: z.enum(["summary", "entries"]).optional(),
     // audit_event filters. `actor` and `eventType` are sent as repeatable query
     // params (actor[]=…), which the platform supports from 2026.17.0 onwards.
     // Named `eventType` rather than `type` so it cannot be confused with

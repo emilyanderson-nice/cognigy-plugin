@@ -38,7 +38,7 @@ Credentials do **not** go into any `mcp_config.json` (shared, hand-edited, paste
 
 ## Tools — few tools, many operations
 
-20 tools, each often a multi-operation dispatcher (e.g. `manage_flow_nodes { operation }`, `manage_knowledge`, `manage_packages`). Prefer extending an existing tool over adding one. Each tool spans:
+19 tools in `definitions.ts` (the dispatcher adds `list_environments` and `use_environment` on top), each often a multi-operation dispatcher (e.g. `manage_flow_nodes { operation }`, `manage_knowledge`, `manage_packages`). Prefer extending an existing tool over adding one. Each tool spans:
 
 | File                        | Role                                                                            |
 | --------------------------- | ------------------------------------------------------------------------------- |
@@ -82,6 +82,10 @@ Wire contract, all of it load-bearing (`services/service-api/src/middleware/auth
 Ours lives in `src/utils/actorContext.ts`: an `AsyncLocalStorage` task id (one per MCP tool call, entered in `src/index.ts`'s `CallTool` handler — a mutable field would let concurrent calls interleave) plus a boot-time `sessionId`, injected by the single request interceptor in `src/api/client.ts` so uploads are covered too. `talk_to_agent`'s bare `axios.post(endpointUrl)` deliberately gets no header — endpoint traffic produces conversations, not audit events. `COGNIGY_DISABLE_AUDIT_ATTRIBUTION=1` opts out.
 
 Attribution is self-declared provenance, **not** a security control: service-api trusts this header from any authenticated caller (a gap the PR documents in that file; its PR body's `INTERNAL_SERVICE_TOKEN` claim is stale). Read side: `list_resources` / `get_resource` `resourceType: 'audit_event'` → `GET /v2.0/auditevents` (organisation-scoped, no `projectId`; `actor[]`/`type[]` need 2026.17.0+ — an older platform 400s on them, so the handler refetches unfiltered and applies both filters in-process rather than guessing from the error text, hinting that `total` then counts only the fetched page).
+
+## Project logs (read-only)
+
+`list_resources { resourceType: 'log', projectId }` reads the project Logs page (`GET /v2.1/projects/{id}/logs`, `/logs/tail` for `sessionId`). Behaviour findings with evidence classes are in `docs/platform-versions/` (L1-L7). Code: `src/tools/logReader.ts` (paging, deadline, fixed error texts), `logScrub.ts` (scrub, template, entry allowlist), `logSummary.ts` (aggregation); `handlers.ts` only delegates. It is summary-first because one hour of one project held ~13k near-identical entries. Invariants: output is built field by field (never spread an upstream object), `meta` is allowlisted (`flowId`, `flowName`, `channel`; `meta.text` and `meta.URLToken` are never returned; `msg` is scrubbed best-effort (emails, tokens, long digit runs), capped at 500 characters, and may still contain personal data), upstream error text is never echoed, and `get_resource`/`delete_resource` do not accept `log`.
 
 ## Flow-chart model — gotchas (hard-won)
 

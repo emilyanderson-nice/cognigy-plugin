@@ -365,6 +365,21 @@ For knowledge workflows, the MCP should import the full required source-project 
 in one pass, reuse shared connections only once, and try the imported same-project model
 IDs before falling back to `setup_llm`.
 
+### 9. Read the project logs after a test
+
+```
+Talk to the agent, then show me what went wrong in the logs for project <projectId>.
+```
+
+This uses `list_resources` with `resourceType: 'log'` (read-only, project-scoped). The default
+`view: 'summary'` aggregates the last hour into level counts, the most frequent message
+templates and the flows involved, because one hour of a busy project can hold thousands of
+near-identical entries. Narrow with `search`, `logLevel`, `flowName` or `startDate`/`endDate`,
+then use `view: 'entries'` to read single lines, or pass the session id from `talk_to_agent` as
+`sessionId` for that conversation's newest 100 entries. Log retention is typically about 24 hours. `meta.text`
+and `meta.URLToken` are never returned. Message text is scrubbed best-effort and may still
+contain personal data. Details and evidence: `docs/platform-versions/README.md`.
+
 ## Tools
 
 | Tool                   | Type  | Description                                                                                                    |
