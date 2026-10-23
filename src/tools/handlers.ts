@@ -138,6 +138,7 @@ import {
   summarizeSnapshot,
   type SnapshotSummary,
 } from "./snapshotManagement.js";
+import { readLogs } from "./logReader.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -3714,6 +3715,27 @@ export class ToolHandlers {
     }
   }
 
+  // list_resources { resourceType: 'log' }: delegates to readLogs, whose body
+  // is already scrubbed and is deliberately not passed through filterList.
+  private async listLogs(
+    data: z.infer<typeof schemas.listResourcesSchema>,
+  ): Promise<any> {
+    const result = await readLogs(this.apiClient, {
+      projectId: data.projectId as string,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      logLevel: data.logLevel,
+      search: data.search,
+      flowName: data.flowName,
+      sessionId: data.sessionId,
+      view: data.view,
+      limit: data.limit,
+      skip: data.skip,
+      sort: data.sort,
+    });
+    return withHints(result.body, result.hint ?? {});
+  }
+
   // =========================================================================
   // Tool 5: list_resources
   // =========================================================================
@@ -3755,6 +3777,7 @@ export class ToolHandlers {
         },
       );
     }
+    if (resourceType === "log") return this.listLogs(data);
     if (resourceType === "tool" && !aiAgentId && !requestedFlowId) {
       return withHints(
         { error: "aiAgentId or flowId is required for resourceType 'tool'." },

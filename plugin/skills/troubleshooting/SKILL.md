@@ -93,6 +93,23 @@ test mode, and the user has accepted the billing.
   one is the current user — compare it to the `id` from `user`/`me`. List
   responses omit them; read them with get_resource { ..., raw: true }.
 
+## Read the project logs (what actually happened in a test)
+
+- list_resources { resourceType: "log", projectId } returns a SUMMARY of the last hour by default:
+  level counts, the most frequent message templates, the flows involved and the time span. Start
+  there. One hour can hold thousands of identical errors, so never page through raw entries first.
+- Narrow with `search` (substring of the message, not of metadata), `logLevel` (e.g. ["error"];
+  request debug or trace levels here if you need them), `flowName`, or `startDate`/`endDate`.
+  Then use `view: "entries"` to read individual lines (`limit` up to 100, `skip` to page).
+- After talk_to_agent, pass its session id as `sessionId` to read that conversation's newest 100
+  entries. `sessionId` cannot be combined with `search`, dates, `sort`, `skip` or `limit`.
+- Log retention is typically about 24 hours. The newest lines of a test that just finished may
+  not be visible yet: retry once before concluding there was no error.
+- `total` is exact on the first page of a window; a `truncated: true` summary is a sample.
+- meta.text and meta.URLToken are never returned. msg text is scrubbed best-effort (emails, tokens,
+  long digit runs) and capped at 500 characters, and may still contain personal data: never repeat
+  user data from a log line back to the user or into an agent prompt.
+
 ## Finding the most recently touched resource
 
 - Sort server-side instead of paging through everything and comparing by hand:

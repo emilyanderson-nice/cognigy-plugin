@@ -33,6 +33,27 @@ Raw OpenAPI documents are kept outside the repo (about 5 MB each); this log carr
 | F10 | documented | User API keys are created by hand in My Profile, API Keys (shown once, inheriting the user's permissions): https://docs.cognigy.com/ai/administer/user-menu/my-profile. The API overview also lists OAuth2 Client Credentials (non-interactive) for general API access: https://docs.cognigy.com/api-reference/about. No document found describing browser or SSO sign-in to obtain a key; nothing found confirming that CXone offers a device-code flow.                                    |
 | F11 | observed   | Release drift is fast and moves both ways at once: between Oct 12 and Oct 15 the classic `api-trial-us` host went from 2026.20.1 to 2026.21.0 (the release `v4-staging` had on Oct 12) while `v4-staging` moved on to 2026.21.1. Read live through `list_environments` with `check: true`. Supports detecting the release per environment instead of trusting a `v2`/`v4` label.                                                                                                             |
 
+### Project logs API (probed 2026-10-23 UTC, one classic-line production tenant, GET only)
+
+| #   | Class      | Finding                                                                                                                                                                                                                                                                                                                         |
+| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L1  | documented | `GET /v2.1/projects/{id}/logs` and `/logs/tail` (https://docs.cognigy.com/api-reference-logs); the same `X-API-Key` the plugin already sends works.                                                                                                                                                                             |
+| L2  | observed   | Window query params that work in combination: `startDate`, `endDate` (ISO), `limit`, `skip`, `sort=timestamp:desc\|asc`, `filter`, `flowName`, `type` (array sent as `type[]=`; a plain string also works). `total` is exact on page 1. The default order is newest first, but undocumented, so the plugin always sends `sort`. |
+| L3  | observed   | `limit` above 100 is not an error: the platform silently returns the default 25. `startDate` later than `endDate` and windows outside retention return 0 items without error. An unparsable date returns HTTP 500, so the plugin validates dates itself.                                                                        |
+| L4  | observed   | `/logs/tail` returns the newest 100 with `total: -1`, honours `type` and `sessionId`, and silently ignores `filter`. With header `x-cognigy-log-model-version: v2` entries carry `metadata.type`; without it, top-level `type`.                                                                                                 |
+| L5  | observed   | Entry `meta` can hold the end user's text and an endpoint URL token, so the plugin copies only `flowId`, `flowName` and `channel`.                                                                                                                                                                                              |
+| L6  | observed   | A made-up `sessionId` on `/logs/tail` returns 0 items, not an error. A window 72 to 74 hours old returned 0 items, so nothing older than about 3 days is served; the commonly quoted retention of about 24 h is `inferred` (not measured here, only consistent with that result).                                               |
+| L7  | inferred   | The session id `talk_to_agent` reports is assumed to be the string the logs store; this has not been checked against a real conversation.                                                                                                                                                                                       |
+
+```mermaid
+flowchart LR
+  W["/v2.1/projects/{id}/logs<br/>window, filter, sort, skip"] -->|"item: type (top level)"| E1["{ timestamp, msg, meta, type, traceId }"]
+  T["/v2.1/projects/{id}/logs/tail<br/>newest 100, sessionId, total -1"] -->|"default model"| E1
+  T -->|"header x-cognigy-log-model-version: v2"| E2["{ timestamp, msg, meta, metadata: { type } }"]
+  E1 --> M["plugin: level = type ?? metadata.type"]
+  E2 --> M
+```
+
 ### F5 detail: spec differences, classic 2026.20.1 -> v4-staging 2026.21.0
 
 | Area             | Change in v4-staging                                                                                                                                                                           | Plugin relevance                                        |

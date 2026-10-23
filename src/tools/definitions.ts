@@ -6,6 +6,7 @@ import {
   AUDIT_ACTORS,
   AUDIT_EVENT_TYPES,
   BEDROCK_LOCATIONS,
+  LOG_LEVELS,
   SETUP_LLM_PROVIDERS,
 } from "../schemas/tools.js";
 
@@ -323,7 +324,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "list_resources",
     description:
-      "List resources in a Cognigy project. Use this to discover projects, agents, flows, endpoints, LLM models, knowledge stores, conversations, extensions, functions, tools, or audit events.\n\nSet resourceType to 'project' to find projectIds (no projectId needed). 'tool' requires aiAgentId (or flowId, for LLM Prompt flows that have no agent resource) instead of projectId. 'audit_event' is organisation-scoped and takes no projectId — it answers \"who changed what\" questions: `{ resourceType: 'audit_event', actor: ['mcp-plugin'], sort: 'timestamp:desc' }` lists exactly the changes this plugin made, and `actor: ['human']` the ones people made by hand. Each item carries `performedBy` for non-human actors; a missing `performedBy` means a person performed it. Needs Cognigy 2026.17.0+ and an API key with Admin Center access. All other types require projectId. For `llm_model`, you can also pass `useCase` to match the UI's use-case-filtered model dropdowns (for example `knowledgeSearch`). Packages are handled through manage_packages.\n\nUse `sort` for recency questions instead of paging through everything: `sort: 'lastChanged:desc', limit: 5` answers \"which project was touched most recently\" in one call. To attribute a change to a person, get the current user's id from get_resource { resourceType: 'user', id: 'me' } and compare it against `lastChangedBy` from get_resource { resourceType: 'project', id, raw: true } — list items omit `lastChangedBy` to save tokens.\n\nReturns a paginated list with id, name, and type-specific fields.",
+      "List resources in a Cognigy project. Use this to discover projects, agents, flows, endpoints, LLM models, knowledge stores, conversations, extensions, functions, tools, audit events, or project logs.\n\n'log' (project-scoped, needs projectId, read-only) reads the project's runtime logs, typically about 24 hours deep: start with the default summary view, then narrow with search, logLevel, flowName, a shorter startDate/endDate window or sessionId, and use view 'entries' (skip pages it) for individual lines. meta.text and meta.URLToken are never included in the output; message text (msg) is scrubbed best-effort (emails, tokens, long digit runs), capped at 500 characters, and may still contain personal data. The log-only fields are logLevel, search, flowName, sessionId and view; sessionId cannot be combined with startDate, endDate, search, sort, skip or limit.\n\nSet resourceType to 'project' to find projectIds (no projectId needed). 'tool' requires aiAgentId (or flowId, for LLM Prompt flows that have no agent resource) instead of projectId. 'audit_event' is organisation-scoped and takes no projectId — it answers \"who changed what\" questions: `{ resourceType: 'audit_event', actor: ['mcp-plugin'], sort: 'timestamp:desc' }` lists exactly the changes this plugin made, and `actor: ['human']` the ones people made by hand. Each item carries `performedBy` for non-human actors; a missing `performedBy` means a person performed it. Needs Cognigy 2026.17.0+ and an API key with Admin Center access. All other types require projectId. For `llm_model`, you can also pass `useCase` to match the UI's use-case-filtered model dropdowns (for example `knowledgeSearch`). Packages are handled through manage_packages.\n\nUse `sort` for recency questions instead of paging through everything: `sort: 'lastChanged:desc', limit: 5` answers \"which project was touched most recently\" in one call. To attribute a change to a person, get the current user's id from get_resource { resourceType: 'user', id: 'me' } and compare it against `lastChangedBy` from get_resource { resourceType: 'project', id, raw: true } — list items omit `lastChangedBy` to save tokens.\n\nFor every type except log, returns a paginated list with id, name, and type-specific fields. For log, returns a summary or entries body (see the log paragraph above).",
     annotations: {
       title: "List Resources",
       readOnlyHint: true,
@@ -348,6 +349,7 @@ export const tools: ToolDefinition[] = [
             "function",
             "tool",
             "audit_event",
+            "log",
           ],
           description: "Type of resource to list",
         },
@@ -414,13 +416,51 @@ export const tools: ToolDefinition[] = [
           description:
             "audit_event only — filter by the email of the user the action ran as.",
         },
+        logLevel: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "string",
+            enum: [...LOG_LEVELS],
+          },
+          description:
+            "log only — keep only these levels. Request debug or trace here if you need them.",
+        },
+        search: {
+          type: "string",
+          minLength: 1,
+          maxLength: 200,
+          description:
+            "log only — substring match on the log message (not on metadata). Not allowed with sessionId.",
+        },
+        flowName: {
+          type: "string",
+          minLength: 1,
+          maxLength: 100,
+          description: "log only — keep only entries from this flow name.",
+        },
+        sessionId: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description:
+            "log only — read the newest logs of one conversation session (e.g. the sessionId from talk_to_agent). Cannot be combined with startDate, endDate, search, sort, skip or limit.",
+        },
+        view: {
+          type: "string",
+          enum: ["summary", "entries"],
+          description:
+            "log only — 'summary' (default) returns level counts, time span, the most frequent message templates and flows; 'entries' returns individual entries with msg scrubbed best-effort (limit 1-100, page with skip).",
+        },
         limit: {
           type: "number",
-          description: "Results per page (1-100, default 25)",
+          description:
+            "Results per page (1-100, default 25). For log, only the 'entries' view.",
         },
         skip: {
           type: "number",
-          description: "Number of results to skip (default 0)",
+          description:
+            "Number of results to skip (default 0). For log, pages the 'entries' view.",
         },
       },
       required: ["resourceType"],
