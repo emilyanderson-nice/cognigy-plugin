@@ -54,12 +54,12 @@ Pass an explicit `parentNodeId` whenever you need to branch or insert rather tha
 
 `list` entries carry `id`, `referenceId`, `type`, `label`, `parentId`, `isEntryPoint`, `isDisabled` (only when true), `children` and `next`:
 
-- `parentId` is the node whose branch holds this one (`null` for top-level nodes); `children` lists a node's branch children in order.
+- `parentId` is the container for a node's direct branch heads (Then/Else/Default) and, for nodes chained inside a branch, the branch head they run under. `parentId` is null only on the top-level chain. `children` lists a node's branch heads in order.
 - `next` is the chain link. Top-level order is a `next` chain, so walk `next` from the `start` node to read the flow in execution order.
 - `isEntryPoint` is a per-node-type flag, true for every AI Agent node, so it does not mean "first node".
 - If `GET /chart` is unavailable the result has a warning and `parentId` is null for every node, with no `children`/`next`.
 - A partial list carries `truncated: true` and `totalAvailable` (the platform's node count) plus a `_hints.action`: do not treat it as complete; use `get` with a specific `nodeId` or narrow the request.
-- Use `id` for API calls (get/update/delete, `parentNodeId`). `goTo` and `executeFlow` targets use `referenceId` instead (see those sections).
+- Use `id` for API calls (get/update/delete, `parentNodeId`). `goTo` targets use `referenceId` instead (verified on NA1) and `executeFlow` targets reportedly do too (reported, not verified); see those sections.
 
 ## Naming and comments
 
@@ -606,9 +606,10 @@ Jump execution to another flow or a specific node. The conversation does NOT com
 **Config:**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| flowId | string | No | Target flow reference ID (for cross-flow jumps) |
-| nodeId | string | No | Target node within the flow. Reported (NA1, unverified): this takes the node's `referenceId` (UUID) from `list`/`get`, not the 24-hex `id`; verify in the UI if the jump misbehaves |
-| executionMode | string | No | `execute` (default) or `goAndDontReturn` |
+| flowNode | object | No | `{ flow, node }`: BOTH are referenceIds, the flow's from `manage_flows` and the node's from `list`/`get`, not the 24-hex `id`; verified on NA1 for a jump inside one flow |
+| flowId | string | No | Alias the plugin turns into `flowNode.flow` (same referenceId rule) |
+| nodeId | string | No | Alias the plugin turns into `flowNode.node` (same referenceId rule: the node's `referenceId` from `list`/`get`) |
+| executionMode | string | No | `continue` (go to the node and continue; verified on NA1) or `wait` (go to the node and wait for input; inferred from the UI wording, not verified) |
 
 ---
 

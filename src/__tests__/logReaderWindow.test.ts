@@ -275,11 +275,11 @@ describe("readLogs", () => {
       expect(r.body.truncated).toBe(false);
     });
 
-    it("advances skip by 100 for pages 2 and 3 and sends no skip on page 1", async () => {
+    it("spreads pages 2 and 3 across a total above 300 (C3: floor((total-100)/2) and total-100) and sends no skip on page 1", async () => {
       queue(client, [
         page(100, 1000),
-        page(100, 1000, 100),
-        page(100, 1000, 200),
+        page(100, 1000, 450),
+        page(100, 1000, 900),
       ]);
       await run();
       expect(client).toHaveBeenCalledTimes(3);
@@ -291,8 +291,8 @@ describe("readLogs", () => {
       };
       expect(paramsOf(client, 0)).toEqual(base);
       expect(sortedKeys(paramsOf(client, 0))).not.toContain("skip");
-      expect(paramsOf(client, 1)).toEqual({ ...base, skip: 100 });
-      expect(paramsOf(client, 2)).toEqual({ ...base, skip: 200 });
+      expect(paramsOf(client, 1)).toEqual({ ...base, skip: 450 });
+      expect(paramsOf(client, 2)).toEqual({ ...base, skip: 900 });
       for (const c of client.mock.calls) expect(c[0]).toBe(LOGS_URL);
     });
 

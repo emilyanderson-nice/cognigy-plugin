@@ -25,6 +25,13 @@ import {
   paramsOf,
   opts,
 } from "./helpers/logFixtures.js";
+import {
+  rawAxiosError,
+  tlsText,
+  timeoutText,
+  dnsText,
+  unreachableText,
+} from "./helpers/netErrors.js";
 
 describe("readLogs hardening", () => {
   let client: Mock;
@@ -68,7 +75,9 @@ describe("readLogs hardening", () => {
         limit: 100,
         sort: "timestamp:desc",
       });
-      expect(paramsOf(client, 2).skip).toBe(200);
+      // C3: total 500 > 300, so pages 2 and 3 are spread: floor(400/2)=200 and 400
+      expect(paramsOf(client, 1).skip).toBe(200);
+      expect(paramsOf(client, 2).skip).toBe(400);
     });
 
     it("entries view: the single call", async () => {
@@ -98,7 +107,7 @@ describe("readLogs hardening", () => {
     );
   });
 
-  describe("A14b: status boundaries and body-less network errors", () => {
+  describe("A14b/C2: status boundaries and raw network errors", () => {
     const VIEWS: Array<[string, Record<string, unknown>]> = [
       ["summary", {}],
       ["entries", { view: "entries" }],
@@ -111,7 +120,7 @@ describe("readLogs hardening", () => {
     };
     const spec = (what: string) => ({
       what,
-      why: "A14b: only integers 100..599 are reported as status; anything else is status null with the generic text; no upstream code/message is output",
+      why: "A14b/C2: only integers 100..599 are reported as status; a raw AxiosError without response names its allowlisted network code with a fixed class text; no upstream message is ever output",
       fix: "statusOf: accept 100 <= n <= 599 (Number.isInteger) and nothing else",
     });
 
@@ -150,27 +159,30 @@ describe("readLogs hardening", () => {
         },
       );
 
-      it.each(["ECONNABORTED", "ETIMEDOUT", "ENOTFOUND"])(
-        "a body-less %s error (no response, no status) gives status null, the generic text and no leak of code or message",
-        async (code) => {
-          const err: any = new Error(`${SENTINEL_ERR} ${code}`);
-          err.code = code;
-          err.isAxiosError = true;
-          err.config = {
-            url: LOGS_URL,
-            headers: { "X-API-Key": SENTINEL_KEY },
-          };
-          const generic = await fail(clientError(500), args);
-          const r = await fail(err, args);
+      it.each([
+        ["ECONNABORTED", timeoutText("ECONNABORTED")],
+        ["ENOTFOUND", dnsText("ENOTFOUND")],
+        ["ECONNREFUSED", unreachableText("ECONNREFUSED")],
+        ["SELF_SIGNED_CERT_IN_CHAIN", tlsText("SELF_SIGNED_CERT_IN_CHAIN")],
+      ])(
+        "a raw AxiosError %s (no response) gives its fixed class text, status null and the code, and leaks no message",
+        async (code, text) => {
+          const r = await fail(rawAxiosError(code), args);
           expectExact(
             [
               r.body,
-              [...ERROR_LEAK_SENTINELS, code].filter((s) =>
-                JSON.stringify(r).includes(s),
+              Object.keys(r.body),
+              [...ERROR_LEAK_SENTINELS, SENTINEL_ERR, SENTINEL_KEY].filter(
+                (s) => JSON.stringify(r).includes(s),
               ),
               client.mock.calls.length,
             ],
-            [{ error: generic.body.error, status: null }, [], 1],
+            [
+              { error: text, status: null, code },
+              ["error", "status", "code"],
+              [],
+              1,
+            ],
             spec(`${_v} ${code}`),
           );
         },
