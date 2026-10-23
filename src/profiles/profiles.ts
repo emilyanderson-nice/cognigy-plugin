@@ -16,6 +16,16 @@ import {
 } from "../hosts.js";
 import { usableEnv } from "../placeholders.js";
 import { ProfileConfigError } from "./errors.js";
+import {
+  envOrigin,
+  fileOrigin,
+  isUrlField,
+  LEGACY_VARIABLE,
+  originSuffix,
+  savedProfileOrigin,
+  type FieldOrigins,
+  type UrlField,
+} from "./origins.js";
 import { resolveDefinitions, type Definition } from "./precedence.js";
 import {
   profilesFromRaw,
@@ -65,9 +75,13 @@ export interface RawFields {
   webchatBaseUrl?: string;
   staticFilesBaseUrl?: string;
   versionHint?: string;
+  /** Where each URL value came from; only used to word validation errors. */
+  origins?: FieldOrigins;
 }
 
-const ENV_FIELD: Record<string, keyof RawFields> = {
+type ValueField = Exclude<keyof RawFields, "origins">;
+
+const ENV_FIELD: Record<string, ValueField> = {
   API_BASE_URL: "apiBaseUrl",
   API_KEY: "apiKey",
   ENDPOINT_BASE_URL: "endpointBaseUrl",
@@ -120,7 +134,11 @@ function protectKey(profile: Profile): Profile {
 }
 
 /** Throws ProfileConfigError (never quoting secret values) for an unusable profile. */
-export function validateProfileFields(name: string, raw: RawFields): void {
+export function validateProfileFields(
+  name: string,
+  raw: RawFields,
+  origins?: FieldOrigins,
+): void {
   if (!NAME_RE.test(name)) {
     throw new ProfileConfigError(
       `Invalid profile name "${name}": use lowercase letters, digits and hyphens, starting with a letter or digit.`,
@@ -134,26 +152,26 @@ export function validateProfileFields(name: string, raw: RawFields): void {
       throw new ProfileConfigError(`Profile "${name}" is missing ${field}.`);
     }
   }
-  const urls = [
-    ["apiBaseUrl", raw.apiBaseUrl as string],
+  const urls: [UrlField, string | undefined][] = [
+    ["apiBaseUrl", raw.apiBaseUrl],
     ["endpointBaseUrl", raw.endpointBaseUrl],
     ["webchatBaseUrl", raw.webchatBaseUrl],
     ["staticFilesBaseUrl", raw.staticFilesBaseUrl],
-  ] as const;
+  ];
   for (const [field, value] of urls) {
     if (!value) continue;
     try {
       assertUrl(field, value);
     } catch {
       throw new ProfileConfigError(
-        `Profile "${name}": ${field} is not a valid http(s) URL.`,
+        `Profile "${name}": ${field} is not a valid http(s) URL${originSuffix(origins?.[field])}.`,
       );
     }
   }
 }
 
 function build(name: string, raw: RawFields, source: ProfileSource): Profile {
-  validateProfileFields(name, raw);
+  validateProfileFields(name, raw, raw.origins);
   const apiBaseUrl = normalizeApiBaseUrl(raw.apiBaseUrl as string);
   return protectKey({
     name,
@@ -180,12 +198,21 @@ function legacyFields(
   const pick = (key: string) => val(env[key]) || val(file[key]);
   const envUrl = val(env.COGNIGY_API_BASE_URL);
   const envKey = val(env.COGNIGY_API_KEY);
+  const origins: FieldOrigins = {};
+  for (const [field, variable] of Object.entries(LEGACY_VARIABLE) as [
+    UrlField,
+    string,
+  ][]) {
+    if (val(env[variable])) origins[field] = envOrigin(variable);
+    else if (val(file[variable])) origins[field] = fileOrigin(variable);
+  }
   const raw: RawFields = {
     apiBaseUrl: pick("COGNIGY_API_BASE_URL"),
     apiKey: pick("COGNIGY_API_KEY"),
     endpointBaseUrl: pick("COGNIGY_ENDPOINT_BASE_URL"),
     webchatBaseUrl: pick("COGNIGY_WEBCHAT_BASE_URL"),
     staticFilesBaseUrl: pick("COGNIGY_STATIC_FILES_BASE_URL"),
+    origins,
   };
   if (!raw.apiBaseUrl || !raw.apiKey) return undefined;
   return { raw, source: envUrl || envKey ? "legacy-env" : "legacy-file" };
@@ -216,6 +243,9 @@ function envProfiles(env: NodeJS.ProcessEnv): {
     }
     definitions.add(settingKey);
     fields[field] = v;
+    if (isUrlField(field)) {
+      fields.origins = { ...fields.origins, [field]: envOrigin(key) };
+    }
     found.set(name, fields);
     const seen = spellings.get(name) ?? new Set<string>();
     seen.add(m[1].toUpperCase());
@@ -234,8 +264,15 @@ function envProfiles(env: NodeJS.ProcessEnv): {
   return { found, problems };
 }
 
-function fileFields(raw: ProfilesFile["profiles"][string]): RawFields {
-  const out: RawFields = {};
+function fileFields(
+  name: string,
+  raw: ProfilesFile["profiles"][string],
+): RawFields {
+  const out: RawFields = {
+    origins: Object.fromEntries(
+      Object.keys(LEGACY_VARIABLE).map((f) => [f, savedProfileOrigin(name)]),
+    ),
+  };
   for (const [key, value] of Object.entries(raw)) {
     if (value !== undefined && typeof value !== "string") {
       throw new ProfileConfigError(`${key} must be a string.`);
@@ -273,7 +310,7 @@ export function loadProfiles(options: LoadProfilesOptions = {}): ProfileSet {
   if (legacy) attempt("default", () => legacy.raw, legacy.source);
 
   for (const [name, raw] of Object.entries(fileProfiles.profiles)) {
-    attempt(name, () => fileFields(raw), "file-profile");
+    attempt(name, () => fileFields(name, raw), "file-profile");
   }
 
   const fromEnv = envProfiles(env);
