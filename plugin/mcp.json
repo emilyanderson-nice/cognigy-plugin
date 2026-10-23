@@ -8,7 +8,7 @@
         "--allow-git=root",
         "-y",
         "-p",
-        "github:emilyanderson-nice/cognigy-plugin#v1.22.2-esc.2",
+        "github:emilyanderson-nice/cognigy-plugin#v1.22.2-esc.3",
         "cognigy-mcp"
       ]
     },
