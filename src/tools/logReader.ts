@@ -1,4 +1,5 @@
 import { toLogEntry, type LogEntry } from "./logScrub.js";
+import { networkErrorBody } from "./logNetworkError.js";
 import { summarizeEntries } from "./logSummary.js";
 
 export interface LogReadArgs {
@@ -109,7 +110,8 @@ function statusOf(err: unknown): number | null {
 
 const failedCall = (err: unknown): LogReadResult => {
   const status = statusOf(err);
-  return fail(errorText(status), { status });
+  const network = status === null ? networkErrorBody(err) : undefined;
+  return network ? { body: network } : fail(errorText(status), { status });
 };
 
 function itemsOf(data: unknown): unknown[] {
@@ -153,7 +155,13 @@ function withWindowNote(
     : "Showing the last hour by default";
   return {
     ...hint,
-    action: `${hint?.action ?? ""} ${shown}; ${LOOK_FURTHER}`,
+    // The window sentence already says it, so drop the base copy.
+    action: [
+      (hint?.action ?? "").replace(RETENTION_ACTION, "").trim(),
+      `${shown}; ${LOOK_FURTHER}`,
+    ]
+      .filter(Boolean)
+      .join(" "),
   };
 }
 
@@ -277,6 +285,18 @@ async function readEntries(
   };
 }
 
+// More matches than the three pages hold: pages 2 and 3 are read from the
+// middle and the oldest end, so the sample spans the window instead of only
+// its newest moments.
+const spreadSample = (total: number | null): boolean =>
+  total !== null && total > SUMMARY_PAGE_SIZE * SUMMARY_MAX_PAGES;
+
+function spreadSkip(page: number, total: number): number {
+  if (page === 0) return 0;
+  const oldest = Math.floor(total) - SUMMARY_PAGE_SIZE;
+  return page === 1 ? Math.floor(oldest / 2) : oldest;
+}
+
 async function readSummary(
   client: LogClient,
   args: LogReadArgs,
@@ -290,12 +310,16 @@ async function readSummary(
   let total: number | null = null;
   let truncated = false;
   let partialFailure = false;
+  let spreadSlices = 0; // later spread pages that returned entries
   for (let page = 0; page < SUMMARY_MAX_PAGES; page++) {
     if (page > 0 && now() - began >= deadlineMs) {
       truncated = true;
       break;
     }
-    const skip = page * SUMMARY_PAGE_SIZE;
+    const spread = spreadSample(total);
+    const skip = spread
+      ? spreadSkip(page, total as number)
+      : page * SUMMARY_PAGE_SIZE;
     let data: unknown;
     try {
       data = await client.get(`/v2.1/projects/${args.projectId}/logs`, {
@@ -314,6 +338,7 @@ async function readSummary(
     }
     if (page === 0) total = totalOf(data);
     const items = itemsOf(data);
+    if (page > 0 && spread && items.length > 0) spreadSlices++;
     entries.push(...items.map(toLogEntry));
     if (items.length < SUMMARY_PAGE_SIZE) break;
     if (total !== null && entries.length >= total) break;
@@ -322,7 +347,9 @@ async function readSummary(
   truncated = truncated || (total !== null && total > entries.length);
   const warning = partialFailure
     ? "A later page failed to load: this result is a SAMPLE of the matching log entries."
-    : undefined;
+    : spreadSlices === SUMMARY_MAX_PAGES - 1
+      ? `This result is a SAMPLE: ${entries.length} of ${total} matching log entries were read, spread across the window (newest, middle and oldest); counts describe the sample only.`
+      : undefined;
   return {
     body: {
       view: "summary",

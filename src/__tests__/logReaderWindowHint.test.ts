@@ -276,6 +276,70 @@ describe("readLogs window hint (B4)", () => {
     );
   });
 
+  describe("(h) C4: the retention phrase appears exactly once", () => {
+    const RETENTION = "typically about 24 hours";
+    const BASE_SENTENCE = "Log retention is typically about 24 hours.";
+    const WHY_ONCE =
+      "C4: when the window sentence is appended, the base retention sentence is removed first so the phrase is not duplicated";
+
+    it.each(variants)(
+      "%s (no dates): the phrase appears exactly once and the window sentence still ends the text",
+      async (label, args, resp) => {
+        queue(client, responses(resp));
+        const a = action(await run(args));
+        expectExact(
+          [
+            count(a, RETENTION),
+            count(a, DEFAULT_SENTENCE),
+            label.startsWith("entries, truncated") ||
+              a.endsWith(DEFAULT_SENTENCE),
+          ],
+          [1, 1, true],
+          spec(
+            `${label}: retention phrase count`,
+            WHY_ONCE,
+            "drop 'Log retention is typically about 24 hours.' from the base action before appending the window sentence",
+          ),
+        );
+      },
+    );
+
+    it.each(variants)(
+      "%s (endDate only): the phrase appears exactly once and the end-only sentence ends the text",
+      async (label, args, resp) => {
+        queue(client, responses(resp));
+        const a = action(await run({ ...args, endDate: END }));
+        expectExact(
+          [
+            count(a, RETENTION),
+            count(a, END_ONLY_SENTENCE),
+            label.startsWith("entries, truncated") ||
+              a.endsWith(END_ONLY_SENTENCE),
+          ],
+          [1, 1, true],
+          spec(`${label}: retention phrase count`, WHY_ONCE, "same removal"),
+        );
+      },
+    );
+
+    it.each(variants)(
+      "%s (startDate supplied): the base retention sentence is unchanged and appears once",
+      async (label, args, resp) => {
+        queue(client, responses(resp));
+        const a = action(await run({ ...args, startDate: START }));
+        expectExact(
+          [count(a, RETENTION), count(a, BASE_SENTENCE)],
+          [1, 1],
+          spec(
+            `${label}: base retention sentence`,
+            "C4: hints without a window sentence keep the base retention sentence exactly as before",
+            "only strip the base sentence when a window sentence is appended",
+          ),
+        );
+      },
+    );
+  });
+
   describe("(g) existing guarantees", () => {
     const all: Array<[string, Record<string, unknown>, unknown]> = [
       ...variants,

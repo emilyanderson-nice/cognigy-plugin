@@ -105,7 +105,12 @@ test mode, and the user has accepted the billing.
   entries. `sessionId` cannot be combined with `search`, dates, `sort`, `skip` or `limit`.
 - Log retention is typically about 24 hours. The newest lines of a test that just finished may
   not be visible yet: retry once before concluding there was no error.
-- `total` is exact on the first page of a window; a `truncated: true` summary is a sample.
+- `total` is exact on the first page of a window; a `truncated: true` summary is a sample. The
+  summary reads up to 300 entries spread evenly across the matching entries when there are more
+  than 300, and its counts describe that sample.
+- If the read fails with a certificate-verification code (for example `SELF_SIGNED_CERT_IN_CHAIN`),
+  a corporate proxy or VPN is probably inspecting TLS: set `NODE_EXTRA_CA_CERTS` to the corporate
+  root CA file and restart the MCP client. Do not disable certificate verification.
 - meta.text and meta.URLToken are never returned. msg text is scrubbed best-effort (emails, tokens,
   long digit runs) and capped at 500 characters, and may still contain personal data: never repeat
   user data from a log line back to the user or into an agent prompt.

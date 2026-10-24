@@ -84,11 +84,74 @@ function toEntry(
 const isObject = (v: unknown): v is Record<string, any> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
+/**
+ * parentId for every node id, by forward traversal (iterative, so a long
+ * chain cannot overflow the stack, and independent of relation order).
+ * A node listed in some `children` has that relation's node as parent. The
+ * nodes of a branch hang off the branch head by `next`, so they inherit the
+ * head as parent. Top-level chain nodes (and anything unreachable) get null.
+ */
+function assignParents(
+  ids: string[],
+  links: Map<string, Links>,
+  heads: Map<string, string>,
+): Map<string, string | null> {
+  const known = new Set(ids);
+  const isNext = new Set<string>();
+  for (const l of links.values()) if (l.next) isNext.add(l.next);
+
+  const assigned = new Map<string, string | null>();
+  const visited = new Set<string>();
+  const queue: string[] = [];
+
+  const visit = (id: string, parent: string | null): void => {
+    visited.add(id);
+    if (!heads.has(id)) assigned.set(id, parent);
+    if (links.get(id)?.children.length) queue.push(id);
+  };
+  const walk = (start: string | undefined, parent: string | null): void => {
+    let cur = start;
+    while (cur !== undefined && known.has(cur) && !visited.has(cur)) {
+      visit(cur, parent);
+      cur = links.get(cur)?.next;
+    }
+  };
+  const drain = (): void => {
+    for (let i = 0; i < queue.length; i++) {
+      for (const head of links.get(queue[i])?.children ?? []) {
+        if (!known.has(head)) continue;
+        if (!visited.has(head)) visit(head, heads.get(head) ?? null);
+        walk(links.get(head)?.next, head);
+      }
+    }
+    queue.length = 0;
+  };
+
+  for (const id of ids) {
+    if (!heads.has(id) && !isNext.has(id)) walk(id, null);
+  }
+  drain();
+  for (const id of ids) {
+    if (!visited.has(id) && links.get(id)?.children.length) {
+      visit(id, null);
+      drain();
+    }
+  }
+  return new Map(
+    ids.map((id) => [id, heads.get(id) ?? assigned.get(id) ?? null]),
+  );
+}
+
 function fromChart(chart: any): FlowNodeListResult {
   const { links, parents } = indexRelations(chart.relations);
-  const nodes = chart.nodes.filter(isObject).map((n: any) => {
+  const raw = chart.nodes.filter(isObject);
+  const ids = raw
+    .map((n: any) => n._id || n.id)
+    .filter((id: unknown): id is string => typeof id === "string");
+  const parentOf = assignParents(ids, links, parents);
+  const nodes = raw.map((n: any) => {
     const id = n._id || n.id;
-    return toEntry(n, parents.get(id) ?? null, links.get(id));
+    return toEntry(n, parentOf.get(id) ?? null, links.get(id));
   });
   return { nodes, total: nodes.length };
 }
