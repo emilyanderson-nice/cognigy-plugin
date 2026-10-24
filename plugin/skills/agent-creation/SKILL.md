@@ -33,11 +33,11 @@ description: "Use when the user wants to build, create, or set up a new Cognigy 
    - Save the `referenceId` from the response if you need to assign it explicitly later.
      (See the llm-providers skill for valid provider/modelType values)
 7. create_ai_agent { projectId, name, description }
-   — Returns: agent, flow, endpoint, endpointUrl
+   — Returns: agent, flow, endpoint, endpointId, hasToken
    — The default LLM is automatically assigned to the agent's job node. If llmStatus is "configured", no extra step is needed.
 8. (Only if llmStatus is "unknown" after create) Do not test yet. First repeat steps 4-6 for the returned projectId, then assign LLM to agent if needed:
    update_ai_agent { aiAgentId, jobConfig: { llmProviderReferenceId: "<referenceId from step 4 or 5>" } }
-9. Only after the project has a confirmed working LLM: talk_to_agent { endpointUrl, message }
+9. Only after the project has a confirmed working LLM: talk_to_agent { endpointId, message }
 10. Refine the agent using update_ai_agent — see "All configuration fields" below
 11. Repeat 9-10 until satisfied
 
@@ -113,7 +113,7 @@ When (and only when) the user explicitly asked for it:
 - New agent: `create_ai_agent { name, agentNodeType: "llmPrompt", systemPrompt: "..." }` — provisions project + flow + LLM Prompt node + REST endpoint. There is NO agent resource in this mode.
 - `systemPrompt` is the full persona, job, and guardrail definition.
 - Iterate with `manage_flow_nodes { operation: "update", flowId, nodeId, config: { prompt } }` — NOT update_ai_agent (there is no agent to update).
-- Tools: `create_tool { flowId, ... }` (only tool/mcp/http types). Test with `talk_to_agent { endpointUrl }`.
+- Tools: `create_tool { flowId, ... }` (only tool/mcp/http types). Test with `talk_to_agent { endpointId }`.
 
 ## Key facts
 
@@ -126,5 +126,6 @@ When (and only when) the user explicitly asked for it:
 - **Knowledge**: Always attach knowledge stores as tools (via create_tool { toolType: "knowledge" } or knowledgeStoreReferenceId on create_ai_agent). Knowledge tools give the agent a dedicated search capability. Only attach to the persona (via update_ai_agent) if the user explicitly requests persona-level knowledge.
 - **Changing an EXISTING agent**: the first such change in a session is HELD by the server and returns `error: "backup_not_offered"` without changing anything. Ask the user whether they want a backup, then call `manage_snapshots { operation: "create", projectId, label }` or `{ operation: "decline", projectId }`, then retry the held call — see the snapshot-backups skill. This does NOT fire for an agent you created in this same session, so the build flow above is unaffected.
 - Use same sessionId across talk_to_agent calls for multi-turn testing
-- endpointUrl uses a different base URL (endpoint-\*.cognigy.ai), not the API URL
-- talk_to_agent sends in Cognigy Endpoint Test Mode by default, so test messages are not counted as billable; the response reports `testMode` and the regular `endpointUrl`. It never falls back to a billable send on its own. If a send fails, read `_hints` and check whether the message was processed before re-sending it (see the troubleshooting skill). Cognigy documents a fair-use limit of 600 test messages per hour (scope unspecified).
+- Endpoints live on a different host (endpoint-\*.cognigy.ai) than the API; talk_to_agent builds the address itself from `endpointId`
+- An endpoint's URL token is a credential (anyone holding it can message the endpoint), so `list_resources` and `get_resource` show `hasToken` instead. Pass `revealToken: true` only when a URL is really needed, and never paste it into prompts or files
+- talk_to_agent sends in Cognigy Endpoint Test Mode by default, so test messages are not counted as billable; the response reports `testMode` and `endpointId`, never an endpoint URL. It never falls back to a billable send on its own. If a send fails, read `_hints` and check whether the message was processed before re-sending it (see the troubleshooting skill). Cognigy documents a fair-use limit of 600 test messages per hour (scope unspecified).

@@ -32,6 +32,16 @@ import {
   type ResponseHints,
 } from "./filters.js";
 import { listFlowNodes } from "./flowNodeList.js";
+import {
+  hasUrlToken,
+  redactEndpoint,
+  resolveRestEndpointToken,
+  scrubSecrets,
+  stripTokenKeysDeep,
+  tokenFromEndpointUrl,
+} from "./endpointAccess.js";
+import { buildKnowledgeAiSettings } from "./knowledgeAiRead.js";
+import { plainObjectCopy } from "../utils/jsonSafe.js";
 import { buildWebchatSettings, deepMerge } from "./webchatSettings.js";
 import { isPlainObject, normalizeToolParameters } from "./toolParameters.js";
 import {
@@ -1255,7 +1265,7 @@ function talkToAgentFailureHints(
     "An HTTP error does not prove the message was not processed. A REST endpoint's Execution Finished transformer runs after the flow and can set any status, and a gateway timeout can hide a completed execution. A blind re-send can execute tools or advance the conversation twice; waiting or reusing the sessionId does not prevent that.";
   const where = testMode ? "the test-mode URL" : "the endpoint";
   const verifyEndpoint =
-    "verify the endpoint with list_resources { resourceType: 'endpoint' } (channel rest, URLToken present)";
+    "verify the endpoint with list_resources { resourceType: 'endpoint' } (channel rest, hasToken true)";
 
   let likely_cause: string;
   let action: string;
@@ -1279,7 +1289,7 @@ function talkToAgentFailureHints(
       ? "HTTP 404 has three possible meanings that the response alone cannot separate: the /test/ route does not exist (platform older than Cognigy 4.27), the URL token is unknown (the regular URL would 404 too), or an Execution Finished transformer returned 404 AFTER the flow ran."
       : "HTTP 404: the URL token is unknown, the endpoint was deleted, or an Execution Finished transformer returned 404 after the flow ran.";
     action = testMode
-      ? `${checkOutcome} Then confirm route absence independently before even considering a billable send: the Cognigy release is older than 4.27 (Admin Center or release notes), AND get_resource { resourceType: 'endpoint', id, raw: true } shows the URLToken matches and no Execution Finished transformer is enabled.${billable}`
+      ? `${checkOutcome} Then confirm route absence independently before even considering a billable send: the Cognigy release is older than 4.27 (Admin Center or release notes), AND get_resource { resourceType: 'endpoint', id, raw: true } shows hasToken true and no Execution Finished transformer is enabled.${billable}`
       : `${checkOutcome} Then ${verifyEndpoint}.`;
   } else if (status === 429) {
     likely_cause =
@@ -2477,10 +2487,9 @@ export class ToolHandlers {
         projectCreated: createdProject,
         agent: filterResponse("agent", agent),
         flow: filterResponse("flow", flow),
-        endpoint: filterResponse("endpoint", endpoint),
-        endpointUrl: endpoint.URLToken
-          ? `${this.endpointBaseUrl}/${endpoint.URLToken}`
-          : "URL not available",
+        endpoint: redactEndpoint(filterResponse("endpoint", endpoint)),
+        endpointId: endpoint._id || endpoint.id,
+        hasToken: hasUrlToken(endpoint.URLToken),
         llmStatus,
         // Which model the job node ended up on. Always reported, because the
         // pick can differ from the project default (see pickDefaultLlm) and
@@ -2538,6 +2547,16 @@ export class ToolHandlers {
         };
       }
 
+      // Only worth saying when something else already needs the caller's
+      // attention (a clean create returns no hints at all).
+      // Not when the project default was skipped on purpose: the agent works.
+      const testHint: ResponseHints | null =
+        llmStatus === "unknown" || !llmConnected
+          ? {
+              hint: `Once the LLM is confirmed, test with talk_to_agent { endpointId: "${result.endpointId}" } (the endpoint URL and token are credentials and are not returned).`,
+            }
+          : null;
+
       if (data.knowledgeStoreReferenceId && !knowledgeToolId) {
         return withHints(
           result,
@@ -2547,12 +2566,13 @@ export class ToolHandlers {
               action: `Create it manually: create_tool { aiAgentId: "${agentId}", toolType: "knowledge", name: "Search Knowledge", config: { knowledgeStoreId: "${data.knowledgeStoreReferenceId}", toolId: "search_knowledge", description: "Search the knowledge base" } }`,
             },
             llmHints,
+            testHint,
           ),
         );
       }
 
       if (llmHints) {
-        return withHints(result, llmHints);
+        return withHints(result, mergeHints(llmHints, testHint));
       }
 
       return result;
@@ -2798,10 +2818,9 @@ export class ToolHandlers {
           type: "llmPromptV2",
           label: conventionalLabel("llmPromptV2", data.name),
         },
-        endpoint: filterResponse("endpoint", endpoint),
-        endpointUrl: endpoint.URLToken
-          ? `${this.endpointBaseUrl}/${endpoint.URLToken}`
-          : "URL not available",
+        endpoint: redactEndpoint(filterResponse("endpoint", endpoint)),
+        endpointId: endpoint._id || endpoint.id,
+        hasToken: hasUrlToken(endpoint.URLToken),
         llmStatus,
         // Which model the prompt node ended up on. Always reported, because
         // the pick can differ from the project default (see pickDefaultLlm)
@@ -2817,7 +2836,7 @@ export class ToolHandlers {
           : {}),
       };
 
-      const usageHint = `LLM Prompt flow created — there is NO agent resource in this mode. Edit the system prompt with manage_flow_nodes { operation: "update", flowId: "${flowId}", nodeId: "${promptNodeId}", config: { prompt: "..." } } (NOT update_ai_agent). Add tools with create_tool { flowId: "${flowId}", ... }. Test with talk_to_agent { endpointUrl }. If the first reply right after creation is empty, wait a few seconds and retry with a NEW sessionId — endpoint config propagates briefly, and a session that first hit the stale config stays cached as broken.`;
+      const usageHint = `LLM Prompt flow created — there is NO agent resource in this mode. Edit the system prompt with manage_flow_nodes { operation: "update", flowId: "${flowId}", nodeId: "${promptNodeId}", config: { prompt: "..." } } (NOT update_ai_agent). Add tools with create_tool { flowId: "${flowId}", ... }. Test with talk_to_agent { endpointId }. If the first reply right after creation is empty, wait a few seconds and retry with a NEW sessionId — endpoint config propagates briefly, and a session that first hit the stale config stays cached as broken.`;
 
       if (llmStatus === "unknown") {
         return withHints(result, {
@@ -3437,8 +3456,43 @@ export class ToolHandlers {
       resolved?: boolean;
       endpointId?: string;
     } = {};
+    // The endpoint id is returned whenever it is known; the URL (it carries
+    // the token, a credential) never is.
+    const endpointIdField = () =>
+      endpointMeta.endpointId ? { endpointId: endpointMeta.endpointId } : {};
 
-    if (!endpointUrl && data.aiAgentId) {
+    // Upstream text (error details, the raw response) can echo the request URL,
+    // and a URL carries the token. Scrub the known token and URLs from it.
+    const knownUrls: string[] = [];
+    const scrub = (value: unknown) =>
+      scrubSecrets(value, [
+        resolvedToken,
+        data.endpointUrl && tokenFromEndpointUrl(data.endpointUrl),
+        data.endpointUrl,
+        ...knownUrls,
+      ]);
+    const scrubDetail = (value: unknown): string =>
+      (scrub(
+        typeof value === "string" ? value : (JSON.stringify(value) ?? ""),
+      ) as string) || "Request failed";
+
+    if (!endpointUrl && data.endpointId) {
+      const found = await resolveRestEndpointToken(
+        this.apiClient,
+        data.endpointId,
+      );
+      if (!found.ok) {
+        return withHints(
+          { error: found.error, endpointId: data.endpointId, sessionId },
+          {
+            action:
+              "Find a REST endpoint with list_resources { resourceType: 'endpoint', projectId } (channel rest, hasToken true), or pass aiAgentId instead.",
+          },
+        );
+      }
+      resolvedToken = found.token;
+      endpointMeta = { endpointId: found.endpointId };
+    } else if (!endpointUrl && data.aiAgentId) {
       const resolved = await resolveFlowForAgent(
         this.apiClient,
         data.aiAgentId,
@@ -3453,7 +3507,7 @@ export class ToolHandlers {
             likely_cause:
               "Agent may not have been created via create_ai_agent, or has no associated flow.",
             action:
-              "Create the agent with create_ai_agent, or provide endpointUrl directly.",
+              "Create the agent with create_ai_agent, or provide endpointId directly.",
           },
         );
       }
@@ -3542,14 +3596,16 @@ export class ToolHandlers {
           return withHints(
             {
               error: "Failed to auto-create REST endpoint for agent.",
-              detail: createErr.response?.data?.error || createErr.message,
+              detail: scrubDetail(
+                createErr.response?.data?.error || createErr.message,
+              ),
               sessionId,
             },
             {
               likely_cause:
                 "Insufficient permissions or project configuration issue.",
               action:
-                "Create endpoint manually via create_ai_agent or the Cognigy UI, then provide endpointUrl.",
+                "Create endpoint manually via create_ai_agent or the Cognigy UI, then provide endpointId.",
             },
           );
         }
@@ -3559,6 +3615,7 @@ export class ToolHandlers {
         return withHints(
           {
             error: "Endpoint found/created but URL token not available.",
+            ...endpointIdField(),
             sessionId,
           },
           {
@@ -3616,14 +3673,13 @@ export class ToolHandlers {
           return withHints(
             {
               error: "Endpoint URL has no URL token.",
-              endpointUrl,
               sessionId,
             },
             {
               likely_cause:
-                "Only the endpoint base URL was passed; a REST endpoint URL ends in the endpoint's URLToken.",
+                "Only the endpoint base URL was passed; a REST endpoint URL ends in the endpoint's URL token.",
               action:
-                "Pass the full endpointUrl from create_ai_agent or list_resources { resourceType: 'endpoint' } (channel rest), or pass aiAgentId instead.",
+                "Pass endpointId (from create_ai_agent or list_resources { resourceType: 'endpoint' }, channel rest), or pass aiAgentId instead.",
             },
           );
         }
@@ -3640,18 +3696,19 @@ export class ToolHandlers {
         {
           error: "Endpoint URL is not a valid absolute URL.",
           detail: urlErr?.message,
-          endpointUrl,
+          ...endpointIdField(),
           sessionId,
         },
         {
           likely_cause:
-            "COGNIGY_ENDPOINT_BASE_URL is misconfigured (it must be an absolute https URL), or the endpointUrl argument is malformed.",
+            "COGNIGY_ENDPOINT_BASE_URL is misconfigured (it must be an absolute https URL), or the endpoint URL argument is malformed.",
           action:
-            "Check the endpoint base URL in the server configuration, or pass a full endpointUrl from list_resources { resourceType: 'endpoint' }.",
+            "Check the endpoint base URL in the server configuration, or pass endpointId from list_resources { resourceType: 'endpoint' }.",
         },
       );
     }
 
+    knownUrls.push(endpointUrl!, targetUrl);
     try {
       const response = await axios.post(targetUrl, payload, {
         headers: {
@@ -3679,14 +3736,14 @@ export class ToolHandlers {
       const result: any = {
         agentResponse,
         sessionId,
-        endpointUrl,
+        ...endpointIdField(),
         testMode: useTestMode,
       };
       if (endpointMeta.autoCreated) result.endpointAutoCreated = true;
       if (endpointMeta.resolved) result.endpointResolved = true;
 
       if (data.verbose) {
-        result.rawResponse = response.data;
+        result.rawResponse = scrub(response.data);
       }
 
       if (!agentResponse) {
@@ -3699,16 +3756,17 @@ export class ToolHandlers {
       return result;
     } catch (error: any) {
       const status: number | undefined = error.response?.status;
-      const detail =
+      const detail = scrubDetail(
         error.response?.data?.error ||
-        error.response?.data?.message ||
-        error.message;
+          error.response?.data?.message ||
+          error.message,
+      );
       return withHints(
         {
           error: `Request failed with status ${status ?? "unknown"}`,
           detail,
           sessionId,
-          endpointUrl,
+          ...endpointIdField(),
           testMode: useTestMode,
         },
         talkToAgentFailureHints(status, sessionId, useTestMode),
@@ -3992,7 +4050,19 @@ export class ToolHandlers {
       });
     }
 
-    const result: any = { items: filtered, total: total ?? filtered.length };
+    const result: any = {
+      items:
+        resourceType === "endpoint"
+          ? filtered.map((ep: any, i: number) =>
+              redactEndpoint(
+                ep,
+                data.revealToken,
+                hasUrlToken(items[i]?.URLToken),
+              ),
+            )
+          : filtered,
+      total: total ?? filtered.length,
+    };
 
     if (filteredClientSide) {
       return withHints(result, {
@@ -4072,14 +4142,26 @@ export class ToolHandlers {
         return this.auditEventForbidden(error);
       throw error;
     }
-    if (raw) return result;
+    if (raw) {
+      const reveal = data.revealToken === true;
+      return resourceType === "endpoint"
+        ? stripTokenKeysDeep(redactEndpoint(result, reveal), reveal)
+        : stripTokenKeysDeep(result);
+    }
 
     const filtered = RESOURCE_FILTERS_GET[resourceType]
       ? RESOURCE_FILTERS_GET[resourceType](result)
       : filterResponse(resourceType, result);
 
-    if (resourceType === "endpoint" && (result as any).URLToken) {
-      filtered.endpointUrl = `${this.endpointBaseUrl}/${(result as any).URLToken}`;
+    if (resourceType === "endpoint") {
+      if ((result as any).URLToken) {
+        filtered.endpointUrl = `${this.endpointBaseUrl}/${(result as any).URLToken}`;
+      }
+      return redactEndpoint(
+        filtered,
+        data.revealToken === true,
+        hasUrlToken((result as any).URLToken),
+      );
     }
 
     return filtered;
@@ -4742,12 +4824,16 @@ export class ToolHandlers {
         const chunks = result.items ?? result;
         return {
           chunks: Array.isArray(chunks)
-            ? chunks.map((c: any) => ({
-                id: c._id || c.id,
-                text: c.text,
-                order: c.order,
-                disabled: c.disabled,
-              }))
+            ? chunks.map((c: any) => {
+                const chunkData = plainObjectCopy(c.data);
+                return {
+                  id: c._id || c.id,
+                  text: c.text,
+                  order: c.order,
+                  disabled: c.disabled,
+                  ...(chunkData ? { data: chunkData } : {}),
+                };
+              })
             : [],
           total: result.total ?? (Array.isArray(chunks) ? chunks.length : 0),
           sourceId: targetSourceId,
@@ -7411,6 +7497,12 @@ export class ToolHandlers {
           _hint:
             "Voice preview settings configured. You can now use manage_voice_gateway to create a voice endpoint, or test voice preview in the Cognigy UI.",
         };
+      }
+      case "get_knowledge_ai": {
+        const settings: any = await this.apiClient.get(
+          `/v2.0/projects/${data.projectId}/settings`,
+        );
+        return buildKnowledgeAiSettings(data.projectId, settings);
       }
       case "set_knowledge_ai": {
         const patchPayload: Record<string, any> = {};
