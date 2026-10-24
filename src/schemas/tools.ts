@@ -5,6 +5,9 @@ const idSchema = z.string().regex(/^[a-f0-9]{24}$/, "Must be a 24-char hex ID");
 const NOT_BOTH_IDS_MESSAGE =
   "Pass either aiAgentId or flowId, not both. Use aiAgentId for a normal agent; use flowId only for a flow driven by an LLM Prompt node (which has no agent resource).";
 
+const REVEAL_TOKEN_MESSAGE =
+  "revealToken: true is only valid with resourceType 'endpoint'.";
+
 const paginationSchema = {
   limit: z.number().int().min(1).max(100).optional(),
   skip: z.number().int().min(0).optional(),
@@ -255,6 +258,7 @@ export const setupLlmSchema = z
 export const talkToAgentSchema = z
   .object({
     endpointUrl: z.string().url().optional(),
+    endpointId: idSchema.optional(),
     aiAgentId: idSchema.optional(),
     projectId: idSchema.optional(),
     message: z.string().min(1),
@@ -264,8 +268,8 @@ export const talkToAgentSchema = z
     verbose: z.boolean().optional(),
     testMode: z.boolean().optional(),
   })
-  .refine((d) => d.endpointUrl || d.aiAgentId, {
-    message: "Either endpointUrl or aiAgentId must be provided",
+  .refine((d) => d.endpointUrl || d.endpointId || d.aiAgentId, {
+    message: "One of endpointUrl, endpointId or aiAgentId must be provided",
     path: ["endpointUrl"],
   });
 
@@ -334,6 +338,8 @@ export const listResourcesSchema = z
     actor: z.array(z.enum(AUDIT_ACTORS)).nonempty().optional(),
     eventType: z.array(z.enum(AUDIT_EVENT_TYPES)).nonempty().optional(),
     user: z.string().min(1).optional(),
+    // endpoint only: include the URL token and URL (a credential).
+    revealToken: z.boolean().optional(),
     sort: z
       .string()
       .regex(
@@ -346,28 +352,38 @@ export const listResourcesSchema = z
   .refine((d) => !(d.aiAgentId && d.flowId), {
     message: NOT_BOTH_IDS_MESSAGE,
     path: ["flowId"],
+  })
+  .refine((d) => !d.revealToken || d.resourceType === "endpoint", {
+    message: REVEAL_TOKEN_MESSAGE,
+    path: ["revealToken"],
   });
 
 // Tool 6: get_resource
-export const getResourceSchema = z.object({
-  resourceType: z.enum([
-    "agent",
-    "flow",
-    "endpoint",
-    "project",
-    "conversation",
-    "session_state",
-    "llm_model",
-    "knowledge_store",
-    "extension",
-    "function",
-    "user",
-    "audit_event",
-  ]),
-  id: z.string().min(1),
-  projectId: idSchema.optional(),
-  raw: z.boolean().optional(),
-});
+export const getResourceSchema = z
+  .object({
+    resourceType: z.enum([
+      "agent",
+      "flow",
+      "endpoint",
+      "project",
+      "conversation",
+      "session_state",
+      "llm_model",
+      "knowledge_store",
+      "extension",
+      "function",
+      "user",
+      "audit_event",
+    ]),
+    id: z.string().min(1),
+    projectId: idSchema.optional(),
+    raw: z.boolean().optional(),
+    revealToken: z.boolean().optional(),
+  })
+  .refine((d) => !d.revealToken || d.resourceType === "endpoint", {
+    message: REVEAL_TOKEN_MESSAGE,
+    path: ["revealToken"],
+  });
 
 // Tool 7: delete_resource
 /**
@@ -977,9 +993,15 @@ const manageKnowledgeAiSettingsSchema = z
     },
   );
 
+const getKnowledgeAiSettingsSchema = z.object({
+  operation: z.literal("get_knowledge_ai"),
+  projectId: idSchema,
+});
+
 export const manageSettingsSchema = z.union([
   manageVoicePreviewSettingsSchema,
   manageKnowledgeAiSettingsSchema,
+  getKnowledgeAiSettingsSchema,
 ]);
 
 // Tool 16: audit_voice_agent

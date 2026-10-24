@@ -666,12 +666,14 @@ describe("talkToAgentSchema", () => {
     expect(result.aiAgentId).toBe(VALID_ID);
   });
 
-  it("rejects when neither endpointUrl nor aiAgentId is provided", () => {
+  it("rejects when none of endpointUrl, endpointId or aiAgentId is provided", () => {
     expect(() =>
       schemas.talkToAgentSchema.parse({
         message: "Hello",
       }),
-    ).toThrow("Either endpointUrl or aiAgentId must be provided");
+    ).toThrow(
+      /endpointUrl.*endpointId.*aiAgentId|endpointId.*endpointUrl.*aiAgentId/s,
+    );
   });
 
   it("rejects invalid URL", () => {

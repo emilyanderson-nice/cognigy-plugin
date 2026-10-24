@@ -26,7 +26,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "create_ai_agent",
     description:
-      "Create a complete AI Agent with auto-provisioned flow, AI Agent Job Node, and REST endpoint. Returns everything needed for talk_to_agent.\n\nIf projectId is omitted, a new project is auto-created using the agent name.\n\nLLM SETUP (required for responses):\n1. Ensure the target project has a working LLM. Prefer reusing connected llm_model resources and their connection resources via manage_packages export/import.\n2. Use setup_llm only if no reusable LLM with connectionId exists or package transfer failed.\n3. If the LLM is not default, assign it via update_ai_agent { aiAgentId, jobConfig: { llmProviderReferenceId: \"<llm referenceId>\" } }.\n\nKNOWLEDGE: knowledgeStoreReferenceId auto-creates a knowledge search tool on the agent's Job Node.\n\nAGENT NODE TYPE: Default to the AI Agent node. Set agentNodeType: 'llmPrompt' only when the user asks for an LLM Prompt node by name. In llmPrompt mode there is no agent resource: systemPrompt drives the node, edit it via manage_flow_nodes update, add tools with create_tool { flowId }, and do not pass knowledgeStoreReferenceId.\n\nReturns: agent, flow, endpoint objects, endpointUrl, llmStatus, projectId, and any created knowledge tool. If llmStatus is 'unknown', set up or reuse a working LLM before calling talk_to_agent.",
+      "Create a complete AI Agent with auto-provisioned flow, AI Agent Job Node, and REST endpoint. Returns everything needed for talk_to_agent.\n\nIf projectId is omitted, a new project is auto-created using the agent name.\n\nLLM SETUP (required for responses):\n1. Ensure the target project has a working LLM. Prefer reusing connected llm_model resources and their connection resources via manage_packages export/import.\n2. Use setup_llm only if no reusable LLM with connectionId exists or package transfer failed.\n3. If the LLM is not default, assign it via update_ai_agent { aiAgentId, jobConfig: { llmProviderReferenceId: \"<llm referenceId>\" } }.\n\nKNOWLEDGE: knowledgeStoreReferenceId auto-creates a knowledge search tool on the agent's Job Node.\n\nAGENT NODE TYPE: Default to the AI Agent node. Set agentNodeType: 'llmPrompt' only when the user asks for an LLM Prompt node by name. In llmPrompt mode there is no agent resource: systemPrompt drives the node, edit it via manage_flow_nodes update, add tools with create_tool { flowId }, and do not pass knowledgeStoreReferenceId.\n\nReturns: agent, flow, endpoint objects, endpointId, hasToken (the endpoint URL and its token are not returned; pass endpointId to talk_to_agent), llmStatus, projectId, and any created knowledge tool. If llmStatus is 'unknown', set up or reuse a working LLM before calling talk_to_agent.",
     annotations: {
       title: "Create AI Agent",
       readOnlyHint: false,
@@ -262,7 +262,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "talk_to_agent",
     description:
-      "Send a message to a Cognigy AI Agent and get its response. Use this to test agent behavior during iterative development.\n\nTwo modes:\n1. DIRECT: Provide endpointUrl (from create_ai_agent or list_resources { resourceType: 'endpoint' }).\n2. BY AGENT: Provide aiAgentId — the tool automatically finds or creates a REST endpoint for the agent's flow.\n\nUse the same sessionId across calls for multi-turn conversations.\n\nBILLING: messages are sent in Cognigy Endpoint Test Mode by default (the /test/<token> URL variant), which keeps them out of the customer's billable conversation count. Cognigy documents a fair-use limit of 600 test messages per hour (scope and enforcement unspecified), so keep automated runs (e.g. red-team probes) within that budget. The tool NEVER sends a billable message on its own: a failure on the test-mode URL is returned as an error with status-aware _hints and is not re-sent, because an HTTP error does not prove the message was not processed (a REST endpoint's Execution Finished transformer can set any status after the flow ran, and a gateway timeout can hide a completed execution), so a replay could execute tools twice. Before re-sending anything, check the original outcome as the hints describe. A billable send happens only with testMode: false, after that check and with the user's consent.\n\nReturns: agentResponse text, sessionId, the regular endpointUrl and testMode (the test-mode URL itself is never returned). Add verbose: true for the full raw API response.",
+      "Send a message to a Cognigy AI Agent and get its response. Use this to test agent behavior during iterative development.\n\nTwo modes:\n1. DIRECT: Provide endpointId (from create_ai_agent or list_resources { resourceType: 'endpoint' }, channel rest). The tool reads the endpoint's token itself, so the token never has to pass through the conversation.\n2. BY AGENT: Provide aiAgentId — the tool automatically finds or creates a REST endpoint for the agent's flow.\n\nendpointUrl is still accepted for compatibility but is a credential; prefer endpointId.\n\nUse the same sessionId across calls for multi-turn conversations.\n\nBILLING: messages are sent in Cognigy Endpoint Test Mode by default (the /test/<token> URL variant), which keeps them out of the customer's billable conversation count. Cognigy documents a fair-use limit of 600 test messages per hour (scope and enforcement unspecified), so keep automated runs (e.g. red-team probes) within that budget. The tool NEVER sends a billable message on its own: a failure on the test-mode URL is returned as an error with status-aware _hints and is not re-sent, because an HTTP error does not prove the message was not processed (a REST endpoint's Execution Finished transformer can set any status after the flow ran, and a gateway timeout can hide a completed execution), so a replay could execute tools twice. Before re-sending anything, check the original outcome as the hints describe. A billable send happens only with testMode: false, after that check and with the user's consent.\n\nReturns: agentResponse text, sessionId, endpointId (when known) and testMode (no endpoint URL is ever returned). Add verbose: true for the full raw API response.",
     annotations: {
       title: "Talk to Agent",
       readOnlyHint: false,
@@ -276,17 +276,22 @@ export const tools: ToolDefinition[] = [
         endpointUrl: {
           type: "string",
           description:
-            "REST endpoint URL (e.g., https://endpoint-trial.cognigy.ai/xxxxx). If omitted, provide aiAgentId instead.",
+            "Full REST endpoint URL (the token is a credential). Accepted for compatibility; prefer endpointId. Takes precedence over endpointId and aiAgentId.",
+        },
+        endpointId: {
+          type: "string",
+          description:
+            "24-char hex ID of a REST endpoint (from create_ai_agent or list_resources { resourceType: 'endpoint' }). The tool looks up the token itself. Takes precedence over aiAgentId.",
         },
         aiAgentId: {
           type: "string",
           description:
-            "24-char hex AI Agent ID. When endpointUrl is omitted, the tool finds or auto-creates a REST endpoint for this agent's flow.",
+            "24-char hex AI Agent ID. When endpointUrl and endpointId are omitted, the tool finds or auto-creates a REST endpoint for this agent's flow.",
         },
         projectId: {
           type: "string",
           description:
-            "24-char hex project ID. Pass alongside aiAgentId when known (returned by create_ai_agent and list_resources) — saves a server-side lookup that can fail. Not used when endpointUrl is provided.",
+            "24-char hex project ID. Pass alongside aiAgentId when known (returned by create_ai_agent and list_resources) — saves a server-side lookup that can fail. Not used when endpointUrl or endpointId is provided.",
         },
         message: {
           type: "string",
@@ -324,7 +329,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "list_resources",
     description:
-      "List resources in a Cognigy project. Use this to discover projects, agents, flows, endpoints, LLM models, knowledge stores, conversations, extensions, functions, tools, audit events, or project logs.\n\n'log' (project-scoped, needs projectId, read-only) reads the project's runtime logs, typically about 24 hours deep: start with the default summary view (it reads up to 300 entries spread evenly across the matching entries when there are more than 300, and its counts describe that sample), then narrow with search, logLevel, flowName, a shorter startDate/endDate window or sessionId, and use view 'entries' (skip pages it) for individual lines. meta.text and meta.URLToken are never included in the output; message text (msg) is scrubbed best-effort (emails, tokens, long digit runs), capped at 500 characters, and may still contain personal data. The log-only fields are logLevel, search, flowName, sessionId and view; sessionId cannot be combined with startDate, endDate, search, sort, skip or limit.\n\nSet resourceType to 'project' to find projectIds (no projectId needed). 'tool' requires aiAgentId (or flowId, for LLM Prompt flows that have no agent resource) instead of projectId. 'audit_event' is organisation-scoped and takes no projectId — it answers \"who changed what\" questions: `{ resourceType: 'audit_event', actor: ['mcp-plugin'], sort: 'timestamp:desc' }` lists exactly the changes this plugin made, and `actor: ['human']` the ones people made by hand. Each item carries `performedBy` for non-human actors; a missing `performedBy` means a person performed it. Needs Cognigy 2026.17.0+ and an API key with Admin Center access. All other types require projectId. For `llm_model`, you can also pass `useCase` to match the UI's use-case-filtered model dropdowns (for example `knowledgeSearch`). Packages are handled through manage_packages.\n\nUse `sort` for recency questions instead of paging through everything: `sort: 'lastChanged:desc', limit: 5` answers \"which project was touched most recently\" in one call. To attribute a change to a person, get the current user's id from get_resource { resourceType: 'user', id: 'me' } and compare it against `lastChangedBy` from get_resource { resourceType: 'project', id, raw: true } — list items omit `lastChangedBy` to save tokens.\n\nFor every type except log, returns a paginated list with id, name, and type-specific fields. For log, returns a summary or entries body (see the log paragraph above).",
+      "List resources in a Cognigy project. Use this to discover projects, agents, flows, endpoints, LLM models, knowledge stores, conversations, extensions, functions, tools, audit events, or project logs.\n\n'log' (project-scoped, needs projectId, read-only) reads the project's runtime logs, typically about 24 hours deep: start with the default summary view (it reads up to 300 entries spread evenly across the matching entries when there are more than 300, and its counts describe that sample), then narrow with search, logLevel, flowName, a shorter startDate/endDate window or sessionId, and use view 'entries' (skip pages it) for individual lines. meta.text and meta.URLToken are never included in the output; message text (msg) is scrubbed best-effort (emails, tokens, long digit runs), capped at 500 characters, and may still contain personal data. The log-only fields are logLevel, search, flowName, sessionId and view; sessionId cannot be combined with startDate, endDate, search, sort, skip or limit.\n\nSet resourceType to 'project' to find projectIds (no projectId needed). 'tool' requires aiAgentId (or flowId, for LLM Prompt flows that have no agent resource) instead of projectId. 'audit_event' is organisation-scoped and takes no projectId — it answers \"who changed what\" questions: `{ resourceType: 'audit_event', actor: ['mcp-plugin'], sort: 'timestamp:desc' }` lists exactly the changes this plugin made, and `actor: ['human']` the ones people made by hand. Each item carries `performedBy` for non-human actors; a missing `performedBy` means a person performed it. Needs Cognigy 2026.17.0+ and an API key with Admin Center access. All other types require projectId. For `llm_model`, you can also pass `useCase` to match the UI's use-case-filtered model dropdowns (for example `knowledgeSearch`). Packages are handled through manage_packages.\n\nUse `sort` for recency questions instead of paging through everything: `sort: 'lastChanged:desc', limit: 5` answers \"which project was touched most recently\" in one call. To attribute a change to a person, get the current user's id from get_resource { resourceType: 'user', id: 'me' } and compare it against `lastChangedBy` from get_resource { resourceType: 'project', id, raw: true } — list items omit `lastChangedBy` to save tokens.\n\nENDPOINTS: items carry hasToken (boolean) but NOT the URL token or endpoint URL, which are credentials. Pass the endpoint's id to talk_to_agent { endpointId }. Set revealToken: true only when a URL is really needed: anyone holding the token can send messages to the endpoint.\n\nFor every type except log, returns a paginated list with id, name, and type-specific fields. For log, returns a summary or entries body (see the log paragraph above).",
     annotations: {
       title: "List Resources",
       readOnlyHint: true,
@@ -452,6 +457,11 @@ export const tools: ToolDefinition[] = [
           description:
             "log only — 'summary' (default) returns level counts, time span, the most frequent message templates and flows; 'entries' returns individual entries with msg scrubbed best-effort (limit 1-100, page with skip).",
         },
+        revealToken: {
+          type: "boolean",
+          description:
+            "endpoint only — include the URL token and endpoint URL, which are credentials: anyone holding the token can send messages to the endpoint. Default false (items show hasToken instead). Use only when a URL is really needed; talk_to_agent takes endpointId.",
+        },
         limit: {
           type: "number",
           description:
@@ -471,7 +481,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "get_resource",
     description:
-      "Get detailed information about a single Cognigy resource. Returns a summary view by default. Set `raw: true` for the complete unfiltered API response with all fields.\n\nUse list_resources first to find IDs. Supports all list_resources types plus 'session_state' for session context data and 'user' for accounts. 'audit_event' returns one audit event including its `performedBy` attribution.\n\nresourceType 'user' with id 'me' returns the account the API key belongs to — use it before claiming a resource was changed by the user, since `createdBy` / `lastChangedBy` are opaque ids that mean nothing on their own. Pass a 24-char hex id instead of 'me' to identify another user (requires user-management permissions).",
+      "Get detailed information about a single Cognigy resource. Returns a summary view by default. Set `raw: true` for the complete unfiltered API response with all fields.\n\nUse list_resources first to find IDs. Supports all list_resources types plus 'session_state' for session context data and 'user' for accounts. 'audit_event' returns one audit event including its `performedBy` attribution.\n\nresourceType 'user' with id 'me' returns the account the API key belongs to — use it before claiming a resource was changed by the user, since `createdBy` / `lastChangedBy` are opaque ids that mean nothing on their own. Pass a 24-char hex id instead of 'me' to identify another user (requires user-management permissions).\n\nENDPOINTS: the URL token and endpoint URL are credentials and are left out (hasToken is shown instead), also with raw: true. Pass the id to talk_to_agent { endpointId }. Set revealToken: true only when a URL is really needed.",
     annotations: {
       title: "Get Resource",
       readOnlyHint: true,
@@ -513,6 +523,11 @@ export const tools: ToolDefinition[] = [
           type: "boolean",
           description:
             "If true, return unfiltered API response (default: false)",
+        },
+        revealToken: {
+          type: "boolean",
+          description:
+            "endpoint only — include the URL token and endpoint URL (also with raw: true), which are credentials: anyone holding the token can send messages to the endpoint. Default false (hasToken is shown instead). Use only when a URL is really needed; talk_to_agent takes endpointId.",
         },
       },
       required: ["resourceType", "id"],
@@ -2038,7 +2053,7 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
   {
     name: "manage_settings",
     description:
-      'Manage project-level settings in Cognigy, including Voice Preview Settings and Knowledge AI Settings.\n\nOperations:\n- set_voice_preview: Configure the speech provider for voice preview. Requires projectId and provider. If connectionId is omitted, the tool auto-detects an existing speech connection for the chosen provider. If no connection is found, it returns instructions to upload a package containing one via manage_packages.\n- set_knowledge_ai: Configure Knowledge AI Settings for the project. For normal AI-agent knowledge-store setups, use this before creating the knowledge store. Model IDs must be llm_model referenceIds from the SAME project. These are separate from the embedding-model settings used by manage_knowledge for knowledge-store indexing. The accepted model type for knowledgeSearchModelId can vary by Cognigy instance. Use list_resources { resourceType: "llm_model", projectId, useCase: "knowledgeSearch" } to match the Cognigy Settings UI dropdown when choosing candidates. If you are reusing another project\'s knowledge workflow, import the exact source-project Knowledge Search model into the target project before the first set_knowledge_ai attempt.\n\nSupported speech providers: microsoft, google, aws, deepgram, elevenlabs.',
+      'Manage project-level settings in Cognigy, including Voice Preview Settings and Knowledge AI Settings.\n\nOperations:\n- set_voice_preview: Configure the speech provider for voice preview. Requires projectId and provider. If connectionId is omitted, the tool auto-detects an existing speech connection for the chosen provider. If no connection is found, it returns instructions to upload a package containing one via manage_packages.\n- set_knowledge_ai: Configure Knowledge AI Settings for the project. For normal AI-agent knowledge-store setups, use this before creating the knowledge store. Model IDs must be llm_model referenceIds from the SAME project. These are separate from the embedding-model settings used by manage_knowledge for knowledge-store indexing. The accepted model type for knowledgeSearchModelId can vary by Cognigy instance. Use list_resources { resourceType: "llm_model", projectId, useCase: "knowledgeSearch" } to match the Cognigy Settings UI dropdown when choosing candidates. If you are reusing another project\'s knowledge workflow, import the exact source-project Knowledge Search model into the target project before the first set_knowledge_ai attempt.\n- get_knowledge_ai: Read the project\'s Knowledge AI Settings (read-only; requires projectId). Returns { projectId, knowledgeAI: { fileExtractor, azureDIConnectionId }, generativeAI: { enabled, useCasesSettings } } and nothing else from the project settings.\n\nSupported speech providers: microsoft, google, aws, deepgram, elevenlabs.',
     annotations: {
       title: "Manage Settings",
       readOnlyHint: false,
@@ -2051,7 +2066,7 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
       properties: {
         operation: {
           type: "string",
-          enum: ["set_voice_preview", "set_knowledge_ai"],
+          enum: ["set_voice_preview", "set_knowledge_ai", "get_knowledge_ai"],
           description: "Which operation to perform",
         },
         projectId: {

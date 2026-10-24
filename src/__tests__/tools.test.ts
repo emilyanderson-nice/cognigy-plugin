@@ -110,9 +110,11 @@ describe("ToolHandlers v2", () => {
       expect(result.agent).toBeDefined();
       expect(result.flow).toBeDefined();
       expect(result.endpoint).toBeDefined();
-      expect(result.endpointUrl).toBe(
-        "https://endpoint-trial.cognigy.ai/abc123",
-      );
+      // The token is a credential: the result names the endpoint by id only.
+      expect(result.endpointUrl).toBeUndefined();
+      expect(result.endpointId).toBe(ID.endpoint);
+      expect(result.hasToken).toBe(true);
+      expect(JSON.stringify(result)).not.toContain("abc123");
       expect(result.llmStatus).toBe("configured");
       expect(result._hints).toBeUndefined();
       expect(api.post).toHaveBeenNthCalledWith(
@@ -1081,8 +1083,10 @@ describe("ToolHandlers v2", () => {
       // The axios.post to the endpoint URL will fail (no real server),
       // but we can verify that the endpoint was resolved
       expect(result.sessionId).toBeDefined();
-      // The endpoint URL should be constructed from the URLToken
-      expect(result.endpointUrl || result.error || result._hints).toBeDefined();
+      // The endpoint is identified by id; the URL (token) is never returned.
+      expect(result.endpointUrl).toBeUndefined();
+      expect(result.endpointId).toBe(ID.endpoint);
+      expect(JSON.stringify(result)).not.toContain("abc123token");
     });
 
     it("auto-creates REST endpoint when none exists", async () => {
@@ -2733,8 +2737,29 @@ describe("ToolHandlers v2", () => {
         id: ID.endpoint,
       });
 
-      expect(result.URLToken).toBe("tok");
+      // Redacted by default (see endpointRedaction.test.ts for the full matrix).
+      expect(result.URLToken).toBeUndefined();
+      expect(result.hasToken).toBe(true);
       expect(result.secret).toBeUndefined();
+    });
+
+    it("returns the token fields only with revealToken: true", async () => {
+      api.get.mockResolvedValue({
+        _id: ID.endpoint,
+        name: "EP",
+        channel: "rest",
+        flowId: "f1",
+        URLToken: "tok",
+        createdAt: "2024-01-01",
+      });
+
+      const result = await h.handleToolCall("get_resource", {
+        resourceType: "endpoint",
+        id: ID.endpoint,
+        revealToken: true,
+      });
+
+      expect(result.URLToken).toBe("tok");
     });
   });
 

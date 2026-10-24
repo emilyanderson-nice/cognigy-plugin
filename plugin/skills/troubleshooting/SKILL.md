@@ -14,7 +14,7 @@ description: "Use when a Cognigy agent returns empty responses, a tool call or c
    If none: run setup_llm
 3. Check agent description is not empty: get_resource { resourceType: "agent", id }
 4. Check endpoint is connected: get_resource { resourceType: "endpoint", id }
-   Verify flowId is set and URLToken exists
+   Verify flowId is set and hasToken is true
 5. Endpoint JUST created (seconds ago)? Endpoint config propagates briefly, and a
    session whose FIRST message hit the stale config stays cached as broken — wait a
    few seconds and retry with a NEW sessionId, not the same one.
@@ -31,7 +31,7 @@ The agent says it has no knowledge about a topic that is in the knowledge store,
 talk_to_agent sends through Cognigy Endpoint Test Mode (`/test/<token>`) so test
 messages are not counted as billable. It **never** re-sends a failed message on the regular
 (billable) endpoint by itself; a failure comes back as `error` with `testMode`,
-`endpointUrl` and status-aware `_hints`.
+`endpointId` and status-aware `_hints`.
 
 **Step 1, always: find out whether the message was processed.** An HTTP error
 does not prove it was not. A REST endpoint's Execution Finished transformer runs
@@ -59,7 +59,7 @@ regular path, so a status alone never identifies a test-mode problem.
   `get_resource { resourceType: "endpoint", id, raw: true }` shows the token
   matches and no Execution Finished transformer is enabled.
 - **400** — unknown URL token, invalid payload, or a transformer-set status.
-  Verify the endpoint (`channel: rest`, `URLToken` present) and the payload.
+  Verify the endpoint (`channel: rest`, `hasToken: true`) and the payload.
 - **401 / 403** — authorization, IP/WAF block or an endpoint restriction, which
   would hit the regular URL as well. Fix what `detail` names; do not read it as
   "quota exhausted".

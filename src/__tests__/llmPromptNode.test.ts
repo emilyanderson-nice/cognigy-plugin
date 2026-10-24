@@ -97,9 +97,10 @@ describe("LLM Prompt node support", () => {
       expect(result.agentNodeType).toBe("llmPrompt");
       expect(result.promptNode.nodeId).toBe(ID.node);
       expect(result.promptNode.type).toBe("llmPromptV2");
-      expect(result.endpointUrl).toBe(
-        "https://endpoint-trial.cognigy.ai/abc123",
-      );
+      expect(result.endpointUrl).toBeUndefined();
+      expect(result.endpointId).toBe(ID.endpoint);
+      expect(result.hasToken).toBe(true);
+      expect(JSON.stringify(result)).not.toContain("abc123");
       expect(result.llmStatus).toBe("configured");
       expect(result._hints.hint).toContain("manage_flow_nodes");
 

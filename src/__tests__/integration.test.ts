@@ -44,9 +44,9 @@ describe.skip("Integration Tests (v2)", () => {
     });
     expect(created.agent).toBeDefined();
 
-    if (created.endpointUrl && created.endpointUrl !== "URL not available") {
+    if (created.endpointId) {
       const talked = await toolHandlers.handleToolCall("talk_to_agent", {
-        endpointUrl: created.endpointUrl,
+        endpointId: created.endpointId,
         message: "Hello",
       });
       expect(talked.sessionId).toBeDefined();

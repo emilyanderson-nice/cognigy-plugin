@@ -17,7 +17,7 @@ You have the Cognigy MCP tools (`list_resources`, `create_ai_agent`, `setup_llm`
    - If none and the user has other projects, look there. If another project has a reusable LLM + connection, **reuse it via packages** (`manage_packages`: `list_exportable` → `export` the `largeLanguageModel` + its `connection` → `upload_and_inspect` → `import` → verify with `list_resources`). Prefer reuse over creating new.
    - Only as a last resort, `setup_llm` — and ask the user for provider/model/credentials (apiKey for most providers; AWS access keys or a role ARN for awsBedrock). **Never hallucinate keys, connection URLs, or credentials.** Connections are project-scoped; never pass a cross-project `connectionId`.
 3. **Create the agent.** `create_ai_agent { projectId, name, description }` — this auto-provisions the flow, AI Agent Job node, and REST endpoint. Do not create those separately.
-4. **Test (only with a confirmed working LLM).** `talk_to_agent { endpointUrl, message }`. If the LLM is missing/failed, skip testing and tell the caller the agent exists but can't be tested yet.
+4. **Test (only with a confirmed working LLM).** `talk_to_agent { endpointId, message }`. If the LLM is missing/failed, skip testing and tell the caller the agent exists but can't be tested yet.
 5. **Refine.** `update_ai_agent`, writing each field the way the `agent-prompts` skill lays out: persona in `description`, communication and guardrails in `instructions`, scope in `jobDescription`, flow, tool use and handover in `jobInstructions`. Number only real sequences; each rule in one place.
 6. **Check consistency.** After `create_tool` or any change to the agent's `instructions`, `jobDescription` or `jobInstructions`, run **Check that the agent and its tools agree** from the `agent-creation` skill so no tool description contradicts the agent's instructions (for example about authorization).
 7. **Iterate** steps 4–6 until the behavior matches the request.
@@ -28,4 +28,4 @@ You have the Cognigy MCP tools (`list_resources`, `create_ai_agent`, `setup_llm`
 - All custom logic belongs INSIDE tools (`create_tool`), never as standalone nodes before the AI Agent Job node — that causes loops.
 - Reuse an existing LLM + connection via packages before `setup_llm`.
 - Consult the preloaded `agent-creation` skill for the field reference and the `agent-prompts` skill for how to write the prompt fields.
-- Your final message is a report to the main thread: return the agent id, the endpoint URL from `create_ai_agent` (never a `/test/` URL — talk_to_agent runs in test mode internally), LLM status, and a one-line test result. Be terse.
+- Your final message is a report to the main thread: return the agent id, the `endpointId` from `create_ai_agent` (never an endpoint URL or token: they are credentials, and talk_to_agent runs in test mode internally), LLM status, and a one-line test result. Be terse.

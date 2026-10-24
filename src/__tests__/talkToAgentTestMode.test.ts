@@ -51,9 +51,9 @@ describe("talk_to_agent — endpoint test mode", () => {
     expect(post).toHaveBeenCalledTimes(1);
     expect(post.mock.calls[0][0]).toBe(TEST);
     expect(result.agentResponse).toBe("hello");
-    // The result names the regular endpoint; the test-mode URL is a transport
-    // detail and is never returned.
-    expect(result.endpointUrl).toBe(PROD);
+    // Neither URL is returned: the URL embeds the endpoint token (a credential).
+    expect(result.endpointUrl).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain("abc123token");
     expect(result.testMode).toBe(true);
     expect(result._hints).toBeUndefined();
   });
@@ -89,7 +89,8 @@ describe("talk_to_agent — endpoint test mode", () => {
 
     expect(post).toHaveBeenCalledTimes(1);
     expect(post.mock.calls[0][0]).toBe(PROD);
-    expect(result.endpointUrl).toBe(PROD);
+    expect(result.endpointUrl).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain("abc123token");
     expect(result.testMode).toBe(false);
   });
 
@@ -121,7 +122,8 @@ describe("talk_to_agent — endpoint test mode", () => {
       expect(post).toHaveBeenCalledTimes(1);
       expect(post.mock.calls[0][0]).toBe(TEST);
       expect(result.error).toBe(`Request failed with status ${statusLabel}`);
-      expect(result.endpointUrl).toBe(PROD);
+      expect(result.endpointUrl).toBeUndefined();
+      expect(JSON.stringify(result)).not.toContain("abc123token");
       expect(result.testMode).toBe(true);
       expect(result.sessionId).toBe(SESSION);
       expect(result._hints.warning).toMatch(/does not prove/i);
@@ -277,7 +279,8 @@ describe("talk_to_agent — endpoint test mode", () => {
 
     expect(post).not.toHaveBeenCalled();
     expect(result.error).toBe("Endpoint URL is not a valid absolute URL.");
-    expect(result.endpointUrl).toBe("endpoint-trial.cognigy.ai/abc123token");
+    expect(result.endpointUrl).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain("abc123token");
     expect(result._hints.likely_cause).toContain("COGNIGY_ENDPOINT_BASE_URL");
   });
 
@@ -361,9 +364,8 @@ describe("talk_to_agent — URL construction edge cases", () => {
     expect(post.mock.calls[0][0]).toBe(
       "https://bots.corp.example/test/test/abc123token",
     );
-    expect(result.endpointUrl).toBe(
-      "https://bots.corp.example/test/abc123token",
-    );
+    expect(result.endpointUrl).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain("abc123token");
     expect(result.testMode).toBe(true);
   });
 

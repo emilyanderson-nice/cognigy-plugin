@@ -106,6 +106,7 @@ If you provide `knowledgeSearchModelId` or `answerExtractionModelId`, the tool a
 
 ### Important Notes
 
+- To read the current Knowledge AI settings, use `manage_settings { operation: "get_knowledge_ai", projectId }` (read-only; returns `knowledgeAI` and `generativeAI`, nothing else from the project settings).
 - Knowledge AI model IDs must come from the SAME project. Use `list_resources { resourceType: "llm_model", projectId }` to find them.
 - For Knowledge Search, prefer `list_resources { resourceType: "llm_model", projectId, useCase: "knowledgeSearch" }` so the candidate set matches the Settings UI dropdown.
 - `knowledgeSearchModelId` is not the embedding-model field used by `manage_knowledge`
