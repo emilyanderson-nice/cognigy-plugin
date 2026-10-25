@@ -563,8 +563,18 @@ export const updateToolSchema = z
   });
 
 // Tool 12: manage_flow_nodes
+// Emptiness is reported per field by utils/fileAccess, not as a schema failure.
+const filePathSchema = z.string().max(1000);
 export const manageFlowNodesSchema = z.object({
-  operation: z.enum(["list", "get", "create", "update", "delete", "render"]),
+  operation: z.enum([
+    "list",
+    "get",
+    "create",
+    "update",
+    "delete",
+    "render",
+    "compare",
+  ]),
   flowId: idSchema,
   nodeId: idSchema.optional(),
   nodeType: z.string().optional(),
@@ -584,6 +594,31 @@ export const manageFlowNodesSchema = z.object({
   legend: z.boolean().optional(),
   writeHtml: z.boolean().optional(),
   openInBrowser: z.boolean().optional(),
+  // file-backed large fields (get / update / compare) — see tools/flowNodeFiles.ts
+  fields: z.array(z.string().min(1).max(200)).max(50).optional(),
+  saveTo: z
+    .record(z.string().min(1).max(200), filePathSchema)
+    .refine((r) => Object.keys(r).length <= 50, {
+      message: "saveTo accepts at most 50 entries.",
+    })
+    .optional(),
+  overwrite: z.boolean().optional(),
+  configFromFiles: z
+    .record(
+      z
+        .string()
+        .regex(/^[A-Za-z0-9_]{1,64}$/)
+        .refine((k) => !["__proto__", "constructor", "prototype"].includes(k), {
+          message: "configFromFiles key is not allowed.",
+        }),
+      filePathSchema,
+    )
+    .refine((r) => Object.keys(r).length <= 20, {
+      message: "configFromFiles accepts at most 20 entries.",
+    })
+    .optional(),
+  field: z.string().min(1).max(200).optional(),
+  file: filePathSchema.optional(),
 });
 
 // Tool 13: manage_packages

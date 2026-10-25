@@ -898,6 +898,17 @@ After a node create/update/delete, offer a render once, in one short line (do no
 
 ---
 
+## Large fields and files
+
+A prompt or code field can be tens of thousands of characters. Do not fetch it again and again or paste it into a call; use files.
+
+- `get` with `fields: ["config.code", "label"]` returns only those dotted paths (plus `id`); paths that do not exist are listed in `missingFields`.
+- `get` with `saveTo: { "config.code": "notes/code.ts" }` (the key must also be in `fields`) writes the field to a file and returns `{ savedTo, bytes, sha256 }` in its place. An existing file is an error unless `overwrite: true`.
+- `update` with `configFromFiles: { "code": "notes/code.ts" }` reads the file into that top-level config key (the key may not also be in `config`). A Code node still gets its error handling added, so the file holds only your code. If any file fails, no API call is made.
+- `compare` with `nodeId`, `field` and `file` returns `{ equal, liveBytes, fileBytes, liveSha256, fileSha256, firstDiffByte }`; use it to confirm the node matches the file after an update.
+
+Rules: file paths must be inside the project working directory (or the directory in `COGNIGY_FILE_ROOT`); symlinks and junctions are refused; a file is at most 2 MiB; content is UTF-8 and is written and read byte-exact for valid text (no newline conversion). Parent directories must already exist. Some paths are always refused, even inside the root: git/IDE/CI config (`.git`, `.vscode`, `.github`, `.husky`, `.claude`), credentials and key files (`.env*`, `.ssh`, `.aws`, `*.pem`, `*.key`), package manifests (`package.json`, `node_modules`) and shell startup files (`.bashrc`, `.zshrc`, `.profile`). The root must not be the home directory or a drive root. If a `saveTo` write fails, that field comes back as `{ notSaved: true }` with an entry in `saveErrors`, never as content; one call saves at most 10 MiB in total. File content is never returned, and saved files can hold personal data, so keep them out of commits.
+
 ## Notes
 
 - **Tool parameters**: Inside AI Agent tool branches, the LLM's tool call parameters are available at `input.aiAgent.toolArgs`, **NOT** `input.data`. For example, if the tool defines a `city` parameter, access it as `input.aiAgent.toolArgs.city` in Code nodes or `{{input.aiAgent.toolArgs.city}}` in CognigyScript fields. **Under an LLM Prompt (`llmPromptV2`) node the parameters live at `input.llmPrompt.toolArgs` instead** — `input.aiAgent` is `null` there, so reading `input.aiAgent.toolArgs` returns `undefined` and the tool runs with no arguments (a silent fallback, no error). For a tool that may run under either node type, read defensively: `const args = (input.llmPrompt && input.llmPrompt.toolArgs) || (input.aiAgent && input.aiAgent.toolArgs) || {};`.

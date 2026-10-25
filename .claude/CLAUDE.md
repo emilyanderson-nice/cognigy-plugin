@@ -87,6 +87,10 @@ Attribution is self-declared provenance, **not** a security control: service-api
 
 `list_resources { resourceType: 'log', projectId }` reads the project Logs page (`GET /v2.1/projects/{id}/logs`, `/logs/tail` for `sessionId`). Behaviour findings with evidence classes are in `docs/platform-versions/` (L1-L11). Code: `src/tools/logReader.ts` (paging, deadline, fixed error texts), `logNetworkError.ts` (allowlisted network codes, status-less failures only), `logScrub.ts` (scrub, template, entry allowlist), `logSummary.ts` (aggregation); `handlers.ts` only delegates. It is summary-first because one hour of one project held ~13k near-identical entries. Invariants: output is built field by field (never spread an upstream object), `meta` is allowlisted (`flowId`, `flowName`, `channel`; `meta.text` and `meta.URLToken` are never returned; `msg` is scrubbed best-effort (emails, tokens, long digit runs), capped at 500 characters, and may still contain personal data), upstream error text is never echoed, and `get_resource`/`delete_resource` do not accept `log`. Upstream error text is never echoed; only enumerated network error codes are named. The summary samples up to 300 entries spread across the window (newest, middle, oldest) when more match.
 
+## Large node fields via files
+
+`manage_flow_nodes` takes `fields`/`saveTo` (get), `configFromFiles` (update) and `compare` so big prompts/code move through files instead of the context window (`src/tools/flowNodeFiles.ts`, safe I/O in `src/utils/fileAccess.ts`): paths stay inside the project working directory or `COGNIGY_FILE_ROOT` (never the home directory or a drive root; git/IDE/CI config, credential and key files, package manifests and shell startup files are denied even inside it), no symlinks, 2 MiB cap, UTF-8 byte-exact, `overwrite` is opt-in, content is never returned, and saved files may hold personal data so keep them out of commits.
+
 ## Flow-chart model — gotchas (hard-won)
 
 Endpoints under `/v2.0/flows/{flowId}/chart`:
