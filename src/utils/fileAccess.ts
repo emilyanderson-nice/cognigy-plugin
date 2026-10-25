@@ -124,6 +124,14 @@ export function resolveInRoot(
   if (/^[\\/]{2}/.test(input)) {
     return fail("invalid_path", "Network and device paths are not allowed.");
   }
+  // A backslash separates segments for the deny check on every platform, so
+  // `.git\config` is refused on POSIX too (where it is otherwise one file name).
+  // Absolute inputs are checked below, relative to the root, to avoid judging
+  // the directories above it.
+  const rawSegments = input.split(/[\\/]+/).filter((s) => s !== "");
+  if (!path.isAbsolute(input) && isDeniedPath(rawSegments)) {
+    return fail("denied_path", "Access to this path is not allowed.");
+  }
   const realRoot = canonicalRoot(root);
   const windows = platform === "win32";
   if (windows && /^[A-Za-z]:(?![\\/])/.test(input)) {
@@ -155,7 +163,10 @@ export function resolveInRoot(
   }
   if (!isInside(realRoot, abs)) return fail("outside_root", OUTSIDE);
 
-  const rel = path.relative(realRoot, abs).split(path.sep);
+  const rel = path
+    .relative(realRoot, abs)
+    .split(path.sep)
+    .flatMap((s) => s.split("\\"));
   if (isDeniedPath(rel)) {
     return fail("denied_path", "Access to this path is not allowed.");
   }
@@ -245,6 +256,7 @@ export async function readTextFile(
   }
   if (bytes.length > maxBytes) tooBig();
   try {
+    // ignoreBOM: true KEEPS a leading BOM in the output (as U+FEFF); it does not strip it.
     return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
       bytes,
     );

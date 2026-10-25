@@ -10,6 +10,7 @@ import {
   assertThat,
   attempt,
   describeOutcome,
+  sha256,
   CAN_DIR_SYMLINK,
   CAN_FILE_SYMLINK,
   makeRoot,
@@ -44,12 +45,7 @@ const BAD_PATHS: Array<[string, () => unknown]> = [
   ["non-string undefined", () => undefined],
   ["parent escape", () => "../x.txt"],
   ["deep parent escape", () => "inner/../../x.txt"],
-  ["back-slash parent escape", () => "..\\x.txt"],
   ["leaves and re-enters the root", () => `../${rootName()}/inner/ok.txt`],
-  [
-    "leaves and re-enters (back slashes)",
-    () => `..\\${rootName()}\\inner\\ok.txt`,
-  ],
   ["absolute path outside root", () => path.join(outside, "secret.txt")],
   ["the root itself", () => root],
   ["the root itself with a trailing separator", () => root + path.sep],
@@ -59,6 +55,16 @@ const BAD_PATHS: Array<[string, () => unknown]> = [
   ["extended-length prefix", () => "\\\\?\\C:\\Windows\\win.ini"],
   ["device namespace prefix", () => "\\\\.\\C:\\x.txt"],
 ];
+// A backslash is a separator only on Windows; on POSIX these are literal names.
+if (process.platform === "win32") {
+  BAD_PATHS.push(
+    ["back-slash parent escape", () => "..\\x.txt"],
+    [
+      "leaves and re-enters (back slashes)",
+      () => `..\\${rootName()}\\inner\\ok.txt`,
+    ],
+  );
+}
 
 describe("fileAccess security: path rejection", () => {
   it.each(BAD_PATHS)("resolveInRoot rejects %s", async (label, make) => {
@@ -115,16 +121,54 @@ describe("fileAccess security: path rejection", () => {
     expect(out).toEqual({ ok: true, value: "ok" });
   });
 
-  it("accepts forward and back slash forms of the same inside path", async () => {
-    expect(await attempt(() => readTextFile("inner/ok.txt", root))).toEqual({
-      ok: true,
-      value: "ok",
-    });
-    expect(await attempt(() => readTextFile("inner\\ok.txt", root))).toEqual({
-      ok: true,
-      value: "ok",
-    });
-  });
+  const itWin = process.platform === "win32" ? it : it.skip;
+  const itPosix = process.platform !== "win32" ? it : it.skip;
+
+  itWin(
+    "accepts forward and back slash forms of the same inside path (win32)",
+    async () => {
+      expect(await attempt(() => readTextFile("inner/ok.txt", root))).toEqual({
+        ok: true,
+        value: "ok",
+      });
+      expect(await attempt(() => readTextFile("inner\\ok.txt", root))).toEqual({
+        ok: true,
+        value: "ok",
+      });
+    },
+  );
+
+  itPosix(
+    "treats a backslash as a literal file-name character (POSIX)",
+    async () => {
+      const w = await attempt(() => writeTextFile("a\\b.txt", "lit", root));
+      expect(w).toEqual({
+        ok: true,
+        value: { path: "a\\b.txt", bytes: 3, sha256: sha256("lit") },
+      });
+      expect(fs.readdirSync(root)).toContain("a\\b.txt");
+      expect(await attempt(() => readTextFile("a\\b.txt", root))).toEqual({
+        ok: true,
+        value: "lit",
+      });
+    },
+  );
+
+  itPosix(
+    "..\\x.txt is a literal name inside ROOT, not an escape (POSIX)",
+    async () => {
+      const w = await attempt(() => writeTextFile("..\\x.txt", "lit", root));
+      assertThat(w.ok, {
+        what: "write '..\\x.txt' on POSIX",
+        why: "a backslash is not a separator on POSIX, so this is one file name in ROOT",
+        expected: "success; file named '..\\x.txt' directly in ROOT",
+        actual: describeOutcome(w),
+        guidance: "only normalise backslashes to separators on win32",
+      });
+      expect(fs.readdirSync(root)).toContain("..\\x.txt");
+      expect(fs.existsSync(path.join(path.dirname(root), "x.txt"))).toBe(false);
+    },
+  );
 
   it("rejection messages never contain an absolute path outside ROOT or file contents", async () => {
     const target = path.join(outside, "secret.txt");

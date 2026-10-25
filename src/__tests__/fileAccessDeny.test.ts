@@ -126,6 +126,38 @@ describe("fileAccess deny list (S1)", () => {
     expect(hasCode(out, "denied_path")).toBe(true);
   });
 
+  it.each([
+    ".git\\config",
+    ".claude\\settings.json",
+    "sub\\.env",
+    "..\\.git\\hooks\\pre-commit",
+  ])(
+    "treats a backslash as a separator for the deny list on every OS: %s",
+    async (input) => {
+      const r = await attempt(() => readTextFile(input, root));
+      const w = await attempt(() => writeTextFile(input, "X", root));
+      // On win32 a leading `..\` is a real root escape, so outside_root is also correct there.
+      const accepted = (o: typeof r): boolean =>
+        hasCode(o, "denied_path") ||
+        (process.platform === "win32" &&
+          input.startsWith("..\\") &&
+          hasCode(o, "outside_root"));
+      assertThat(accepted(r) && accepted(w), {
+        what: `deny list for ${JSON.stringify(input)}`,
+        why: "defense in depth: a backslash separates segments for the deny check on all platforms",
+        expected: "denied_path for read and write",
+        actual: `read ${describeOutcome(r)}; write ${describeOutcome(w)}`,
+        guidance:
+          "split the input on both / and a backslash before matching deny segments and basenames",
+      });
+    },
+  );
+
+  it("does not deny notes\\file.txt (on POSIX a literal name, on win32 a nested file)", async () => {
+    const w = await attempt(() => writeTextFile("notes\\file.txt", "X", root));
+    expect(hasCode(w, "denied_path")).toBe(false);
+  });
+
   it("denies a denied segment reached through an inner '..' (resolved path is what counts)", async () => {
     seed(".git/config");
     fs.mkdirSync(path.join(root, "src"), { recursive: true });

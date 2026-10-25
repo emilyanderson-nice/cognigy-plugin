@@ -127,7 +127,12 @@ export async function shapeGetResult(
       continue;
     }
     try {
-      const target = resolveInRoot(file).toLowerCase();
+      // Case-insensitive file systems (Windows, macOS) make Foo.txt and
+      // foo.txt the same file; on Linux they differ. Read at call time.
+      const resolved = resolveInRoot(file);
+      const target = ["win32", "darwin"].includes(process.platform)
+        ? resolved.toLowerCase()
+        : resolved;
       if (targets.has(target)) {
         withheld(
           field,

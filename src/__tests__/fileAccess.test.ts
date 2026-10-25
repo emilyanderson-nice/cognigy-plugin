@@ -47,17 +47,45 @@ describe("fileAccess: read and write round trips", () => {
     );
   });
 
-  it("accepts back slashes and returns the path with forward slashes", async () => {
-    fs.mkdirSync(path.join(root, "bs"), { recursive: true });
-    const out = await write("bs\\b.txt", "x");
-    assertThat(out.ok && (out as any).value.path === "bs/b.txt", {
-      what: "write with a back-slash relative path",
-      why: "Windows-style separators must resolve like forward slashes",
-      expected: "success with path 'bs/b.txt'",
-      actual: describeOutcome(out),
-      guidance: "normalise separators before resolving",
-    });
-  });
+  const itWin = process.platform === "win32" ? it : it.skip;
+  const itPosix = process.platform !== "win32" ? it : it.skip;
+
+  itPosix(
+    "treats a backslash as a literal name character: a\\b.txt is one file in ROOT (POSIX)",
+    async () => {
+      const out = await write("a\\b.txt", "x");
+      expect(out).toEqual({
+        ok: true,
+        value: { path: "a\\b.txt", bytes: 1, sha256: sha256("x") },
+      });
+      expect(fs.readdirSync(root)).toContain("a\\b.txt");
+    },
+  );
+
+  itPosix(
+    "..\\x.txt is a literal name that stays inside ROOT (POSIX)",
+    async () => {
+      const out = await write("..\\x.txt", "x");
+      expect(out.ok).toBe(true);
+      expect((out as any).value.path).toBe("..\\x.txt");
+      expect(fs.readdirSync(root)).toContain("..\\x.txt");
+    },
+  );
+
+  itWin(
+    "accepts back slashes and returns the path with forward slashes (win32)",
+    async () => {
+      fs.mkdirSync(path.join(root, "bs"), { recursive: true });
+      const out = await write("bs\\b.txt", "x");
+      assertThat(out.ok && (out as any).value.path === "bs/b.txt", {
+        what: "write with a back-slash relative path",
+        why: "Windows-style separators must resolve like forward slashes",
+        expected: "success with path 'bs/b.txt'",
+        actual: describeOutcome(out),
+        guidance: "normalise separators before resolving",
+      });
+    },
+  );
 
   it("accepts an absolute path inside ROOT", async () => {
     const abs = path.join(root, "abs.txt");
