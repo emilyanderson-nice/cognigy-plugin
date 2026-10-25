@@ -50,6 +50,12 @@ import {
   supportedNodeTypes,
 } from "./nodeRegistry.js";
 import {
+  compareFieldWithFile,
+  readConfigFiles,
+  shapeGetResult,
+  validateGetFileArgs,
+} from "./flowNodeFiles.js";
+import {
   buildToolCallLogConfig,
   buildToolCallLogLabel,
 } from "./toolCallLog.js";
@@ -1352,6 +1358,7 @@ export class ToolHandlers {
     "get",
     "list",
     "render",
+    "compare",
   ]);
 
   /**
@@ -5961,9 +5968,58 @@ export class ToolHandlers {
   // =========================================================================
   async handleManageFlowNodes(args: any): Promise<any> {
     const data = schemas.manageFlowNodesSchema.parse(args);
+    if (data.operation !== "update" || !data.configFromFiles) {
+      return this.manageFlowNodesCore(data);
+    }
+    // Files are read BEFORE any API call; a file error makes no call at all.
+    const files = await readConfigFiles(data.config, data.configFromFiles);
+    if ("error" in files) return files;
+    const { configFromFiles: _files, ...rest } = data;
+    const result = await this.manageFlowNodesCore({
+      ...rest,
+      config: files.config,
+    });
+    return result?.updated
+      ? { ...result, configFromFiles: files.entries }
+      : result;
+  }
+
+  /** The node as `get` returns it: filtered, with a Code node's wrapper removed. */
+  private async fetchNodeDetail(flowId: string, nodeId: string): Promise<any> {
+    const node: any = await this.apiClient.get(
+      `/v2.0/flows/${flowId}/chart/nodes/${nodeId}`,
+    );
+    const detail = filterFlowNodeDetail(node);
+    // Hand back only the author's code. The error-trace envelope is
+    // plugin-owned and re-applied on every write, so exposing it just
+    // invites the caller to edit or copy it.
+    if (typeof detail.config?.code === "string") {
+      detail.config.code = unwrapCode(detail.config.code);
+    }
+    return detail;
+  }
+
+  private async manageFlowNodesCore(
+    data: z.infer<typeof schemas.manageFlowNodesSchema>,
+  ): Promise<any> {
     const { flowId, operation } = data;
 
     switch (operation) {
+      // ----- COMPARE -----
+      case "compare": {
+        if (!data.nodeId || !data.field || !data.file) {
+          return withHints(
+            { error: "nodeId, field and file are required for compare." },
+            {
+              action:
+                'Use manage_flow_nodes { operation: "compare", flowId, nodeId, field: "config.code", file: "path" }.',
+            },
+          );
+        }
+        const detail = await this.fetchNodeDetail(flowId, data.nodeId);
+        return compareFieldWithFile(detail, data.field, data.file);
+      }
+
       // ----- LIST -----
       case "list":
         return listFlowNodes(this.apiClient, flowId);
@@ -5980,28 +6036,23 @@ export class ToolHandlers {
           );
         }
 
-        const node: any = await this.apiClient.get(
-          `/v2.0/flows/${flowId}/chart/nodes/${data.nodeId}`,
-        );
-        const detail = filterFlowNodeDetail(node);
+        const argError = validateGetFileArgs(data);
+        if (argError) return argError;
 
-        // Hand back only the author's code. The error-trace envelope is
-        // plugin-owned and re-applied on every write, so exposing it just
-        // invites the caller to edit or copy it.
-        if (typeof detail.config?.code === "string") {
-          detail.config.code = unwrapCode(detail.config.code);
-        }
+        const detail = await this.fetchNodeDetail(flowId, data.nodeId);
+        const hasError = detail.config?.hasError;
+        const shaped = await shapeGetResult(detail, data);
 
         // Code nodes are TypeScript, transpiled server-side at save time.
         // hasError = true means the last saved code did not compile.
-        if (detail.config?.hasError) {
-          return withHints(detail, {
+        if (hasError) {
+          return withHints(shaped, {
             warning:
               "config.hasError is true — the last saved code failed to transpile (TypeScript/syntax error).",
             action: "Fix the code and update the node.",
           });
         }
-        return detail;
+        return shaped;
       }
 
       // ----- CREATE -----

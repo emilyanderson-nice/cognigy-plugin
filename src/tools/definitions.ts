@@ -1200,7 +1200,7 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
   {
     name: "manage_flow_nodes",
     description:
-      'Manage the logic nodes inside a flow (list/get/create/update/delete) and render the flow as a diagram. Nodes are helpers that live INSIDE AI Agent tool branches: create a tool first (create_tool { toolType: "tool" }), then add nodes with parentNodeId = toolNodeId, mode = "appendChild". NEVER add standalone nodes before the AI Agent Job node. The flow-nodes skill owns the full workflow — placement, branching (ifThenElse/lookup), node config, and case values.\n\nOPERATIONS:\n- list: all nodes in a flow (not capped at 25; observed up to 36 nodes), NO config. Each entry: id, referenceId, type, label, parentId (the container for a node\'s direct branch heads (Then/Else/Default) and, for nodes chained inside a branch, the branch head they run under; parentId is null only on the top-level chain), isEntryPoint (a per-node-type flag, true for every AI Agent node, so it does not mark the first node), isDisabled when true, children (branch order) and next (the chain: top-level order is a next chain, follow it from the start node). If structure is unavailable the result carries a warning and parentId is null for every node. A partial list carries `truncated: true` and `totalAvailable` (the platform\'s node count) plus a _hints.action: do not treat it as complete; use get with a specific nodeId or narrow the request.\n- get: one node in full incl. config (requires nodeId; also reports referenceId); disabled nodes report isDisabled: true. Read before editing. For code nodes the config reports `hasError`; the large server-computed `transpiled` output is omitted.\n- create: add a node (requires nodeType + config). parentNodeId + mode place it — see the flow-nodes skill. Returns nodeId; `placeholderToolsRemoved` lists auto-created placeholder tool nodes removed for llmPrompt nodes. For nodeType "code", config.code must open with a 1-3 line comment saying what the node does. Write it for a person to read: descriptive names, one statement per line, 2-space indent, data one entry per line (the flow-nodes skill lists the 10 guidelines). config.code that lacks one, or uses something the Code Node runtime does not have (api.httpRequest, fetch, require/import, the removed api.setState/getState/resetState — see the flow-nodes skill) is written anyway and flagged in _hints.warning.\n- update: change a node\'s config or label (only provided fields change). For switch/lookup nodes, pass a `cases` array to set case values. For an existing code node the same config.code hints as create apply.\n- delete: remove a node.\n- render (read-only): visualize the flow. Disabled nodes (and their child branches) are left out, since the flow skips them at runtime. Returns an `ascii` tree (display inline in any client incl. terminal) and a `mermaid` string. Deliver the mermaid ONLY as a native Mermaid/diagram artifact — do NOT wrap it in HTML or paste it as an inline ```mermaid fence (both break the zoomable, mobile-friendly viewer). Options: focus=<nodeId|nodeId[]> highlights nodes; writeHtml writes a self-contained rich HTML graph to a local tmp file and opens it in the browser (returns htmlUrl/htmlPath — the file is already on the user\'s machine, just hand them the link). See the flow-nodes skill for details.\n\nIDs: use `id` for API calls (get/update/delete, parentNodeId). Go To targets a node by its `referenceId` rather than `id` (verified on NA1). Execute Flow is reported to do the same (reported, not verified; check in the UI if a call misbehaves).\n\nSupported node types come from the server node registry; an unsupported nodeType returns the current list. For AI Agent tool nodes (knowledge, send_email, mcp, http) use create_tool / update_tool instead.\n\nLLM PROMPT EXCEPTION: llmPrompt is a top-level raw LLM node, not a tool-branch helper. Create it only when the user asks for an LLM Prompt node by name; reading/updating existing llmPromptV2 nodes is fine.',
+      'Manage the logic nodes inside a flow (list/get/create/update/delete) and render the flow as a diagram. Nodes are helpers that live INSIDE AI Agent tool branches: create a tool first (create_tool { toolType: "tool" }), then add nodes with parentNodeId = toolNodeId, mode = "appendChild". NEVER add standalone nodes before the AI Agent Job node. The flow-nodes skill owns the full workflow — placement, branching (ifThenElse/lookup), node config, and case values.\n\nOPERATIONS:\n- list: all nodes in a flow (not capped at 25; observed up to 36 nodes), NO config. Each entry: id, referenceId, type, label, parentId (the container for a node\'s direct branch heads (Then/Else/Default) and, for nodes chained inside a branch, the branch head they run under; parentId is null only on the top-level chain), isEntryPoint (a per-node-type flag, true for every AI Agent node, so it does not mark the first node), isDisabled when true, children (branch order) and next (the chain: top-level order is a next chain, follow it from the start node). If structure is unavailable the result carries a warning and parentId is null for every node. A partial list carries `truncated: true` and `totalAvailable` (the platform\'s node count) plus a _hints.action: do not treat it as complete; use get with a specific nodeId or narrow the request.\n- get: one node in full incl. config (requires nodeId; also reports referenceId); disabled nodes report isDisabled: true. Read before editing. For code nodes the config reports `hasError`; the large server-computed `transpiled` output is omitted.\n- create: add a node (requires nodeType + config). parentNodeId + mode place it — see the flow-nodes skill. Returns nodeId; `placeholderToolsRemoved` lists auto-created placeholder tool nodes removed for llmPrompt nodes. For nodeType "code", config.code must open with a 1-3 line comment saying what the node does. Write it for a person to read: descriptive names, one statement per line, 2-space indent, data one entry per line (the flow-nodes skill lists the 10 guidelines). config.code that lacks one, or uses something the Code Node runtime does not have (api.httpRequest, fetch, require/import, the removed api.setState/getState/resetState — see the flow-nodes skill) is written anyway and flagged in _hints.warning.\n- update: change a node\'s config or label (only provided fields change). For switch/lookup nodes, pass a `cases` array to set case values. For an existing code node the same config.code hints as create apply.\n- delete: remove a node.\n- render (read-only): visualize the flow. Disabled nodes (and their child branches) are left out, since the flow skips them at runtime. Returns an `ascii` tree (display inline in any client incl. terminal) and a `mermaid` string. Deliver the mermaid ONLY as a native Mermaid/diagram artifact — do NOT wrap it in HTML or paste it as an inline ```mermaid fence (both break the zoomable, mobile-friendly viewer). Options: focus=<nodeId|nodeId[]> highlights nodes; writeHtml writes a self-contained rich HTML graph to a local tmp file and opens it in the browser (returns htmlUrl/htmlPath — the file is already on the user\'s machine, just hand them the link). See the flow-nodes skill for details.\n\nLARGE FIELDS AND FILES: a prompt or code field can be tens of thousands of characters, so do not fetch it repeatedly or paste it into a call. get with `fields` (dotted paths such as config.instructions, config.code, label) returns only those; paths that do not exist come back in `missingFields`. get with `saveTo` ({ "config.code": "notes/code.ts" }, every key also in `fields`) writes the field to a file and returns { savedTo, bytes, sha256 } instead of the content; `overwrite: true` replaces an existing file, otherwise an existing file is an error. update with `configFromFiles` ({ "systemPrompt": "notes/prompt.txt" }) reads each file into that top-level config key (a key may not also be in `config`); the result lists each file with bytes and sha256, and a Code node still gets its error handling added around the file\'s code. compare (requires nodeId, `field`, `file`) returns { equal, liveBytes, fileBytes, liveSha256, fileSha256, firstDiffByte } without returning any content. File rules: paths are confined to the project working directory (or the directory in COGNIGY_FILE_ROOT); symbolic links and junctions are refused; a file may be at most 2 MiB; content must be valid UTF-8 and is written and read byte for byte for valid text (no newline conversion). Parent directories must already exist. Some paths are always refused, even inside the root: git, IDE and CI config (.git, .vscode, .github, .husky, .claude), credentials and key files (.env, .ssh, .aws, *.pem, *.key, id_rsa*), package manifests (package.json, package-lock.json, node_modules) and shell startup files (.bashrc, .zshrc, .profile). The root must not be the home directory or a filesystem/drive root. If any saveTo write fails, that field is withheld (reported as { notSaved: true } plus an entry in saveErrors), never returned; one call saves at most 10 MiB in total. Saved files can hold personal data, so keep them out of commits. File content is never returned.\n\nIDs: use `id` for API calls (get/update/delete, parentNodeId). Go To targets a node by its `referenceId` rather than `id` (verified on NA1). Execute Flow is reported to do the same (reported, not verified; check in the UI if a call misbehaves).\n\nSupported node types come from the server node registry; an unsupported nodeType returns the current list. For AI Agent tool nodes (knowledge, send_email, mcp, http) use create_tool / update_tool instead.\n\nLLM PROMPT EXCEPTION: llmPrompt is a top-level raw LLM node, not a tool-branch helper. Create it only when the user asks for an LLM Prompt node by name; reading/updating existing llmPromptV2 nodes is fine.',
     annotations: {
       title: "Manage Flow Nodes",
       readOnlyHint: false,
@@ -1213,7 +1213,15 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
       properties: {
         operation: {
           type: "string",
-          enum: ["list", "get", "create", "update", "delete", "render"],
+          enum: [
+            "list",
+            "get",
+            "create",
+            "update",
+            "delete",
+            "render",
+            "compare",
+          ],
           description: "Operation to perform",
         },
         flowId: {
@@ -1299,6 +1307,40 @@ ADDRESSING: Pass aiAgentId for normal agents. Pass flowId only for LLM Prompt fl
           type: "boolean",
           description:
             "render only (requires writeHtml): open the generated HTML in the user's default browser automatically. Default: true — set false to only get htmlUrl/htmlPath back without opening.",
+        },
+        fields: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 50,
+          description:
+            "get only: dotted paths into the node (e.g. config.code, config.instructions, label); returns just those plus id. Missing paths are listed in missingFields.",
+        },
+        saveTo: {
+          type: "object",
+          additionalProperties: { type: "string" },
+          description:
+            "get only: field path -> file path. Each key must also be in `fields`. The string value is written to the file (inside the working directory, max 2 MiB, UTF-8) and replaced in the result by { savedTo, bytes, sha256 }.",
+        },
+        overwrite: {
+          type: "boolean",
+          description:
+            "get with saveTo: replace files that already exist. Default: false (an existing file is an error).",
+        },
+        configFromFiles: {
+          type: "object",
+          additionalProperties: { type: "string" },
+          description:
+            "update only: top-level config key -> file path (max 20). The file text becomes config[key]. A key may not also appear in `config`. No API call is made if any file fails.",
+        },
+        field: {
+          type: "string",
+          description:
+            "compare only: dotted path of the string field to compare, e.g. config.code.",
+        },
+        file: {
+          type: "string",
+          description:
+            "compare only: file (inside the working directory) to compare the field with.",
         },
       },
       required: ["operation", "flowId"],
