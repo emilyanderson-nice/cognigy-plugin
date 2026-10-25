@@ -6,6 +6,7 @@ import {
   assertThat,
   attempt,
   describeOutcome,
+  hasCode,
   makeRoot,
   removeDir,
   sha256,
@@ -63,12 +64,23 @@ describe("fileAccess: read and write round trips", () => {
   );
 
   itPosix(
-    "..\\x.txt is a literal name that stays inside ROOT (POSIX)",
+    "..\\x.txt is rejected (outside_root or invalid_path) and creates no file (POSIX)",
     async () => {
+      const before = fs.readdirSync(root).sort();
       const out = await write("..\\x.txt", "x");
-      expect(out.ok).toBe(true);
-      expect((out as any).value.path).toBe("..\\x.txt");
-      expect(fs.readdirSync(root)).toContain("..\\x.txt");
+      assertThat(
+        !out.ok &&
+          (hasCode(out, "outside_root") || hasCode(out, "invalid_path")),
+        {
+          what: "write '..\\x.txt' on POSIX",
+          why: "the same string is a root escape on Windows, so it is rejected on every platform",
+          expected: "rejection with code outside_root or invalid_path",
+          actual: describeOutcome(out),
+          guidance:
+            "treat a backslash as a separator for escape checks everywhere",
+        },
+      );
+      expect(fs.readdirSync(root).sort()).toEqual(before);
     },
   );
 

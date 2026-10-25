@@ -10,6 +10,7 @@ import {
   assertThat,
   attempt,
   describeOutcome,
+  hasCode,
   sha256,
   CAN_DIR_SYMLINK,
   CAN_FILE_SYMLINK,
@@ -155,17 +156,22 @@ describe("fileAccess security: path rejection", () => {
   );
 
   itPosix(
-    "..\\x.txt is a literal name inside ROOT, not an escape (POSIX)",
+    "..\\x.txt is rejected (outside_root or invalid_path) for read and write (POSIX)",
     async () => {
+      const before = fs.readdirSync(root).sort();
       const w = await attempt(() => writeTextFile("..\\x.txt", "lit", root));
-      assertThat(w.ok, {
-        what: "write '..\\x.txt' on POSIX",
-        why: "a backslash is not a separator on POSIX, so this is one file name in ROOT",
-        expected: "success; file named '..\\x.txt' directly in ROOT",
-        actual: describeOutcome(w),
-        guidance: "only normalise backslashes to separators on win32",
+      const r = await attempt(() => readTextFile("..\\x.txt", root));
+      const rejected = (o: typeof w): boolean =>
+        !o.ok && (hasCode(o, "outside_root") || hasCode(o, "invalid_path"));
+      assertThat(rejected(w) && rejected(r), {
+        what: "read/write '..\\x.txt' on POSIX",
+        why: "the same string is a root escape on Windows, so it is rejected on every platform",
+        expected: "rejection with code outside_root or invalid_path for both",
+        actual: `write ${describeOutcome(w)}; read ${describeOutcome(r)}`,
+        guidance:
+          "treat a backslash as a separator for escape checks everywhere",
       });
-      expect(fs.readdirSync(root)).toContain("..\\x.txt");
+      expect(fs.readdirSync(root).sort()).toEqual(before);
       expect(fs.existsSync(path.join(path.dirname(root), "x.txt"))).toBe(false);
     },
   );
