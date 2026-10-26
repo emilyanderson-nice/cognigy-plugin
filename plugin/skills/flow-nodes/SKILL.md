@@ -909,6 +909,16 @@ A prompt or code field can be tens of thousands of characters. Do not fetch it a
 
 Rules: file paths must be inside the project working directory (or the directory in `COGNIGY_FILE_ROOT`); symlinks and junctions are refused; a file is at most 2 MiB; content is UTF-8 and is written and read byte-exact for valid text (no newline conversion). Parent directories must already exist. Some paths are always refused, even inside the root: git/IDE/CI config (`.git`, `.vscode`, `.github`, `.husky`, `.claude`), credentials and key files (`.env*`, `.ssh`, `.aws`, `*.pem`, `*.key`), package manifests (`package.json`, `node_modules`) and shell startup files (`.bashrc`, `.zshrc`, `.profile`). The root must not be the home directory or a drive root. If a `saveTo` write fails, that field comes back as `{ notSaved: true }` with an entry in `saveErrors`, never as content; one call saves at most 10 MiB in total. File content is never returned, and saved files can hold personal data, so keep them out of commits.
 
+## Debugging tool calls with Log nodes
+
+Add Log nodes (`manage_flow_nodes create`, type `log`, `message` and `level`) to see what a tool received and returned. Observed on NA1 with the Itau session; `input.result` for a knowledge tool is not tested.
+
+- Head Log, first in the tool branch: `[tool-values] <literal tool name> args={{JSON.stringify(input.aiAgent && input.aiAgent.toolArgs)}}`. `input.aiAgent.toolId` was empty, so write the literal tool name.
+- Tail Log, last in the branch: `[tool-result] result={{JSON.stringify(input.result)}}`. It was populated for a Code-node tool. If the tool throws, the tail Log is not written; the head one still is.
+- Knowledge tools: Log nodes under the knowledge tool node never run. Set the tool's storeLocation to `context` and put a Log node AFTER the AI Agent node: `[kb-meta] n={{((context.knowledgeSearch&&context.knowledgeSearch.data&&context.knowledgeSearch.data.topK)||[]).length}} meta={{JSON.stringify(((context.knowledgeSearch&&context.knowledgeSearch.data&&context.knowledgeSearch.data.topK)||[]).map(function(c){ return { d: c.distance, m: c.chunkMetaData } }))}}`.
+- Read the lines with `list_resources { resourceType: "log", projectId, sessionId, view: "entries", msgChars: 4000 }`. The platform did not cut messages up to about 3,200 characters; the default 500-character cap of the reader does.
+- Logged values can contain personal data: use test projects and remove the Log nodes afterwards. Log retention is typically about 24 hours.
+
 ## Notes
 
 - **Tool parameters**: Inside AI Agent tool branches, the LLM's tool call parameters are available at `input.aiAgent.toolArgs`, **NOT** `input.data`. For example, if the tool defines a `city` parameter, access it as `input.aiAgent.toolArgs.city` in Code nodes or `{{input.aiAgent.toolArgs.city}}` in CognigyScript fields. **Under an LLM Prompt (`llmPromptV2`) node the parameters live at `input.llmPrompt.toolArgs` instead** — `input.aiAgent` is `null` there, so reading `input.aiAgent.toolArgs` returns `undefined` and the tool runs with no arguments (a silent fallback, no error). For a tool that may run under either node type, read defensively: `const args = (input.llmPrompt && input.llmPrompt.toolArgs) || (input.aiAgent && input.aiAgent.toolArgs) || {};`.

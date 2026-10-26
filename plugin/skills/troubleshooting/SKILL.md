@@ -101,6 +101,7 @@ test mode, and the user has accepted the billing.
 - Narrow with `search` (substring of the message, not of metadata), `logLevel` (e.g. ["error"];
   request debug or trace levels here if you need them), `flowName`, or `startDate`/`endDate`.
   Then use `view: "entries"` to read individual lines (`limit` up to 100, `skip` to page).
+  Messages are cut at 500 characters by default; pass `msgChars` (100 to 4000) with `view: "entries"` to read longer ones.
 - After talk_to_agent, pass its session id as `sessionId` to read that conversation's newest 100
   entries. `sessionId` cannot be combined with `search`, dates, `sort`, `skip` or `limit`.
 - Log retention is typically about 24 hours. The newest lines of a test that just finished may

@@ -3795,6 +3795,7 @@ export class ToolHandlers {
       flowName: data.flowName,
       sessionId: data.sessionId,
       view: data.view,
+      msgChars: data.msgChars,
       limit: data.limit,
       skip: data.skip,
       sort: data.sort,
