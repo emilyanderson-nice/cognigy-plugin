@@ -1,6 +1,6 @@
 ---
 name: flow-nodes
-description: "Use when building or editing a Cognigy Flow with manage_flow_nodes or manage_flows — creating a standalone flow with no AI Agent, adding logic inside an agent's tool branch, node types and config schemas, placement rules, and rendering a flow as a diagram."
+description: "Use when building or editing a Cognigy Flow with manage_flow_nodes or manage_flows — creating a standalone flow with no AI Agent, adding or debugging logic inside an agent's tool branch (code, HTTP Request, if/else and other nodes), moving large prompts or code through files, node types and config schemas, placement rules, and rendering a flow as a diagram."
 ---
 
 # Flow Node Reference
@@ -48,6 +48,7 @@ Pass an explicit `parentNodeId` whenever you need to branch or insert rather tha
 3. Add a node inside the tool — manage_flow_nodes { operation: 'create', flowId, parentNodeId: '<toolNodeId>', mode: 'appendChild', nodeType: 'code', label: 'Validate Order', config: { code: '...' } }
 4. Add more nodes — manage_flow_nodes { operation: 'create', flowId, parentNodeId: '<previousNodeId>', mode: 'append', nodeType: 'say', label: 'Confirm', config: { text: 'Order processed!' } }
 5. List all nodes — manage_flow_nodes { operation: 'list', flowId } (not capped at 25, observed up to 36 nodes; no config — use `get` for that)
+   Read one node with its config before editing — manage_flow_nodes { operation: 'get', flowId, nodeId: '<id>' }
 6. Update a node — manage_flow_nodes { operation: 'update', flowId, nodeId: '<id>', config: { text: 'Updated!' } }
 7. Delete a node — manage_flow_nodes { operation: 'delete', flowId, nodeId: '<id>' }
 ```
@@ -414,6 +415,7 @@ input.transferLine = `Transferring you to ${teamName}.`;
 
 **Documented footguns (not flagged — just know them):**
 
+- No top-level `return` — Code nodes are not full functions and the engine rejects it. Mutate `input` (or `context`) directly: `input.foo = bar;` instead of `return { foo: bar };`.
 - `api.deleteContext("a.b")` — only removes **top-level** keys; a dot-path silently does nothing. Use `delete context.a.b;`.
 - More than 100 `api.*` calls per execution — the platform aborts the node ([limits](https://docs.cognigy.com/ai/administer/limitations)).
 

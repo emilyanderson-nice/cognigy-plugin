@@ -33,9 +33,9 @@ The default marker (`isDefault`) in the `list_environments` output is not consen
 
 ## Ids belong to one environment
 
-- Project ids, agent ids, flow ids, endpoint ids and URLs, and package and snapshot references are valid only in the environment that produced them. Do not reuse one in another environment.
+- Project ids, agent ids, flow ids, endpoint ids, endpoint URLs, and package and snapshot references are valid only in the environment that produced them and must not be reused in another environment.
 - To move something between environments, export it as a package from one and import it into the other with `manage_packages`, using each environment's own ids.
 
 ## Destructive operations
 
-Before any destructive operation (delete, snapshot restore, overwrite) when more than one environment exists, confirm the target environment with the user, by name. Do this even when the session is pinned.
+Before any destructive operation (delete, snapshot restore, overwrite) when more than one environment exists, confirm the target environment with the user by name, even when the session is pinned.
