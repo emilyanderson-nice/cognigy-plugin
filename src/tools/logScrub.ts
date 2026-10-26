@@ -1,6 +1,7 @@
 export const MAX_MESSAGE_CHARS = 500;
 export const MAX_TEMPLATE_CHARS = 200;
 export const MAX_SCRUB_INPUT_CHARS = 2000;
+const SCRUB_CUT_MARGIN_CHARS = 1000;
 
 export interface LogEntry {
   timestamp: string;
@@ -33,9 +34,18 @@ function collapse(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-export function scrubText(input: unknown, maxChars: number): string {
+// The pre-cut must exceed the output cap by a margin so a token straddling
+// the cap is seen whole and masked before truncation.
+const inputCutFor = (msgChars: number): number =>
+  Math.max(MAX_SCRUB_INPUT_CHARS, msgChars + SCRUB_CUT_MARGIN_CHARS);
+
+export function scrubText(
+  input: unknown,
+  maxChars: number,
+  inputChars: number = MAX_SCRUB_INPUT_CHARS,
+): string {
   if (typeof input !== "string") return "";
-  const cleaned = collapse(input.slice(0, MAX_SCRUB_INPUT_CHARS))
+  const cleaned = collapse(input.slice(0, inputChars))
     .replace(EMAIL, "<email>")
     .replace(JWT, "<token>")
     .replace(BEARER, "$1 <token>")
@@ -70,7 +80,10 @@ function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-export function toLogEntry(raw: unknown): LogEntry {
+export function toLogEntry(
+  raw: unknown,
+  msgChars: number = MAX_MESSAGE_CHARS,
+): LogEntry {
   const source = isPlainObject(raw) ? raw : {};
   const metadata = isPlainObject(source.metadata) ? source.metadata : {};
   const entry: LogEntry = {
@@ -81,7 +94,7 @@ export function toLogEntry(raw: unknown): LogEntry {
       nonEmptyString(metadata.type) ??
       "unknown"
     ).slice(0, 20),
-    msg: scrubText(source.msg, MAX_MESSAGE_CHARS),
+    msg: scrubText(source.msg, msgChars, inputCutFor(msgChars)),
   };
   if (isPlainObject(source.meta)) {
     const flowId = nonEmptyString(source.meta.flowId);

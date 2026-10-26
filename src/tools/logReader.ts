@@ -1,4 +1,4 @@
-import { toLogEntry, type LogEntry } from "./logScrub.js";
+import { MAX_MESSAGE_CHARS, toLogEntry, type LogEntry } from "./logScrub.js";
 import { networkErrorBody } from "./logNetworkError.js";
 import { summarizeEntries } from "./logSummary.js";
 
@@ -11,6 +11,7 @@ export interface LogReadArgs {
   flowName?: string;
   sessionId?: string;
   view?: "summary" | "entries";
+  msgChars?: number;
   limit?: number;
   skip?: number;
   sort?: string;
@@ -165,6 +166,23 @@ function withWindowNote(
   };
 }
 
+const MSG_CHARS_MAX = 4000;
+
+// Entries view only: tells the caller when the per-message cap cut a message.
+// A cut message is exactly `cap` characters and ends with the ellipsis.
+function withCutNote(
+  hint: LogReadResult["hint"],
+  entries: LogEntry[],
+  cap: number,
+): LogReadResult["hint"] {
+  const cut =
+    cap < MSG_CHARS_MAX &&
+    entries.some((e) => e.msg.length === cap && e.msg.endsWith("…"));
+  if (!cut) return hint;
+  const note = `Some messages were cut at ${cap} characters; pass msgChars (up to ${MSG_CHARS_MAX}) to read them in full.`;
+  return { ...hint, action: [hint?.action, note].filter(Boolean).join(" ") };
+}
+
 function withPagingNote(
   hint: LogReadResult["hint"],
   ignored: boolean,
@@ -229,7 +247,11 @@ async function readSession(
   } catch (err) {
     return failedCall(err);
   }
-  const entries = itemsOf(data).map(toLogEntry);
+  const cap =
+    args.view === "entries"
+      ? (args.msgChars ?? MAX_MESSAGE_CHARS)
+      : MAX_MESSAGE_CHARS;
+  const entries = itemsOf(data).map((item) => toLogEntry(item, cap));
   const truncated = entries.length >= TAIL_MAX_ITEMS;
   const body =
     args.view === "entries"
@@ -245,7 +267,11 @@ async function readSession(
           window: null,
           ...summarizeEntries(entries, { total: null, truncated }),
         };
-  return { body, hint: successHint(entries.length, truncated) };
+  const hint = successHint(entries.length, truncated);
+  return {
+    body,
+    hint: args.view === "entries" ? withCutNote(hint, entries, cap) : hint,
+  };
 }
 
 async function readEntries(
@@ -271,7 +297,10 @@ async function readEntries(
   } catch (err) {
     return failedCall(err);
   }
-  const entries: LogEntry[] = itemsOf(data).map(toLogEntry);
+  const cap = args.msgChars ?? MAX_MESSAGE_CHARS;
+  const entries: LogEntry[] = itemsOf(data).map((item) =>
+    toLogEntry(item, cap),
+  );
   const total = totalOf(data);
   return {
     body: {
@@ -281,7 +310,11 @@ async function readEntries(
       returned: entries.length,
       entries,
     },
-    hint: withWindowNote(successHint(entries.length, false), args),
+    hint: withCutNote(
+      withWindowNote(successHint(entries.length, false), args),
+      entries,
+      cap,
+    ),
   };
 }
 

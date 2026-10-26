@@ -331,6 +331,7 @@ export const listResourcesSchema = z
     flowName: z.string().min(1).max(100).optional(),
     sessionId: z.string().min(1).max(128).optional(),
     view: z.enum(["summary", "entries"]).optional(),
+    msgChars: z.number().int().min(100).max(4000).optional(),
     // audit_event filters. `actor` and `eventType` are sent as repeatable query
     // params (actor[]=…), which the platform supports from 2026.17.0 onwards.
     // Named `eventType` rather than `type` so it cannot be confused with
