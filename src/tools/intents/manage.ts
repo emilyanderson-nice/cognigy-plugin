@@ -15,6 +15,7 @@ import {
 import {
   build,
   create,
+  fileImportOp,
   importOp,
   move,
   remove,
@@ -233,6 +234,9 @@ export async function handleManageIntents(
         return await importOp(api, a, deps);
       case "build":
         return await build(api, a, deps);
+      case "import_csv":
+      case "import_tree":
+        return await fileImportOp(api, a, deps);
     }
   } catch (err) {
     return requestFailed(a.operation, err);

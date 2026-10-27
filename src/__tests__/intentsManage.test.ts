@@ -3105,6 +3105,1010 @@ describe("manage_intents build with an unusable locale", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Round 7: import_csv and import_tree
+// ---------------------------------------------------------------------------
+const files = (m: Record<string, string>) =>
+  jest
+    .fn<(p: string) => Promise<string>>()
+    .mockImplementation(async (p: string) => {
+      if (!(p in m)) throw new Error(`test: no such file ${p}`);
+      return m[p];
+    });
+const intentPosts = (p: Platform) =>
+  p.writes().filter((c) => c.method === "post" && c.path === LIST_PATH);
+const sentencePatches = (p: Platform) =>
+  p.writes().filter((c) => c.method === "patch");
+const hint = (r: any) => {
+  expect(typeof r._hints.warning).toBe("string");
+  expect(r._hints.warning.length).toBeGreaterThan(0);
+  expect(r._hints.action).toContain("run the same call again");
+};
+
+describe("manage_intents file imports: shared refusals", () => {
+  const CSV_ARGS = {
+    operation: "import_csv",
+    projectId: PROJECT,
+    file: "data/a.csv",
+    mode: "add",
+  };
+  const TREE_ARGS = {
+    operation: "import_tree",
+    projectId: PROJECT,
+    specFile: "data/spec.json",
+    sentencesFile: "data/s.csv",
+  };
+  const FILE_OPS: Array<[string, Record<string, unknown>]> = [
+    ["import_csv", CSV_ARGS],
+    ["import_tree", TREE_ARGS],
+  ];
+  const ALL_FILES = {
+    "data/a.csv": csv([["Other", "csv one"]]),
+    "data/spec.json": JSON.stringify({
+      families: [{ name: "Fam", groups: [{ name: "Grp", tags: ["T1"] }] }],
+    }),
+    "data/s.csv": csv([["T1", "csv one"]]),
+  };
+
+  const untouched = (p: Platform, readFile: any) => {
+    expect(p.writes()).toEqual([]);
+    expect(p.gets(LIST_PATH)).toEqual([]);
+    expect(p.sentenceCalls()).toEqual([]);
+    expect(readFile).not.toHaveBeenCalled();
+  };
+
+  it.each(FILE_OPS)(
+    "%s: project_mismatch for another project id",
+    async (_n, args) => {
+      const p = makePlatform({ projectRef: hid("e", 2) });
+      const readFile = files(ALL_FILES);
+      const r = await call(p, args, { readFile });
+      expect(r).toEqual({
+        operation: args.operation,
+        error: "project_mismatch",
+      });
+      untouched(p, readFile);
+    },
+  );
+
+  it.each(FILE_OPS)(
+    "%s: project_mismatch when the flow has no projectReference",
+    async (_n, args) => {
+      const p = makePlatform({ projectRef: null });
+      const readFile = files(ALL_FILES);
+      const r = await call(p, args, { readFile });
+      expect(r).toEqual({
+        operation: args.operation,
+        error: "project_mismatch",
+      });
+      untouched(p, readFile);
+    },
+  );
+
+  describe.each([
+    ["err.response.status", "response" as const],
+    ["err.status", "plain" as const],
+  ])("flow GET rejects with %s", (_l, shape) => {
+    it.each(FILE_OPS)(
+      "%s: flow_not_readable with the status",
+      async (_n, args) => {
+        const p = makePlatform();
+        p.fail({
+          method: "get",
+          path: new RegExp(`${FLOW_PATH}$`),
+          status: 503,
+          shape,
+        });
+        const readFile = files(ALL_FILES);
+        const r = await call(p, args, { readFile });
+        expect(r).toMatchObject({
+          operation: args.operation,
+          error: "flow_not_readable",
+          httpStatus: 503,
+        });
+        noSecret(r);
+        untouched(p, readFile);
+      },
+    );
+  });
+
+  it.each(FILE_OPS)(
+    "%s: a failed first tree page is flow_not_readable with the status and no writes",
+    async (_n, args) => {
+      const p = makePlatform();
+      p.fail({
+        method: "get",
+        path: new RegExp(`${LIST_PATH}$`),
+        status: 502,
+        shape: "plain",
+      });
+      const r = await call(p, args, { readFile: files(ALL_FILES) });
+      expect(r).toEqual({
+        operation: args.operation,
+        flowId: FLOW,
+        error: "flow_not_readable",
+        httpStatus: 502,
+      });
+      noWrites(p);
+      noSecret(r);
+    },
+  );
+
+  it.each(FILE_OPS)(
+    "%s: an orphan in the tree is tree_incomplete",
+    async (_n, args) => {
+      const p = makePlatform({ intents: orphanSeed() });
+      const r = await call(p, args, { readFile: files(ALL_FILES) });
+      expect(r).toEqual({
+        operation: args.operation,
+        flowId: FLOW,
+        error: "tree_incomplete",
+      });
+      noWrites(p);
+      expect(p.sentenceCalls()).toEqual([]);
+    },
+  );
+
+  it.each(FILE_OPS)(
+    "%s: a truncated tree read is tree_incomplete",
+    async (_n, args) => {
+      const p = makePlatform({ pageSize: 2 });
+      failNextPage(p);
+      const r = await call(p, args, { readFile: files(ALL_FILES) });
+      expect(r).toEqual({
+        operation: args.operation,
+        flowId: FLOW,
+        error: "tree_incomplete",
+      });
+      noWrites(p);
+    },
+  );
+
+  it("import_csv reads the flow once and passes the file path through exactly", async () => {
+    const p = makePlatform();
+    const readFile = files(ALL_FILES);
+    await call(p, CSV_ARGS, { readFile });
+    expect(p.gets(FLOW_PATH)).toHaveLength(1);
+    expect(readFile.mock.calls.map((c) => c[0])).toEqual(["data/a.csv"]);
+  });
+
+  it("import_tree reads the flow once and passes both file paths through exactly", async () => {
+    const p = makePlatform();
+    const readFile = files(ALL_FILES);
+    await call(p, TREE_ARGS, { readFile });
+    expect(p.gets(FLOW_PATH)).toHaveLength(1);
+    expect(readFile.mock.calls.map((c) => c[0])).toEqual([
+      "data/spec.json",
+      "data/s.csv",
+    ]);
+  });
+
+  describe("schema failures throw and make no call", () => {
+    const bad: Array<[string, Record<string, unknown>]> = [
+      [
+        "import_csv without projectId",
+        { operation: "import_csv", file: "a.csv", mode: "add" },
+      ],
+      [
+        "import_csv without mode",
+        { operation: "import_csv", projectId: PROJECT, file: "a.csv" },
+      ],
+      [
+        "import_csv without file",
+        { operation: "import_csv", projectId: PROJECT, mode: "add" },
+      ],
+      [
+        "import_csv with an invalid mode",
+        {
+          operation: "import_csv",
+          projectId: PROJECT,
+          file: "a.csv",
+          mode: "merge",
+        },
+      ],
+      ["import_csv deadlineSeconds 0", { ...CSV_ARGS, deadlineSeconds: 0 }],
+      ["import_csv deadlineSeconds 601", { ...CSV_ARGS, deadlineSeconds: 601 }],
+      [
+        "import_tree without projectId",
+        { operation: "import_tree", specFile: "s.json" },
+      ],
+      [
+        "import_tree without specFile",
+        { operation: "import_tree", projectId: PROJECT },
+      ],
+      ["import_tree deadlineSeconds 0", { ...TREE_ARGS, deadlineSeconds: 0 }],
+      [
+        "import_tree deadlineSeconds 601",
+        { ...TREE_ARGS, deadlineSeconds: 601 },
+      ],
+      [
+        "an unknown operation",
+        { operation: "import_json", projectId: PROJECT, file: "a.csv" },
+      ],
+    ];
+    it.each(bad)("%s", async (_n, args) => {
+      const p = makePlatform();
+      await expect(
+        handleManageIntents(p.api, { flowId: FLOW, ...args }),
+      ).rejects.toThrow();
+      expect(p.calls).toEqual([]);
+    });
+
+    it("accepts the boundary deadlines 1 and 600", async () => {
+      for (const d of [1, 600]) {
+        const p = makePlatform();
+        const r = await call(
+          p,
+          { ...CSV_ARGS, deadlineSeconds: d },
+          { readFile: files(ALL_FILES) },
+        );
+        expect(r.operation).toBe("import_csv");
+      }
+    });
+  });
+});
+
+describe("manage_intents import_csv", () => {
+  const base = {
+    operation: "import_csv",
+    projectId: PROJECT,
+    file: "data/s.csv",
+    mode: "add",
+  };
+  const run = (
+    p: Platform,
+    text: string,
+    extra: Record<string, unknown> = {},
+    deps: any = {},
+  ) =>
+    call(
+      p,
+      { ...base, ...extra },
+      { readFile: files({ "data/s.csv": text }), ...deps },
+    );
+
+  const CSV = csv([
+    ["Other", `${SENTINEL} o1`],
+    ["Brandnew", `${SENTINEL} b1`],
+    ["Brandnew", `${SENTINEL} b2`],
+  ]);
+
+  it("creates a missing flat intent and imports sentences with exact calls and counts", async () => {
+    const p = makePlatform();
+    const r = await run(p, CSV);
+    expect(p.writes()).toEqual([
+      { method: "post", path: LIST_PATH, body: { name: "Brandnew" } },
+      {
+        method: "patch",
+        path: sentPath(OTH),
+        body: {
+          operations: [{ op: "create", value: { text: `${SENTINEL} o1` } }],
+        },
+      },
+      {
+        method: "patch",
+        path: sentPath(NEW1),
+        body: {
+          operations: [
+            { op: "create", value: { text: `${SENTINEL} b1` } },
+            { op: "create", value: { text: `${SENTINEL} b2` } },
+          ],
+        },
+      },
+    ]);
+    expect(r).toEqual({
+      operation: "import_csv",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "complete",
+      intents: { inFile: 2, existing: 1, created: 1, createFailed: 0 },
+      sentences: {
+        rows: 3,
+        created: 3,
+        deleted: 0,
+        skippedExisting: 0,
+        duplicatesDropped: 0,
+      },
+      batches: 2,
+    });
+    expect(p.gets(LIST_PATH)).toHaveLength(1);
+    noSentence(r);
+    noSecret(r);
+  });
+
+  it("a rerun after a complete run makes no POST and no PATCH", async () => {
+    const p = makePlatform();
+    await run(p, CSV);
+    const before = p.writes().length;
+    const r = await run(p, CSV);
+    expect(p.writes()).toHaveLength(before);
+    expect(r).toEqual({
+      operation: "import_csv",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "complete",
+      intents: { inFile: 2, existing: 2, created: 0, createFailed: 0 },
+      sentences: {
+        rows: 3,
+        created: 0,
+        deleted: 0,
+        skippedExisting: 3,
+        duplicatesDropped: 0,
+      },
+      batches: 0,
+    });
+  });
+
+  it("refuses an unreadable file with file_error and touches nothing", async () => {
+    const p = makePlatform();
+    const readFile = jest
+      .fn<(p: string) => Promise<string>>()
+      .mockRejectedValue(new FileAccessError("fixed refusal", "outside_root"));
+    const r = await call(p, base, { readFile });
+    expect(r).toEqual({
+      operation: "import_csv",
+      flowId: FLOW,
+      error: "file_error",
+      which: "file",
+      code: "outside_root",
+      message: "fixed refusal",
+    });
+    expect(p.gets(LIST_PATH)).toEqual([]);
+    noWrites(p);
+  });
+
+  it("refuses bad rows with csv_errors by line number", async () => {
+    const p = makePlatform();
+    const r = await run(p, `onlyone\nOther,exampleSentence,ok\n`);
+    expect(r).toEqual({
+      operation: "import_csv",
+      flowId: FLOW,
+      error: "csv_errors",
+      which: "file",
+      count: 1,
+      first: [{ line: 1, error: "wrong_column_count" }],
+    });
+    noWrites(p);
+    expect(p.gets(LIST_PATH)).toEqual([]);
+  });
+
+  it("refuses an empty file with empty_file", async () => {
+    const p = makePlatform();
+    const r = await run(p, "");
+    expect(r).toEqual({
+      operation: "import_csv",
+      flowId: FLOW,
+      error: "empty_file",
+      which: "file",
+    });
+    noWrites(p);
+  });
+
+  it("refuses the whole call when a name is ambiguous", async () => {
+    const p = makePlatform({ intents: [...defaultSeed(), ...dupSeeds()] });
+    const r = await run(
+      p,
+      csv([
+        ["Dup", "csv one"],
+        ["Other", "csv two"],
+      ]),
+    );
+    expect(r).toEqual({
+      operation: "import_csv",
+      flowId: FLOW,
+      error: "ambiguous_intents",
+      count: 1,
+      problems: [{ intent: "Dup", candidates: [DUP1, DUP2] }],
+    });
+    noWrites(p);
+  });
+
+  it("with createMissing false creates nothing and reports the missing intent", async () => {
+    const p = makePlatform();
+    const r = await run(p, CSV, { createMissing: false });
+    expect(intentPosts(p)).toEqual([]);
+    expect(sentencePatches(p).map((c) => c.path)).toEqual([sentPath(OTH)]);
+    expect(r).toMatchObject({
+      ok: true,
+      status: "complete",
+      skipped: { missing: 1 },
+      names: { missing: ["Brandnew"] },
+    });
+    expect(r._hints).toBeUndefined();
+  });
+
+  it("skips an intent over 200 distinct sentences, creates nothing for it and imports the rest", async () => {
+    const p = makePlatform();
+    const big = Array.from(
+      { length: 201 },
+      (_, i) => ["Big", `${SENTINEL} big ${i}`] as [string, string],
+    );
+    const r = await run(p, csv([...big, ["Other", `${SENTINEL} o1`]]));
+    expect(intentPosts(p)).toEqual([]);
+    expect(sentencePatches(p).map((c) => c.path)).toEqual([sentPath(OTH)]);
+    expect(r).toMatchObject({
+      ok: true,
+      status: "complete",
+      skipped: { overCap: 1 },
+      names: { overCap: ["Big"] },
+    });
+    noSentence(r);
+  });
+
+  it("skips an existing intent that would end above 200 and imports the rest once more", async () => {
+    const p = makePlatform();
+    const many = Array.from(
+      { length: 196 },
+      (_, i) => ["Tag", `${SENTINEL} extra ${i}`] as [string, string],
+    );
+    const r = await run(p, csv([...many, ["Other", `${SENTINEL} o1`]]));
+    expect(sentencePatches(p).map((c) => c.path)).toEqual([sentPath(OTH)]);
+    expect(r).toMatchObject({
+      ok: true,
+      status: "complete",
+      skipped: { capExceeded: 1 },
+      names: { capExceeded: ["Tag"] },
+    });
+    expect(r.sentences.created).toBe(1);
+    expect(r._hints).toBeUndefined();
+    noSentence(r);
+  });
+
+  it("a rejected creation POST is createFailed, its sentences are not attempted, the rest imports", async () => {
+    const p = makePlatform();
+    p.fail({
+      method: "post",
+      path: new RegExp(`${LIST_PATH}$`),
+      status: 400,
+      shape: "plain",
+    });
+    const r = await run(p, CSV);
+    expect(sentencePatches(p).map((c) => c.path)).toEqual([sentPath(OTH)]);
+    expect(r).toEqual({
+      operation: "import_csv",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "partial",
+      intents: { inFile: 2, existing: 1, created: 0, createFailed: 1 },
+      sentences: {
+        rows: 3,
+        created: 1,
+        deleted: 0,
+        skippedExisting: 0,
+        duplicatesDropped: 0,
+      },
+      batches: 1,
+      names: { createFailed: ["Brandnew"] },
+      _hints: { warning: expect.any(String), action: expect.any(String) },
+    });
+    hint(r);
+    noSecret(r);
+    noSentence(r);
+  });
+
+  it("a creation POST without a usable _id is createFailed", async () => {
+    const p = makePlatform();
+    p.respond("post", new RegExp(`${LIST_PATH}$`), {});
+    const r = await run(p, CSV);
+    expect(r.status).toBe("partial");
+    expect(r.intents.createFailed).toBe(1);
+    expect(sentencePatches(p).map((c) => c.path)).toEqual([sentPath(OTH)]);
+  });
+
+  it("a failed sentence PATCH is reported by status without upstream text", async () => {
+    const p = makePlatform();
+    p.fail({
+      method: "patch",
+      path: new RegExp(`/${OTH}/sentences$`),
+      status: 500,
+      shape: "plain",
+    });
+    const r = await run(p, CSV);
+    expect(r.status).toBe("partial");
+    expect(r.notDone).toEqual({ failed: 1 });
+    expect(r.names.failed).toEqual(["Other"]);
+    hint(r);
+    noSecret(r);
+    noSentence(r);
+  });
+
+  describe("deadline", () => {
+    const TWO = csv([
+      ["NewA", `${SENTINEL} a1`],
+      ["NewB", `${SENTINEL} b1`],
+    ]);
+    const timed = async (extra: Record<string, unknown>, jump: number) => {
+      const p = makePlatform();
+      let t = 0;
+      p.onCall((c) => {
+        if (c.method === "post" && c.path === LIST_PATH) t = jump;
+      });
+      const r = await run(p, TWO, extra, { now: () => t });
+      return { p, r };
+    };
+
+    it.each([
+      ["default 120 s, clock at 119999 ms", {}, 119999, 2],
+      ["default 120 s, clock at 120000 ms", {}, 120000, 1],
+      [
+        "deadlineSeconds 10, clock at 9999 ms",
+        { deadlineSeconds: 10 },
+        9999,
+        2,
+      ],
+      [
+        "deadlineSeconds 10, clock at 10000 ms",
+        { deadlineSeconds: 10 },
+        10000,
+        1,
+      ],
+    ] as Array<[string, Record<string, unknown>, number, number]>)(
+      "%s makes the expected creation POSTs (%#)",
+      async (_l, extra, jump, posts) => {
+        const { p, r } = await timed(extra, jump);
+        expect(intentPosts(p)).toHaveLength(posts);
+        if (posts === 2) expect(r.status).toBe("complete");
+        else {
+          expect(r.status).toBe("partial");
+          hint(r);
+        }
+      },
+    );
+
+    it("counts everything not reached as notAttempted when the deadline has passed", async () => {
+      const { p, r } = await timed({}, 120000);
+      expect(sentencePatches(p)).toEqual([]);
+      expect(r.notDone).toEqual({ notAttempted: 2 });
+      expect(r.intents).toEqual({
+        inFile: 2,
+        existing: 0,
+        created: 1,
+        createFailed: 0,
+      });
+    });
+  });
+});
+
+describe("manage_intents import_tree", () => {
+  const base = {
+    operation: "import_tree",
+    projectId: PROJECT,
+    specFile: "data/spec.json",
+  };
+  const run = (
+    p: Platform,
+    spec: unknown,
+    sentences?: string,
+    extra: Record<string, unknown> = {},
+    deps: any = {},
+  ) => {
+    const m: Record<string, string> = {
+      "data/spec.json": typeof spec === "string" ? spec : JSON.stringify(spec),
+    };
+    if (sentences !== undefined) m["data/s.csv"] = sentences;
+    return call(
+      p,
+      {
+        ...base,
+        ...(sentences !== undefined ? { sentencesFile: "data/s.csv" } : {}),
+        ...extra,
+      },
+      { readFile: files(m), ...deps },
+    );
+  };
+  const SPEC = {
+    families: [
+      {
+        name: "Label",
+        intent: "Fam A",
+        groups: [{ name: "Grp A", tags: ["T One", "T Two"] }],
+      },
+    ],
+  };
+  const ROWS = csv([
+    ["T One", `${SENTINEL} t1`],
+    ["T One", `${SENTINEL} t2`],
+    ["T Two", `${SENTINEL} t3`],
+    ["Stranger", `${SENTINEL} x1`],
+  ]);
+  const F = hid("d", 1);
+  const G = hid("d", 2);
+  const T1 = hid("d", 3);
+  const T2 = hid("d", 4);
+  const EXPECTED = {
+    operation: "import_tree",
+    flowId: FLOW,
+    ok: true,
+    mode: "add",
+    status: "complete",
+    intents: {
+      planned: { families: 1, groups: 1, tags: 2 },
+      existing: { families: 0, groups: 0, tags: 0 },
+      created: { families: 1, groups: 1, tags: 2 },
+      createFailed: 0,
+      notAttempted: 0,
+    },
+    sentences: {
+      rows: 4,
+      created: 3,
+      deleted: 0,
+      skippedExisting: 0,
+      duplicatesDropped: 0,
+    },
+    batches: 2,
+    skipped: { notInSpecRows: 1, notInSpecIntents: 1 },
+    names: { notInSpec: ["Stranger"] },
+  };
+
+  it("creates the tree level by level with exact bodies and imports the tag sentences", async () => {
+    const p = makePlatform({ intents: [] });
+    const r = await run(p, SPEC, ROWS);
+    expect(p.writes()).toEqual([
+      {
+        method: "post",
+        path: LIST_PATH,
+        body: { name: "Fam A", childFeatures: true },
+      },
+      {
+        method: "post",
+        path: LIST_PATH,
+        body: { name: "Grp A", parentIntentId: F, childFeatures: true },
+      },
+      {
+        method: "post",
+        path: LIST_PATH,
+        body: { name: "T One", parentIntentId: G },
+      },
+      {
+        method: "post",
+        path: LIST_PATH,
+        body: { name: "T Two", parentIntentId: G },
+      },
+      {
+        method: "patch",
+        path: sentPath(T1),
+        body: {
+          operations: [
+            { op: "create", value: { text: `${SENTINEL} t1` } },
+            { op: "create", value: { text: `${SENTINEL} t2` } },
+          ],
+        },
+      },
+      {
+        method: "patch",
+        path: sentPath(T2),
+        body: {
+          operations: [{ op: "create", value: { text: `${SENTINEL} t3` } }],
+        },
+      },
+    ]);
+    expect(r).toEqual(EXPECTED);
+    expect(p.gets(LIST_PATH)).toHaveLength(1);
+    expect(p.gets(FLOW_PATH)).toHaveLength(1);
+    noSentence(r);
+    noSecret(r);
+  });
+
+  it("a rerun after a complete run makes no write", async () => {
+    const p = makePlatform({ intents: [] });
+    await run(p, SPEC, ROWS);
+    const before = p.writes().length;
+    const r = await run(p, SPEC, ROWS);
+    expect(p.writes()).toHaveLength(before);
+    expect(r).toEqual({
+      ...EXPECTED,
+      intents: {
+        planned: { families: 1, groups: 1, tags: 2 },
+        existing: { families: 1, groups: 1, tags: 2 },
+        created: { families: 0, groups: 0, tags: 0 },
+        createFailed: 0,
+        notAttempted: 0,
+      },
+      sentences: {
+        rows: 4,
+        created: 0,
+        deleted: 0,
+        skippedExisting: 3,
+        duplicatesDropped: 0,
+      },
+      batches: 0,
+    });
+  });
+
+  it("without a sentencesFile it creates the tree and returns no sentences or batches keys", async () => {
+    const p = makePlatform({ intents: [] });
+    const r = await run(p, SPEC);
+    expect(intentPosts(p)).toHaveLength(4);
+    expect(sentencePatches(p)).toEqual([]);
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "complete",
+      intents: EXPECTED.intents,
+    });
+  });
+
+  it("creates the same group name once under each family that lists it", async () => {
+    const p = makePlatform({ intents: [] });
+    const spec = {
+      families: [
+        { name: "Fam A", groups: [{ name: "Shared", tags: ["T1"] }] },
+        { name: "Fam B", groups: [{ name: "Shared", tags: ["T2"] }] },
+      ],
+    };
+    const r = await run(p, spec);
+    expect(intentPosts(p).map((c) => c.body)).toEqual([
+      { name: "Fam A", childFeatures: true },
+      { name: "Fam B", childFeatures: true },
+      { name: "Shared", parentIntentId: hid("d", 1), childFeatures: true },
+      { name: "Shared", parentIntentId: hid("d", 2), childFeatures: true },
+      { name: "T1", parentIntentId: hid("d", 3) },
+      { name: "T2", parentIntentId: hid("d", 4) },
+    ]);
+    expect(r.intents.created).toEqual({ families: 2, groups: 2, tags: 2 });
+  });
+
+  it("reuses existing intents, reports a parent whose childFeatures is false and changes nothing else", async () => {
+    const p = makePlatform({
+      intents: [
+        {
+          id: FAM,
+          name: "Family",
+          parent: null,
+          childFeatures: false,
+          sentences: [],
+        },
+        {
+          id: GRP,
+          name: "Group",
+          parent: FAM,
+          childFeatures: true,
+          sentences: [],
+        },
+      ],
+    });
+    const spec = {
+      families: [
+        { name: "Family", groups: [{ name: "Group", tags: ["NewTag"] }] },
+      ],
+    };
+    const r = await run(p, spec);
+    expect(p.writes()).toEqual([
+      {
+        method: "post",
+        path: LIST_PATH,
+        body: { name: "NewTag", parentIntentId: GRP },
+      },
+    ]);
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "complete",
+      intents: {
+        planned: { families: 1, groups: 1, tags: 1 },
+        existing: { families: 1, groups: 1, tags: 0 },
+        created: { families: 0, groups: 0, tags: 1 },
+        createFailed: 0,
+        notAttempted: 0,
+      },
+      parentsNeedingChildFeatures: { count: 1, names: ["Family"] },
+    });
+  });
+
+  it("a failed group creation counts its descendants as notAttempted and skips their rows", async () => {
+    const p = makePlatform({ intents: [] });
+    p.fail({
+      method: "post",
+      path: new RegExp(`${LIST_PATH}$`),
+      status: 500,
+      shape: "plain",
+      when: (c) => c.body?.name === "Grp A",
+    });
+    const r = await run(
+      p,
+      SPEC,
+      csv([
+        ["T One", `${SENTINEL} t1`],
+        ["T One", `${SENTINEL} t2`],
+      ]),
+    );
+    expect(intentPosts(p).map((c) => c.body.name)).toEqual(["Fam A", "Grp A"]);
+    expect(sentencePatches(p)).toEqual([]);
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "partial",
+      intents: {
+        planned: { families: 1, groups: 1, tags: 2 },
+        existing: { families: 0, groups: 0, tags: 0 },
+        created: { families: 1, groups: 0, tags: 0 },
+        createFailed: 1,
+        notAttempted: 2,
+      },
+      sentences: {
+        rows: 2,
+        created: 0,
+        deleted: 0,
+        skippedExisting: 0,
+        duplicatesDropped: 0,
+      },
+      batches: 0,
+      skipped: { tagNotCreated: 2 },
+      names: { createFailed: ["Grp A"] },
+      _hints: { warning: expect.any(String), action: expect.any(String) },
+    });
+    hint(r);
+    noSecret(r);
+    noSentence(r);
+  });
+
+  it("skips a tag over 200 distinct sentences, still creates it, and imports the others", async () => {
+    const p = makePlatform({ intents: [] });
+    const big = Array.from(
+      { length: 201 },
+      (_, i) => ["T One", `${SENTINEL} big ${i}`] as [string, string],
+    );
+    const r = await run(p, SPEC, csv([...big, ["T Two", `${SENTINEL} t3`]]));
+    expect(intentPosts(p).map((c) => c.body.name)).toEqual([
+      "Fam A",
+      "Grp A",
+      "T One",
+      "T Two",
+    ]);
+    expect(sentencePatches(p).map((c) => c.path)).toEqual([sentPath(T2)]);
+    expect(r).toMatchObject({
+      ok: true,
+      status: "complete",
+      skipped: { overCap: 1 },
+      names: { overCap: ["T One"] },
+    });
+    noSentence(r);
+  });
+
+  it("the deadline turns the planned intents not yet created into notAttempted", async () => {
+    const p = makePlatform({ intents: [] });
+    let t = 0;
+    p.onCall((c) => {
+      if (c.method === "post" && c.path === LIST_PATH) t = 120000;
+    });
+    const r = await run(p, SPEC, undefined, {}, { now: () => t });
+    expect(intentPosts(p)).toHaveLength(1);
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "partial",
+      intents: {
+        planned: { families: 1, groups: 1, tags: 2 },
+        existing: { families: 0, groups: 0, tags: 0 },
+        created: { families: 1, groups: 0, tags: 0 },
+        createFailed: 0,
+        notAttempted: 3,
+      },
+      _hints: { warning: expect.any(String), action: expect.any(String) },
+    });
+    hint(r);
+  });
+
+  it("refuses an invalid spec with spec_invalid and changes nothing", async () => {
+    const p = makePlatform();
+    const r = await run(p, "this is not json");
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      error: "spec_invalid",
+      count: 1,
+      problems: [{ path: "", reason: "not_json" }],
+    });
+    noWrites(p);
+    expect(p.gets(LIST_PATH)).toEqual([]);
+  });
+
+  it("refuses an unreadable spec file with file_error and which specFile", async () => {
+    const p = makePlatform();
+    const readFile = jest
+      .fn<(p: string) => Promise<string>>()
+      .mockRejectedValue(new FileAccessError("fixed refusal", "outside_root"));
+    const r = await call(p, base, { readFile });
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      error: "file_error",
+      which: "specFile",
+      code: "outside_root",
+      message: "fixed refusal",
+    });
+    noWrites(p);
+  });
+
+  it("refuses bad csv rows with csv_errors and which sentencesFile, before any change", async () => {
+    const p = makePlatform();
+    const r = await run(p, SPEC, "onlyone\n");
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      error: "csv_errors",
+      which: "sentencesFile",
+      count: 1,
+      first: [{ line: 1, error: "wrong_column_count" }],
+    });
+    noWrites(p);
+  });
+
+  it("refuses an empty sentences file with which sentencesFile", async () => {
+    const p = makePlatform();
+    const r = await run(p, SPEC, "");
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      error: "empty_file",
+      which: "sentencesFile",
+    });
+    noWrites(p);
+  });
+
+  it("replace mode is passed through to the sentence import", async () => {
+    const p = makePlatform({
+      intents: [
+        {
+          id: FAM,
+          name: "Fam A",
+          parent: null,
+          childFeatures: true,
+          sentences: [],
+        },
+        {
+          id: GRP,
+          name: "Grp A",
+          parent: FAM,
+          childFeatures: true,
+          sentences: [],
+        },
+        { id: TAG, name: "T One", parent: GRP, sentences: [`${SENTINEL} old`] },
+      ],
+    });
+    const spec = {
+      families: [
+        { name: "Fam A", groups: [{ name: "Grp A", tags: ["T One"] }] },
+      ],
+    };
+    const ids = p.sentenceIds(TAG);
+    const r = await run(p, spec, csv([["T One", `${SENTINEL} fresh`]]), {
+      mode: "replace",
+    });
+    expect(r.mode).toBe("replace");
+    expect(sentencePatches(p)).toEqual([
+      {
+        method: "patch",
+        path: sentPath(TAG),
+        body: {
+          operations: [
+            { op: "delete", id: ids[0] },
+            { op: "create", value: { text: `${SENTINEL} fresh` } },
+          ],
+        },
+      },
+    ]);
+    expect(r.sentences).toEqual({
+      rows: 1,
+      created: 1,
+      deleted: 1,
+      skippedExisting: 0,
+      duplicatesDropped: 0,
+    });
+  });
+});
+
 describe("manage_intents operation field", () => {
   it("sets operation on every error shape", async () => {
     const p = makePlatform();
