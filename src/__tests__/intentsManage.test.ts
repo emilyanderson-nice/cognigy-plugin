@@ -4109,6 +4109,293 @@ describe("manage_intents import_tree", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Round 8: list views (compact and summary)
+// ---------------------------------------------------------------------------
+describe("manage_intents list views", () => {
+  const statusSeed = (): SeedIntent[] =>
+    defaultSeed().map((s) =>
+      s.id === TAG
+        ? {
+            ...s,
+            feedbackReport: {
+              findings: [
+                {
+                  type: "lowDataIntents",
+                  intents: [{ intentName: "Tag", intentId: TAG }],
+                },
+              ],
+            },
+          }
+        : s.id === FAM
+          ? { ...s, feedbackReport: { findings: [] } }
+          : s,
+    );
+  const REASONS = [
+    { type: "lowDataIntents", intents: ["Tag"], intentCount: 1 },
+  ];
+
+  it("view absent and view full give the identical result, with no view key", async () => {
+    const a = makePlatform();
+    const b = makePlatform();
+    const absent = await call(a, { operation: "list" });
+    const full = await call(b, { operation: "list", view: "full" });
+    expect(full).toEqual(absent);
+    expect("view" in absent).toBe(false);
+    expect("view" in full).toBe(false);
+    expect(Array.isArray(full.intents)).toBe(true);
+    expect(full.intents).toHaveLength(4);
+  });
+
+  it("compact returns the exact table and no intents key", async () => {
+    const p = makePlatform();
+    const r = await call(p, { operation: "list", view: "compact" });
+    expect(r).toEqual({
+      operation: "list",
+      flowId: FLOW,
+      view: "compact",
+      total: 4,
+      maxDepth: 3,
+      columns: [
+        "id",
+        "name",
+        "parentId",
+        "depth",
+        "sentenceCount",
+        "effectiveSentenceCount",
+        "childFeatures",
+      ],
+      rows: [
+        [FAM, "Family", null, 1, 6, 14, true],
+        [GRP, "Group", FAM, 2, 3, 8, true],
+        [TAG, "Tag", GRP, 3, 5, null, null],
+        [OTH, "Other", null, 1, 0, null, null],
+      ],
+    });
+    expect("intents" in r).toBe(false);
+    expect("priority" in r).toBe(false);
+    expect(r._hints).toBeUndefined();
+    noWrites(p);
+    noSentence(r);
+  });
+
+  it("compact with includeSentenceCounts false has no count columns and makes no sentence request", async () => {
+    const p = makePlatform();
+    const r = await call(p, {
+      operation: "list",
+      view: "compact",
+      includeSentenceCounts: false,
+    });
+    expect(r.columns).toEqual([
+      "id",
+      "name",
+      "parentId",
+      "depth",
+      "childFeatures",
+    ]);
+    expect(r.rows).toEqual([
+      [FAM, "Family", null, 1, true],
+      [GRP, "Group", FAM, 2, true],
+      [TAG, "Tag", GRP, 3, null],
+      [OTH, "Other", null, 1, null],
+    ]);
+    expect(p.sentenceCalls()).toEqual([]);
+  });
+
+  it("compact with includeStatus adds the state column and the grouped reasons", async () => {
+    const p = makePlatform({ intents: statusSeed() });
+    const r = await call(p, {
+      operation: "list",
+      view: "compact",
+      includeStatus: true,
+    });
+    expect(r.columns).toEqual([
+      "id",
+      "name",
+      "parentId",
+      "depth",
+      "sentenceCount",
+      "effectiveSentenceCount",
+      "childFeatures",
+      "state",
+    ]);
+    expect(r.rows).toEqual([
+      [FAM, "Family", null, 1, 6, 14, true, "ok"],
+      [GRP, "Group", FAM, 2, 3, 8, true, "unknown"],
+      [TAG, "Tag", GRP, 3, 5, null, null, "low_data"],
+      [OTH, "Other", null, 1, 0, null, null, "unknown"],
+    ]);
+    expect(r.reasons).toEqual(REASONS);
+    expect(p.gets(LIST_PATH)[0].params).toEqual({
+      limit: 100,
+      includeChildren: true,
+      includeFeedbackReport: true,
+    });
+  });
+
+  it("compact with includeStatus but no reasons has the state column and no reasons key", async () => {
+    const p = makePlatform();
+    const r = await call(p, {
+      operation: "list",
+      view: "compact",
+      includeStatus: true,
+    });
+    expect(r.columns[r.columns.length - 1]).toBe("state");
+    expect(r.rows.map((row: any[]) => row[row.length - 1])).toEqual([
+      "unknown",
+      "unknown",
+      "unknown",
+      "unknown",
+    ]);
+    expect("reasons" in r).toBe(false);
+  });
+
+  it("compact carries the priority once when every intent shares it", async () => {
+    const p = makePlatform({
+      intents: defaultSeed().map((s) => ({
+        ...s,
+        priority: "parents" as const,
+      })),
+    });
+    const r = await call(p, { operation: "list", view: "compact" });
+    expect(r.priority).toBe("parents");
+    expect(r.columns).not.toContain("priority");
+  });
+
+  it("summary returns the exact counts and no intents or rows", async () => {
+    const p = makePlatform();
+    const r = await call(p, { operation: "list", view: "summary" });
+    expect(r).toEqual({
+      operation: "list",
+      flowId: FLOW,
+      view: "summary",
+      total: 4,
+      maxDepth: 3,
+      byDepth: { "1": 2, "2": 1, "3": 1 },
+      sentenceCounts: { counted: 4, min: 0, max: 6, median: 3, sum: 14 },
+      inheriting: 2,
+    });
+    expect("intents" in r).toBe(false);
+    expect("rows" in r).toBe(false);
+    expect(r._hints).toBeUndefined();
+    noSentence(r);
+  });
+
+  it("summary with includeSentenceCounts false has only the depth counts", async () => {
+    const p = makePlatform();
+    const r = await call(p, {
+      operation: "list",
+      view: "summary",
+      includeSentenceCounts: false,
+    });
+    expect(r).toEqual({
+      operation: "list",
+      flowId: FLOW,
+      view: "summary",
+      total: 4,
+      maxDepth: 3,
+      byDepth: { "1": 2, "2": 1, "3": 1 },
+    });
+    expect(p.sentenceCalls()).toEqual([]);
+  });
+
+  it("summary with includeStatus adds states, reasons and the attention list", async () => {
+    const p = makePlatform({ intents: statusSeed() });
+    const r = await call(p, {
+      operation: "list",
+      view: "summary",
+      includeStatus: true,
+    });
+    expect(r).toEqual({
+      operation: "list",
+      flowId: FLOW,
+      view: "summary",
+      total: 4,
+      maxDepth: 3,
+      byDepth: { "1": 2, "2": 1, "3": 1 },
+      sentenceCounts: { counted: 4, min: 0, max: 6, median: 3, sum: 14 },
+      inheriting: 2,
+      states: { ok: 1, low_data: 1, not_scored: 0, unknown: 2 },
+      reasons: REASONS,
+      attention: [
+        { id: GRP, name: "Group", state: "unknown" },
+        { id: TAG, name: "Tag", state: "low_data" },
+        { id: OTH, name: "Other", state: "unknown" },
+      ],
+    });
+  });
+
+  it("makes the same platform calls for full, compact and summary", async () => {
+    const calls: unknown[] = [];
+    for (const view of [undefined, "full", "compact", "summary"]) {
+      const p = makePlatform();
+      await call(p, view ? { operation: "list", view } : { operation: "list" });
+      calls.push(p.calls);
+    }
+    expect(calls[1]).toEqual(calls[0]);
+    expect(calls[2]).toEqual(calls[0]);
+    expect(calls[3]).toEqual(calls[0]);
+  });
+
+  describe.each(["compact", "summary"])("%s warning rule", (view) => {
+    it("truncated gives truncated true and a warning", async () => {
+      const p = makePlatform({ pageSize: 2 });
+      failNextPage(p);
+      const r = await call(p, { operation: "list", view });
+      expect(r.truncated).toBe(true);
+      expect(r.view).toBe(view);
+      expect(r._hints.warning.length).toBeGreaterThan(0);
+      expect("intents" in r).toBe(false);
+    });
+
+    it("countsIncomplete gives countsIncomplete true and a warning", async () => {
+      const p = makePlatform();
+      p.fail({
+        method: "get",
+        path: new RegExp(`/${TAG}/sentences$`),
+        status: 500,
+      });
+      const r = await call(p, { operation: "list", view });
+      expect(r.countsIncomplete).toBe(true);
+      expect(r._hints.warning.length).toBeGreaterThan(0);
+      noSecret(r);
+    });
+
+    it("problems are reported with a warning", async () => {
+      const p = makePlatform({ intents: orphanSeed() });
+      const r = await call(p, { operation: "list", view });
+      expect(r.problems).toEqual([{ id: LOST, problem: "orphan" }]);
+      expect(r._hints.warning.length).toBeGreaterThan(0);
+    });
+
+    it("a clean read has none of truncated, countsIncomplete, problems", async () => {
+      const p = makePlatform();
+      const r = await call(p, { operation: "list", view });
+      expect("truncated" in r).toBe(false);
+      expect("countsIncomplete" in r).toBe(false);
+      expect("problems" in r).toBe(false);
+    });
+
+    it("a failed first page is flow_not_readable with the status", async () => {
+      const p = makePlatform();
+      p.fail({ method: "get", path: new RegExp(`${LIST_PATH}$`), status: 503 });
+      const r = await call(p, { operation: "list", view });
+      expect(r).toMatchObject({
+        operation: "list",
+        error: "flow_not_readable",
+        httpStatus: 503,
+      });
+      noSecret(r);
+    });
+  });
+
+  it("the summary counts an orphan under depth 0", async () => {
+    const p = makePlatform({ intents: orphanSeed() });
+    const r = await call(p, { operation: "list", view: "summary" });
+    expect(r.byDepth).toEqual({ "0": 1, "1": 2, "2": 1, "3": 1 });
+  });
+});
+
 describe("manage_intents operation field", () => {
   it("sets operation on every error shape", async () => {
     const p = makePlatform();
