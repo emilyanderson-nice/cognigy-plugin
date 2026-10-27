@@ -2330,4 +2330,157 @@ export const tools: ToolDefinition[] = [
       },
     },
   },
+
+  // 20. manage_intents
+  {
+    name: "manage_intents",
+    description:
+      "Read and manage the NLU intents of a flow (up to 3 levels: family, group, tag), including example sentences, and train the model. Reads: list, get, export_tree, below_minimum, compare (against a CSV file), model_state. All write operations (create, update, move, delete, import_sentences and build) change the flow's NLU and are held by the backup gate until a backup is offered or declined. Never guess an intent: pass an id, a unique name or a Parent/Child path. import_sentences adds or replaces sentences in batches; results never echo sentences or upstream errors.",
+    annotations: {
+      title: "Manage Intents",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: [
+            "list",
+            "get",
+            "export_tree",
+            "below_minimum",
+            "compare",
+            "model_state",
+            "create",
+            "update",
+            "move",
+            "delete",
+            "import_sentences",
+            "build",
+          ],
+          description: "Operation to perform",
+        },
+        flowId: {
+          type: "string",
+          pattern: "^[a-f0-9]{24}$",
+          description: "Flow ID (24-char hex)",
+        },
+        projectId: {
+          type: "string",
+          pattern: "^[a-f0-9]{24}$",
+          description:
+            "Project ID; required for every write and must be the flow's project",
+        },
+        intent: {
+          type: "string",
+          minLength: 1,
+          maxLength: 300,
+          description:
+            "Intent id, unique name, or Parent/Child path (get, update, move, delete)",
+        },
+        name: {
+          type: "string",
+          minLength: 1,
+          maxLength: 200,
+          description: "Intent name (create, update)",
+        },
+        parent: {
+          type: ["string", "null"],
+          minLength: 1,
+          maxLength: 300,
+          description:
+            "Parent intent (id, name or path). On move, null makes the intent a root",
+        },
+        childFeatures: {
+          type: "boolean",
+          description: "Let the intent have child intents (create, update)",
+        },
+        priority: {
+          type: "string",
+          enum: ["parents", "children"],
+          description: "Whether parent or child intents win on a tie",
+        },
+        sentences: {
+          type: "array",
+          maxItems: 200,
+          items: { type: "string", minLength: 1, maxLength: 500 },
+          description: "Example sentences for the new intent (create)",
+        },
+        entries: {
+          type: "array",
+          minItems: 1,
+          maxItems: 500,
+          items: {
+            type: "object",
+            properties: {
+              intent: {
+                type: "string",
+                minLength: 1,
+                maxLength: 300,
+                description: "Intent id, name or Parent/Child path",
+              },
+              sentences: {
+                type: "array",
+                maxItems: 200,
+                items: { type: "string", minLength: 1, maxLength: 500 },
+              },
+            },
+            required: ["intent", "sentences"],
+          },
+          description:
+            "import_sentences: sentences per intent (max 500 entries, 10000 sentences)",
+        },
+        mode: {
+          type: "string",
+          enum: ["add", "replace", "full", "quick"],
+          description:
+            "import_sentences: add or replace (required). build: full or quick (default full)",
+        },
+        min: {
+          type: "integer",
+          minimum: 1,
+          maximum: 200,
+          description: "below_minimum: sentence threshold (default 5)",
+        },
+        file: {
+          type: "string",
+          minLength: 1,
+          maxLength: 500,
+          description:
+            "compare: CSV path inside the project (no header; intent,exampleSentence,sentence)",
+        },
+        includeSentenceCounts: {
+          type: "boolean",
+          description: "list: include sentence counts (default true)",
+        },
+        includeStatus: {
+          type: "boolean",
+          description: "list: include training-quality status (default false)",
+        },
+        includeSentences: {
+          type: "boolean",
+          description: "get: also return the intent's sentences",
+        },
+        waitSeconds: {
+          type: "integer",
+          minimum: 0,
+          maximum: 300,
+          description:
+            "build: seconds to wait for training (0-300, default 60)",
+        },
+        deadlineSeconds: {
+          type: "integer",
+          minimum: 1,
+          maximum: 600,
+          description:
+            "import_sentences: seconds before stopping a large import (1-600, default 60); re-run to finish",
+        },
+      },
+      required: ["operation", "flowId"],
+    },
+  },
 ];

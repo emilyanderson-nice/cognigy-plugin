@@ -1,0 +1,71 @@
+{
+  "probedAt": "2026-10-26T21:50:05.847Z",
+  "profile": "na1",
+  "host": "cognigy-api-na1.nicecxone.com",
+  "declaredVersion": null,
+  "method": "GET",
+  "path": "/v2.0/flows/{id}/intents/{id}",
+  "query": {},
+  "status": 200,
+  "ms": 233,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "<present>",
+    "connection": "<present>",
+    "access-control-allow-credentials": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-embedder-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "expect-ct": "<present>",
+    "last-modified": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "set-cookie": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "api--ced34786-a587-4e2d-9375-58cce57072e6",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-robots-tag": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "1.1 {id}375e5544.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "_id": "<objectId>",
+    "name": "<string:5>",
+    "description": "<string:0>",
+    "referenceId": "<uuid>",
+    "tags": {
+      "_array": 0,
+      "_item": null
+    },
+    "analyticsLabel": "<string:5>",
+    "createdAt": "number",
+    "lastChanged": "number",
+    "createdBy": "<objectId>",
+    "lastChangedBy": "<objectId>",
+    "isDisabled": "boolean",
+    "confirmationSentences": {
+      "_array": 0,
+      "_item": null
+    },
+    "rules": {
+      "_array": 0,
+      "_item": null
+    },
+    "localeReference": "<objectId>",
+    "childFeatures": "boolean",
+    "biasTowardsParentOrChildIntents": "<string:7>"
+  }
+}

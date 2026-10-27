@@ -84,6 +84,7 @@ import {
 } from "./voiceChecklist.js";
 import { z } from "zod";
 import * as schemas from "../schemas/tools.js";
+import { handleManageIntents } from "./intents/manage.js";
 import {
   chartToAscii,
   chartToMermaid,
@@ -1228,6 +1229,7 @@ export const BACKUP_WORTHY_TOOLS = new Set([
   "create_tool",
   "update_tool",
   "manage_flow_nodes",
+  "manage_intents",
   "delete_resource",
   // Rewrites node configs and prepends flow nodes — the bulkiest single change
   // the plugin can make. Only in apply mode; see isBackupWorthyCall.
@@ -1320,6 +1322,8 @@ export class ToolHandlers {
     "body",
     "preProcessCode",
     "postProcessCode",
+    "entries",
+    "sentences",
   ]);
   private static readonly DEFAULT_PACKAGE_TIMEOUT_MS = 600000;
   /** Pagination guard for listAllSnapshots (100 per page). */
@@ -1348,6 +1352,7 @@ export class ToolHandlers {
     create_tool: schemas.createToolSchema,
     update_tool: schemas.updateToolSchema,
     manage_flow_nodes: schemas.manageFlowNodesSchema,
+    manage_intents: schemas.manageIntentsSchema,
     delete_resource: schemas.deleteResourceSchema,
     audit_voice_agent: schemas.auditVoiceAgentSchema,
     manage_settings: schemas.manageSettingsSchema,
@@ -1359,6 +1364,9 @@ export class ToolHandlers {
     "list",
     "render",
     "compare",
+    "export_tree",
+    "below_minimum",
+    "model_state",
   ]);
 
   /**
@@ -9029,6 +9037,9 @@ export class ToolHandlers {
           break;
         case "manage_flow_nodes":
           result = await this.handleManageFlowNodes(args);
+          break;
+        case "manage_intents":
+          result = await handleManageIntents(this.apiClient, args);
           break;
         case "manage_packages":
           result = await this.handleManagePackages(args);

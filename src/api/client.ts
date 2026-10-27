@@ -243,9 +243,11 @@ export class CognigyApiClient {
         const message = (error.response?.data as any)?.detail || error.message;
         const traceId = (error.response?.data as any)?.traceId;
 
+        // NLU endpoints can echo training sentences in their error text.
+        const withhold = (config?.url ?? "").includes("/intents");
         log.error("API Response Error", {
           status: status || "N/A",
-          message: this.redact(message),
+          message: withhold ? "[withheld: NLU endpoint]" : this.redact(message),
           traceId: this.redact(traceId),
           url: config?.url,
         });

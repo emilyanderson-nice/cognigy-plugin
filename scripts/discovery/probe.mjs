@@ -7,7 +7,8 @@
  *
  * Safety properties (all enforced in this file, not by convention):
  *   - GET only: the only HTTP call made is axios.get. There is no code path for another method.
- *   - Credentials come from env.local (COGNIGY_PROFILE_<NAME>_*), parsed here; values are never
+ *   - Credentials come from env.local (COGNIGY_PROFILE_<NAME>_*), parsed here, or else from a profile
+ *     saved with cognigy-setup, read by the engine's own loader (dist/); values are never
  *     printed or written. Any string containing the API key is replaced with <REDACTED>.
  *   - Output is a SHAPE of the response (types, array lengths, key names), not its data. Only values of
  *     a small allowlist of structural keys (type, status, version, ...) are kept. IDs, names, emails,
@@ -20,7 +21,7 @@
  */
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import axios from "axios";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -62,8 +63,8 @@ const SAFE_HEADERS = [
   /^api-/i,
 ];
 
-function loadProfile(name) {
-  if (!existsSync(ENV_FILE)) fail(`env.local not found at ${ENV_FILE}`);
+function loadEnvFileProfile(name) {
+  if (!existsSync(ENV_FILE)) return null;
   const vars = {};
   for (const line of readFileSync(ENV_FILE, "utf8").split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
@@ -73,16 +74,45 @@ function loadProfile(name) {
   const prefix = `COGNIGY_PROFILE_${name.toUpperCase().replace(/-/g, "_")}_`;
   const baseUrl = vars[`${prefix}API_BASE_URL`];
   const apiKey = vars[`${prefix}API_KEY`];
-  if (!baseUrl || !apiKey)
-    fail(
-      `profile "${name}": API_BASE_URL and API_KEY must both be set in env.local`,
-    );
+  if (!baseUrl || !apiKey) return null;
   return {
     name,
     baseUrl: baseUrl.replace(/\/+$/, ""),
     apiKey,
     declaredVersion: vars[`${prefix}PLATFORM_VERSION`],
   };
+}
+
+// A profile saved with cognigy-setup lives in the user's config file, not in
+// env.local. The engine's own loader reads it, so the key is never parsed or
+// printed here. Requires `npm run build`.
+async function loadSavedProfile(name) {
+  try {
+    const mod = await import(
+      pathToFileURL(join(ROOT, "dist", "profiles", "profiles.js")).href
+    );
+    const found = mod
+      .loadProfilesFromSystem()
+      .profiles.find((p) => p.name === name);
+    if (!found) return null;
+    return {
+      name,
+      baseUrl: found.apiBaseUrl.replace(/\/+$/, ""),
+      apiKey: found.apiKey,
+      declaredVersion: found.versionHint,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function loadProfile(name) {
+  const profile = loadEnvFileProfile(name) ?? (await loadSavedProfile(name));
+  if (!profile)
+    fail(
+      `profile "${name}" not found: set COGNIGY_PROFILE_<NAME>_API_BASE_URL and _API_KEY in env.local, or save it with cognigy-setup (and run npm run build)`,
+    );
+  return profile;
 }
 
 function fail(msg) {
@@ -228,10 +258,14 @@ const maskQuery = (q) =>
     ]),
   );
 const pathToUrl = (p) => new URL(`file:///${p.replace(/\\/g, "/")}`).href;
+// Tenant ids (24-hex object ids) never reach disk: not in file names, not in the stored path.
+const maskIds = (s) => s.replace(/[0-9a-f]{24}/gi, "{id}");
 const slug = (path, query) =>
-  (
+  maskIds(
     path +
-    (Object.keys(query).length ? "?" + Object.keys(query).sort().join("&") : "")
+      (Object.keys(query).length
+        ? "?" + Object.keys(query).sort().join("&")
+        : ""),
   )
     .replace(/^\//, "")
     .replace(/[^A-Za-z0-9._-]+/g, "_");
@@ -250,7 +284,7 @@ function record(profile, result) {
     ...publicPart,
     query: maskQuery(publicPart.query),
   };
-  writeFileSync(file, JSON.stringify(doc, null, 2) + "\n");
+  writeFileSync(file, maskIds(JSON.stringify(doc, null, 2)) + "\n");
   return file;
 }
 
@@ -325,7 +359,7 @@ if (!profileName)
   fail(
     "usage: probe.mjs <profile> <path> [k=v ...] | <profile> --preset baseline",
   );
-const profile = loadProfile(profileName);
+const profile = await loadProfile(profileName);
 const redactor = makeRedactor(profile.apiKey);
 console.log(
   `profile=${profile.name} host=${new URL(profile.baseUrl).host} declaredVersion=${profile.declaredVersion || "-"}`,
