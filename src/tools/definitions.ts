@@ -2335,7 +2335,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "manage_intents",
     description:
-      "Read and manage the NLU intents of a flow (up to 3 levels: family, group, tag), including example sentences, and train the model. Reads: list, get, export_tree, below_minimum, compare (against a CSV file), model_state. All write operations (create, update, move, delete, import_sentences and build) change the flow's NLU and are held by the backup gate until a backup is offered or declined. Never guess an intent: pass an id, a unique name or a Parent/Child path. import_csv and import_tree read sentences (and a tree spec) from project files so the text never passes through the conversation; both are held by the backup gate. Results never echo sentences or upstream errors.",
+      "Read and manage the NLU intents of a flow (up to 3 levels: family, group, tag), including example sentences, and train the model. Reads: list (full, compact or summary view), get, export_tree, below_minimum, compare (against a CSV file), model_state. All write operations (create, update, move, delete, import_sentences and build) change the flow's NLU and are held by the backup gate until a backup is offered or declined. Never guess an intent: pass an id, a unique name or a Parent/Child path. import_csv and import_tree read sentences (and a tree spec) from project files so the text never passes through the conversation; both are held by the backup gate. Results never echo sentences or upstream errors.",
     annotations: {
       title: "Manage Intents",
       readOnlyHint: false,
@@ -2462,6 +2462,12 @@ export const tools: ToolDefinition[] = [
         includeStatus: {
           type: "boolean",
           description: "list: include training-quality status (default false)",
+        },
+        view: {
+          type: "string",
+          enum: ["full", "compact", "summary"],
+          description:
+            "list: full (default, one object per intent), compact (a table) or summary (counts only, best for large flows)",
         },
         includeSentences: {
           type: "boolean",

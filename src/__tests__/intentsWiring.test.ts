@@ -176,6 +176,25 @@ describe("manageIntentsSchema", () => {
     expect(parses({ ...VALID.list, includeStatus: "yes" })).toBe(false);
   });
 
+  it.each(["full", "compact", "summary"])(
+    "list accepts view %s and keeps it",
+    (view) => {
+      const p = { ...VALID.list, view };
+      expect(manageIntentsSchema.parse(p)).toEqual(p);
+    },
+  );
+
+  it.each(["tiny", "", "FULL", "Compact", 1, null, true])(
+    "list rejects view %p",
+    (view) => {
+      expect(parses({ ...VALID.list, view })).toBe(false);
+    },
+  );
+
+  it("list without view still parses and adds no view key", () => {
+    expect("view" in manageIntentsSchema.parse(VALID.list)).toBe(false);
+  });
+
   it("get takes includeSentences and bounds intent to 1-300 chars", () => {
     const p = { ...VALID.get, includeSentences: true };
     expect(manageIntentsSchema.parse(p)).toEqual(p);
@@ -518,7 +537,23 @@ describe("manage_intents tool definition", () => {
     expect(schema.required).toEqual(["operation", "flowId"]);
   });
 
-  it("declares the 20 named properties (16 original, deadlineSeconds, specFile, sentencesFile, createMissing) with short, non-empty descriptions", () => {
+  it("mentions the compact and summary list views", () => {
+    const d = tool!.description;
+    expect(d).toContain("compact");
+    expect(d).toContain("summary");
+    expect(d.length).toBeLessThanOrEqual(1000);
+  });
+
+  it("declares view as a string enum full, compact, summary with a short description", () => {
+    const v = (tool!.inputSchema as any).properties.view;
+    expect(v.type).toBe("string");
+    expect(v.enum).toEqual(["full", "compact", "summary"]);
+    expect(typeof v.description).toBe("string");
+    expect(v.description.length).toBeGreaterThan(0);
+    expect(v.description.length).toBeLessThanOrEqual(450);
+  });
+
+  it("declares the 21 named properties (16 original, deadlineSeconds, specFile, sentencesFile, createMissing, view) with short, non-empty descriptions", () => {
     const props = (tool!.inputSchema as any).properties;
     const names = [
       "flowId",
@@ -541,8 +576,9 @@ describe("manage_intents tool definition", () => {
       "specFile",
       "sentencesFile",
       "createMissing",
+      "view",
     ];
-    expect(names).toHaveLength(20);
+    expect(names).toHaveLength(21);
     for (const n of names) {
       expect(props[n]).toBeDefined();
       expect(typeof props[n].description).toBe("string");

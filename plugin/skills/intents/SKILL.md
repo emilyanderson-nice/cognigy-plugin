@@ -28,6 +28,10 @@ Write operations need `projectId`. `create` refuses a name already used by a sib
 - The platform wants **at least 5 sentences** per intent (documented), counting those an intent inherits from its children when `childFeatures` is true. `list` and `export_tree` give `effectiveSentenceCount` on such parents. Fewer still works, but its quality drops and the build flags it.
 - The list pages at 100. The tool reads every page itself (up to 2,000 intents) and says `truncated: true` if it could not.
 
+## Views of `list`
+
+`list` takes `view`: `full` (default, one object per intent), `compact` (a table: `columns` and `rows`, one shared `priority`, and grouped `reasons` with `includeStatus`) or `summary` (counts only: `byDepth`, `sentenceCounts`, `inheriting`, `states`, `reasons`, and up to 50 `attention` intents that are `low_data` or `unknown`). On a large flow (hundreds of intents) call `summary` first, then `compact` or `full` only if you need the rows. The warnings for truncated or incomplete reads apply to every view.
+
 ## Hierarchy settings
 
 - `childFeatures: true` on a parent makes it inherit the example sentences of its children ("Inherit example sentences from child intents").

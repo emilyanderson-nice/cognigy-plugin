@@ -1141,6 +1141,7 @@ export const manageIntentsSchema = z
       flowId: idSchema,
       includeSentenceCounts: z.boolean().optional(),
       includeStatus: z.boolean().optional(),
+      view: z.enum(["full", "compact", "summary"]).optional(),
     }),
     z.object({
       operation: z.literal("get"),

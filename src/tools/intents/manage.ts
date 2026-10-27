@@ -2,6 +2,12 @@ import { manageIntentsSchema } from "../../schemas/tools.js";
 import { FileAccessError, readTextFile } from "../../utils/fileAccess.js";
 import { withHints } from "../filters.js";
 import { modelState } from "./build.js";
+import {
+  compactTable,
+  groupReasons,
+  summarize,
+  type ReasonGroup,
+} from "./listViews.js";
 import { belowMinimum, compareIntents, parseIntentCsv } from "./csv.js";
 import {
   failure,
@@ -33,6 +39,9 @@ const namesOf = (names: string[]): { uncountedIntents?: string[] } =>
 
 // ---------------------------------------------------------------- reads
 
+const reasonsEntry = (reasons: ReasonGroup[]): { reasons?: ReasonGroup[] } =>
+  reasons.length > 0 ? { reasons } : {};
+
 async function list(api: IntentApi, a: Op<"list">): Promise<Result> {
   const read = await readFlowIntents(api, a.flowId, {
     includeSentenceCounts: a.includeSentenceCounts !== false,
@@ -44,12 +53,28 @@ async function list(api: IntentApi, a: Op<"list">): Promise<Result> {
       ...(read.httpStatus !== undefined ? { httpStatus: read.httpStatus } : {}),
     });
   }
-  const result: Result = {
+  const view = a.view ?? "full";
+  const head = {
     operation: a.operation,
     flowId: a.flowId,
+    ...(view === "full" ? {} : { view }),
     total: read.total,
     maxDepth: read.maxDepth,
-    intents: read.intents,
+  };
+  const body: Result =
+    view === "compact"
+      ? {
+          ...compactTable(read.intents),
+          ...(a.includeStatus === true
+            ? reasonsEntry(groupReasons(read.intents))
+            : {}),
+        }
+      : view === "summary"
+        ? { ...summarize(read.intents) }
+        : { intents: read.intents };
+  const result: Result = {
+    ...head,
+    ...body,
     ...(read.truncated ? { truncated: true } : {}),
     ...(read.countsIncomplete ? { countsIncomplete: true } : {}),
     ...(read.problems.length > 0 ? { problems: read.problems } : {}),
