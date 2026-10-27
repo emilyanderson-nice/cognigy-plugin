@@ -16,6 +16,7 @@ import {
 import { tools } from "../tools/definitions.js";
 import { ToolHandlers } from "../tools/handlers.js";
 import { SERVER_INSTRUCTIONS } from "../instructions.js";
+import { readRepo } from "./helpers/docText.js";
 import {
   KEY_A,
   harness,
@@ -379,10 +380,25 @@ describe("log wiring: dispatcher-wrapped output", () => {
   });
 });
 
-describe("log wiring: always-on instructions", () => {
-  it('mentions list_resources with resourceType: "log"', () => {
-    expect(SERVER_INSTRUCTIONS).toContain(
+// SERVER_INSTRUCTIONS is capped at 2000 characters (toolSurfaceBudget), so the
+// route to the logs is carried by the list_resources description (every session)
+// and the troubleshooting skill (recipe, on intent).
+describe("log wiring: where the model learns the log route", () => {
+  it("the list_resources description names the log type and the troubleshooting skill", () => {
+    const d = String(
+      (tools.find((t) => t.name === "list_resources") as any).description,
+    );
+    expect(d).toMatch(/\blog \(read-only project logs/);
+    expect(d).toContain("troubleshooting skill");
+  });
+
+  it('the troubleshooting skill shows list_resources with resourceType: "log"', () => {
+    expect(readRepo("plugin/skills/troubleshooting/SKILL.md")).toContain(
       'list_resources { resourceType: "log"',
     );
+  });
+
+  it("the always-on instructions stay within their cap without the log recipe", () => {
+    expect(SERVER_INSTRUCTIONS.length).toBeLessThanOrEqual(2000);
   });
 });

@@ -178,29 +178,23 @@ describe("Go To / Execute Flow wording (C5)", () => {
   describe("manage_flow_nodes tool description", () => {
     const d = norm(description);
 
-    it("says Go To uses referenceId and is verified", () => {
+    // The description is capped at 1000 characters (toolSurfaceBudget), so it
+    // cannot carry the verified/reported evidence labels. The skill tests above
+    // and the CLAUDE.md tests below still pin them; the description only has to
+    // send the model to the skill for Go To targets.
+    it("points at the flow-nodes skill for Go To referenceIds", () => {
       assertThat(
-        /go to[^.]{0,200}referenceid[^.]{0,200}\bverified\b/.test(d) ||
-          /go to[^.]{0,200}\bverified\b[^.]{0,200}referenceid/.test(d),
+        /go to[^.]{0,200}referenceid[^.]{0,200}flow-nodes skill/.test(d),
         {
-          what: "description: Go To referenceId verified",
-          why: "the live NA1 check verified it",
-          expected: "a sentence with 'Go To', 'referenceId' and 'verified'",
+          what: "description: Go To referenceIds are in the flow-nodes skill",
+          why: "the evidence-labelled Go To rules live in the skill",
+          expected:
+            "a sentence with 'Go To', 'referenceId' and 'flow-nodes skill'",
           actual: excerpt(description),
           guidance:
-            "write 'Go To targets a node by referenceId (verified on NA1)'",
+            "keep 'Go To referenceIds are in the flow-nodes skill' in the description",
         },
       );
-    });
-
-    it("still labels Execute Flow as reported", () => {
-      assertThat(/execute flow[^.]{0,200}\breported\b/.test(d), {
-        what: "description: Execute Flow reported",
-        why: "Execute Flow was not tested",
-        expected: "a sentence with 'Execute Flow' and 'reported'",
-        actual: excerpt(description),
-        guidance: "keep 'Execute Flow reported, not verified'",
-      });
     });
   });
 

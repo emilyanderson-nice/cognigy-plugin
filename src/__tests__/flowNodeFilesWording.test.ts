@@ -155,36 +155,65 @@ const TERMS: Array<[string, RegExp]> = [
   ["overwrite", /\boverwrite\b/],
 ];
 
-describe.each([
-  ["manage_flow_nodes description", norm(description)],
-  [SKILL_PATH, norm(skill)],
-])("%s mentions the file features", (_name, text) => {
-  it.each(TERMS)("mentions %s", (label, re) => {
-    assertThat(re.test(text as string), {
-      what: `${_name} mentions ${label}`,
-      why: "agents must learn the large-field workflow from the tool description and the skill",
-      expected: `the text contains ${label}`,
-      actual: (text as string).slice(0, 300),
-      guidance: `add a short large-fields section covering ${label}`,
+// The tool description is capped at 1000 characters (toolSurfaceBudget), so it
+// names the features and points at the skill; the skill holds the rules.
+describe("manage_flow_nodes description points at the file features", () => {
+  const d = norm(description);
+
+  it.each(["fields", "saveto", "configfromfiles", "compare"])(
+    "names %s",
+    (term) => {
+      assertThat(d.includes(term), {
+        what: `description names ${term}`,
+        why: "the LLM-facing contract must show that large fields can move through files",
+        expected: `the description contains ${term}`,
+        actual: description.slice(0, 300),
+        guidance: `mention ${term} in the manage_flow_nodes description`,
+      });
+    },
+  );
+
+  it("says the file rules are in the flow-nodes skill", () => {
+    assertThat(/file rules[^.]*flow-nodes skill/.test(d), {
+      what: "description points at the skill for the file rules",
+      why: "the root, deny list and size limits live in the skill, not the description",
+      expected: "'file rules ... flow-nodes skill'",
+      actual: description.slice(-300),
+      guidance: "keep the pointer to the flow-nodes skill",
     });
   });
-
-  it("says content is never returned and files may hold personal data", () => {
-    const t = text as string;
-    expect(
-      /content[^.]{0,80}never returned|never[^.]{0,60}return[^.]{0,40}content/.test(
-        t,
-      ),
-    ).toBe(true);
-    expect(/personal data|sensitive|personal information/.test(t)).toBe(true);
-  });
-
-  it("states the project working directory as the root and UTF-8 byte-exact handling", () => {
-    const t = text as string;
-    expect(/working directory/.test(t)).toBe(true);
-    expect(/utf-?8/.test(t)).toBe(true);
-  });
 });
+
+describe.each([[SKILL_PATH, norm(skill)]])(
+  "%s mentions the file features",
+  (_name, text) => {
+    it.each(TERMS)("mentions %s", (label, re) => {
+      assertThat(re.test(text as string), {
+        what: `${_name} mentions ${label}`,
+        why: "agents must learn the large-field workflow from the tool description and the skill",
+        expected: `the text contains ${label}`,
+        actual: (text as string).slice(0, 300),
+        guidance: `add a short large-fields section covering ${label}`,
+      });
+    });
+
+    it("says content is never returned and files may hold personal data", () => {
+      const t = text as string;
+      expect(
+        /content[^.]{0,80}never returned|never[^.]{0,60}return[^.]{0,40}content/.test(
+          t,
+        ),
+      ).toBe(true);
+      expect(/personal data|sensitive|personal information/.test(t)).toBe(true);
+    });
+
+    it("states the project working directory as the root and UTF-8 byte-exact handling", () => {
+      const t = text as string;
+      expect(/working directory/.test(t)).toBe(true);
+      expect(/utf-?8/.test(t)).toBe(true);
+    });
+  },
+);
 
 describe(".claude/CLAUDE.md (F5)", () => {
   it("has a sentence about the file-based large-field operations", () => {
@@ -247,21 +276,21 @@ const SAFETY_TERMS: Array<[string, RegExp]> = [
   ["byte-exact for valid text", /valid (utf-?8|text)/],
 ];
 
-describe.each([
-  ["manage_flow_nodes description", norm(description)],
-  [SKILL_PATH, norm(skill)],
-])("%s states the safety rules (S1, S2, N5)", (_name, text) => {
-  it.each(SAFETY_TERMS)("mentions %s", (label, re) => {
-    assertThat(re.test(text as string), {
-      what: `${_name}: ${label}`,
-      why: "agents and users must know which files are refused and what the root may not be",
-      expected: `text matching ${re}`,
-      actual: (text as string).slice(0, 300),
-      guidance:
-        "extend the large-fields section with the deny-list categories and root rule",
+describe.each([[SKILL_PATH, norm(skill)]])(
+  "%s states the safety rules (S1, S2, N5)",
+  (_name, text) => {
+    it.each(SAFETY_TERMS)("mentions %s", (label, re) => {
+      assertThat(re.test(text as string), {
+        what: `${_name}: ${label}`,
+        why: "agents and users must know which files are refused and what the root may not be",
+        expected: `text matching ${re}`,
+        actual: (text as string).slice(0, 300),
+        guidance:
+          "extend the large-fields section with the deny-list categories and root rule",
+      });
     });
-  });
-});
+  },
+);
 
 describe(".claude/CLAUDE.md safety clause (S1, S2)", () => {
   it("mentions the deny list and the home-directory root rule", () => {

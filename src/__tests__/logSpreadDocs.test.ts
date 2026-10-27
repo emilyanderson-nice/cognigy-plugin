@@ -5,13 +5,7 @@
  */
 import { describe, it } from "@jest/globals";
 
-import {
-  listDef,
-  norm,
-  overclaims,
-  readRepo,
-  section,
-} from "./helpers/docText.js";
+import { norm, overclaims, readRepo, section } from "./helpers/docText.js";
 import { expectExact } from "./helpers/logFixtures.js";
 
 const BANNED = [
@@ -21,8 +15,10 @@ const BANNED = [
   "lags a few seconds",
 ];
 
+// The list_resources description is capped at 1000 characters (toolSurfaceBudget)
+// and points at the troubleshooting skill, so the sampling statement lives in
+// the skill alone. The description is still checked for banned claims below.
 const texts: Array<[string, () => string]> = [
-  ["list_resources description", () => String(listDef.description)],
   [
     "troubleshooting SKILL.md '## Read the project logs'",
     () =>

@@ -1,17 +1,20 @@
 /**
- * Module D: SERVER_INSTRUCTIONS gains an ENVIRONMENTS section (always-on
- * guidance for clients that do not load skills) without losing existing rules.
+ * Environments guidance. The full rule set lives in the environments skill
+ * (plugin/skills/environments/SKILL.md); SERVER_INSTRUCTIONS keeps a compact
+ * ENVIRONMENTS block for clients that do not load skills. toolSurfaceBudget
+ * caps the instructions at 2000 characters, so the long form cannot stay there.
  *
- * Assumption: the section is introduced by a line starting with "ENVIRONMENTS"
- * (like the existing "RULES:" / "CAPABILITIES:" headings) and runs to the next
- * all-caps heading or the end of the text.
+ * Assumption: the compact block is introduced by a line starting with
+ * "ENVIRONMENTS" and runs to the next all-caps heading or the end of the text.
  */
 import { describe, it } from "@jest/globals";
 import { SERVER_INSTRUCTIONS } from "../instructions.js";
+import { tools } from "../tools/definitions.js";
+import { readRepo } from "./helpers/docText.js";
 import { ok, show } from "./helpers/specAssert.js";
 
-// Current length is 12174 characters; allow +3000 for the new section.
-const MAX_LENGTH = 15200;
+const ENV_SKILL = "plugin/skills/environments/SKILL.md";
+const envSkill = readRepo(ENV_SKILL);
 
 function environmentsSection(): string {
   const m = /^ENVIRONMENTS\b.*$/im.exec(SERVER_INSTRUCTIONS);
@@ -27,40 +30,43 @@ const sentences = (s: string): string[] =>
     .map((x) => x.trim())
     .filter(Boolean);
 
-function expectSentence(what: string, rule: string, ...parts: RegExp[]) {
-  const section = environmentsSection();
-  const hit = sentences(section).find((s) => parts.every((p) => p.test(s)));
+function expectSentence(
+  source: string,
+  where: string,
+  what: string,
+  rule: string,
+  ...parts: RegExp[]
+) {
+  const hit = sentences(source).find((s) => parts.every((p) => p.test(s)));
   ok(
     hit !== undefined,
-    `instructions::${what}`,
+    `instructions::${where}::${what}`,
     `Rule: ${rule}`,
-    `one sentence of the ENVIRONMENTS section matching ${parts.map(String).join(" AND ")}`,
-    section === ""
-      ? "no ENVIRONMENTS section found"
-      : show(section.slice(0, 600)),
-    "State this rule explicitly, in a single sentence, inside an ENVIRONMENTS section.",
+    `one sentence of ${where} matching ${parts.map(String).join(" AND ")}`,
+    source === "" ? `no text for ${where}` : show(source.slice(0, 600)),
+    `State this rule explicitly, in a single sentence, in ${where}.`,
   );
 }
 
-describe("SERVER_INSTRUCTIONS environments guidance", () => {
-  it("has an ENVIRONMENTS section", () => {
-    ok(
-      environmentsSection() !== "",
-      "instructions::section",
-      "Rule: the instructions contain an ENVIRONMENTS section",
-      "a heading line starting with ENVIRONMENTS",
-      "heading missing",
-      "Add a heading line starting with ENVIRONMENTS.",
-    );
-  });
+const inSkill = (what: string, rule: string, ...parts: RegExp[]) =>
+  expectSentence(envSkill, ENV_SKILL, what, rule, ...parts);
+const inInstructions = (what: string, rule: string, ...parts: RegExp[]) =>
+  expectSentence(
+    environmentsSection(),
+    "the ENVIRONMENTS block of SERVER_INSTRUCTIONS",
+    what,
+    rule,
+    ...parts,
+  );
 
+describe("environments skill carries the full guidance", () => {
   it("names the environment argument and the list_environments tool", () => {
-    expectSentence(
+    inSkill(
       "argument",
       "mentions the `environment` argument",
       /`environment`|environment (argument|parameter)/i,
     );
-    expectSentence(
+    inSkill(
       "list_tool",
       "mentions the list_environments tool",
       /list_environments/,
@@ -68,14 +74,14 @@ describe("SERVER_INSTRUCTIONS environments guidance", () => {
   });
 
   it("requires environment on every call when more than one exists, kept constant per task", () => {
-    expectSentence(
+    inSkill(
       "every_call",
       "with more than one environment, `environment` must be passed on every call except list_environments",
       /more than one environment/i,
       /every (tool )?call/i,
       /except[^.]*list_environments|list_environments[^.]*except/i,
     );
-    expectSentence(
+    inSkill(
       "constant",
       "the environment stays constant within one task",
       /(constant|same environment|consistent|switch)/i,
@@ -84,7 +90,7 @@ describe("SERVER_INSTRUCTIONS environments guidance", () => {
   });
 
   it("requires confirming the target before destructive operations", () => {
-    expectSentence(
+    inSkill(
       "confirm_destructive",
       "confirm the target environment with the user before destructive operations when more than one exists",
       /confirm/i,
@@ -95,7 +101,7 @@ describe("SERVER_INSTRUCTIONS environments guidance", () => {
   });
 
   it("says ids, endpoint urls and package/snapshot references are environment-scoped", () => {
-    expectSentence(
+    inSkill(
       "scoped",
       "ids, endpoint URLs and package/snapshot references belong to one environment and must not be reused in another",
       /\bids?\b/i,
@@ -107,19 +113,16 @@ describe("SERVER_INSTRUCTIONS environments guidance", () => {
   });
 
   it("says to ask the user when the environment is unclear", () => {
-    expectSentence(
+    inSkill(
       "ask_user",
       "ask the user when it is unclear which environment is meant",
       /ask the user/i,
       /unclear|ambiguous|not sure|unsure/i,
     );
   });
-});
 
-describe("SERVER_INSTRUCTIONS environments guidance (G6)", () => {
   it("says the default marker is not consent and the model must still ask or confirm", () => {
-    const section = environmentsSection();
-    const ss = sentences(section);
+    const ss = sentences(envSkill);
     const i = ss.findIndex(
       (x) =>
         /default/i.test(x) &&
@@ -131,13 +134,13 @@ describe("SERVER_INSTRUCTIONS environments guidance (G6)", () => {
       "instructions::default_not_consent",
       "Rule: the isDefault marker in list_environments is not permission to use that environment; still ask or confirm",
       "a sentence with default + (consent|permission|not a reason) + environment, itself or the next sentence saying ask/confirm",
-      section === "" ? "no ENVIRONMENTS section" : show(section.slice(0, 800)),
+      show(envSkill.slice(0, 800)),
       "Say that a default marker never replaces asking or confirming with the user.",
     );
   });
 
   it("says to carry the same environment through every step of a multi-step task", () => {
-    expectSentence(
+    inSkill(
       "same_env_every_step",
       "carry the same environment through every step of a multi-step build",
       /same environment/i,
@@ -146,9 +149,9 @@ describe("SERVER_INSTRUCTIONS environments guidance (G6)", () => {
   });
 });
 
-describe("SERVER_INSTRUCTIONS session pin guidance", () => {
+describe("environments skill: session pin guidance", () => {
   it("says a pinned session needs no environment argument", () => {
-    expectSentence(
+    inSkill(
       "pinned_no_arg",
       "when the session is pinned, do not pass `environment` (or pass the pinned name)",
       /pinned/i,
@@ -158,7 +161,7 @@ describe("SERVER_INSTRUCTIONS session pin guidance", () => {
   });
 
   it("says to call use_environment once at the start when the user names a tenant or profile", () => {
-    expectSentence(
+    inSkill(
       "use_once",
       "call use_environment once at the start when the user names a tenant/profile",
       /use_environment/,
@@ -168,7 +171,7 @@ describe("SERVER_INSTRUCTIONS session pin guidance", () => {
   });
 
   it("says to switch the pin only when the user asks, and to say so", () => {
-    expectSentence(
+    inSkill(
       "switch_on_request",
       "switch only when the user asks and say so",
       /switch/i,
@@ -178,13 +181,72 @@ describe("SERVER_INSTRUCTIONS session pin guidance", () => {
   });
 
   it("says destructive operations are still confirmed by name even when pinned", () => {
-    expectSentence(
+    inSkill(
       "confirm_when_pinned",
       "confirm the target environment by name before destructive operations even when pinned",
       /confirm/i,
       /destructive/i,
       /pinned/i,
       /by name/i,
+    );
+  });
+});
+
+describe("SERVER_INSTRUCTIONS compact environments block", () => {
+  it("has an ENVIRONMENTS block that points at the environments skill", () => {
+    ok(
+      environmentsSection() !== "" &&
+        /environments skill/i.test(environmentsSection()),
+      "instructions::section",
+      "Rule: the instructions contain an ENVIRONMENTS block naming the skill that owns the rules",
+      "a heading line starting with ENVIRONMENTS that mentions the environments skill",
+      show(environmentsSection().slice(0, 300) || "heading missing"),
+      "Add a heading line starting with ENVIRONMENTS that names the environments skill.",
+    );
+  });
+
+  it("requires environment on every call when more than one exists, unless pinned", () => {
+    inInstructions(
+      "every_call",
+      "with more than one environment, pass environment on every call (list_environments shows them) unless the session is pinned",
+      /more than one environment/i,
+      /\benvironment\b/i,
+      /every call/i,
+      /list_environments/,
+      /pinned/i,
+    );
+  });
+
+  it("says the default marker is not consent", () => {
+    inInstructions(
+      "default_not_consent",
+      "the default marker never stands in for choosing the target",
+      /default marker/i,
+      /not consent/i,
+    );
+  });
+
+  it("requires confirming the target by name before destructive operations", () => {
+    inInstructions(
+      "confirm_destructive",
+      "confirm the environment by name before delete, restore or overwrite",
+      /confirm/i,
+      /by name/i,
+      /delete/i,
+      /restore/i,
+      /overwrite/i,
+    );
+  });
+
+  it("says ids, endpoint urls and package/snapshot references are environment-scoped", () => {
+    inInstructions(
+      "scoped",
+      "ids, endpoint URLs and package/snapshot references belong to one environment",
+      /\bids\b/i,
+      /endpoint url/i,
+      /package/i,
+      /snapshot/i,
+      /belong to one environment/i,
     );
   });
 });
@@ -206,23 +268,60 @@ describe("SERVER_INSTRUCTIONS use_environment ordering rule", () => {
   });
 });
 
-describe("SERVER_INSTRUCTIONS existing content", () => {
+describe("existing guidance keeps a home", () => {
+  const descriptionOf = (name: string): string =>
+    String((tools.find((t) => t.name === name) as any)?.description);
+
   it.each([
-    "NiCE Cognigy Plugin — builds and iteratively improves LLM-powered AI Agents.",
-    "create_ai_agent auto-provisions flow + AI Agent Job Node + REST endpoint.",
-    "delete_resource is the ONLY way to delete anything.",
-    "Cognigy Connections are PROJECT-SCOPED",
-    "NEVER hallucinate or guess API keys, connection URLs, or credentials.",
-    "TOOL TYPE SELECTION (create_tool):",
-    "DOCUMENTATION LOOKUP:",
-  ])("keeps: %s", (phrase) => {
+    "NiCE Cognigy Plugin — builds and iteratively improves LLM-powered AI Agents",
+    "NEVER guess or invent API keys, URLs or credentials.",
+  ])("SERVER_INSTRUCTIONS keeps: %s", (phrase) => {
     ok(
       SERVER_INSTRUCTIONS.includes(phrase),
       "instructions::existing_content",
-      "Rule: existing instruction content must remain",
+      "Rule: the always-on baseline keeps the plugin identity and the credentials rule",
       `text containing: ${phrase}`,
       "phrase missing",
-      "Add the environments section without removing existing guidance.",
+      "Restore the phrase in src/instructions.ts.",
+    );
+  });
+
+  // Upstream moved these out of the always-on text to stay under the size
+  // budget. Each fact must still be stated where the model will meet it.
+  it.each([
+    [
+      "create_ai_agent description",
+      () => descriptionOf("create_ai_agent"),
+      "auto-provisioned flow, AI Agent Job Node and REST endpoint",
+    ],
+    [
+      "delete_resource description",
+      () => descriptionOf("delete_resource"),
+      "never hard-deleted",
+    ],
+    [
+      "package-management skill",
+      () => readRepo("plugin/skills/package-management/SKILL.md"),
+      "project-scoped",
+    ],
+    [
+      "tools-setup skill",
+      () => readRepo("plugin/skills/tools-setup/SKILL.md"),
+      "the default for any business action",
+    ],
+    [
+      "docs-lookup skill",
+      () => readRepo("plugin/skills/docs-lookup/SKILL.md"),
+      "query_docs_filesystem_cognigy_documentation",
+    ],
+  ])("%s still states: %s", (_where, get, phrase) => {
+    ok(
+      (get() as string).includes(phrase as string),
+      "instructions::moved_content",
+      `Rule: guidance moved out of SERVER_INSTRUCTIONS must still be stated in ${_where}`,
+      `text containing: ${phrase}`,
+      "phrase missing",
+      `State it in ${_where}; do not move it back into the always-on instructions.`,
     );
   });
 
@@ -242,31 +341,5 @@ describe("SERVER_INSTRUCTIONS existing content", () => {
       "Add one terse sentence covering all three; the skill owns the detail.",
     );
     // Killing mutation: sentence absent, or its three terms split across sentences.
-  });
-
-  it("grew by at most 400 characters over the pre-alignment length", () => {
-    // Length without the alignment sentence. Was 13150; the upstream merge added
-    // the session-pin and agent-prompts rules (not ours), so it is now 14094.
-    const BASELINE = 14094;
-    ok(
-      SERVER_INSTRUCTIONS.length <= BASELINE + 400,
-      "instructions::alignment_growth",
-      "Rule: the alignment rule is one terse line, not a section",
-      `length <= ${BASELINE + 400}`,
-      `length ${SERVER_INSTRUCTIONS.length}`,
-      "Keep the always-on addition to one short sentence.",
-    );
-    // Killing mutation: add a multi-sentence paragraph (>400 chars) to the instructions.
-  });
-
-  it("stays under the size bound", () => {
-    ok(
-      SERVER_INSTRUCTIONS.length <= MAX_LENGTH,
-      "instructions::size",
-      "Rule: always-on instructions stay terse (current size + 3000 at most)",
-      `length <= ${MAX_LENGTH}`,
-      `length ${SERVER_INSTRUCTIONS.length}`,
-      "Keep the new section concise; let the skill own the detail.",
-    );
   });
 });
