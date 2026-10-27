@@ -1,0 +1,54 @@
+{
+  "probedAt": "2026-10-26T21:50:06.527Z",
+  "profile": "na1",
+  "host": "cognigy-api-na1.nicecxone.com",
+  "declaredVersion": null,
+  "method": "GET",
+  "path": "/v2.0/flows/{id}/intents/{id}/sentences",
+  "query": {
+    "limit": "3"
+  },
+  "status": 200,
+  "ms": 229,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "<present>",
+    "connection": "<present>",
+    "access-control-allow-credentials": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-embedder-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "expect-ct": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "set-cookie": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "api--a8ca3aa7-18f7-4dea-b1fd-3422bb254273",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-robots-tag": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "1.1 {id}4d13c402.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "items": {
+      "_array": 0,
+      "_item": null
+    },
+    "total": "number",
+    "previousCursor": "null",
+    "nextCursor": "null"
+  }
+}

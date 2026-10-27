@@ -1,0 +1,87 @@
+{
+  "probedAt": "2026-10-26T21:50:07.962Z",
+  "profile": "na1",
+  "host": "cognigy-api-na1.nicecxone.com",
+  "declaredVersion": null,
+  "method": "GET",
+  "path": "/v2.0/flows/{id}/intents",
+  "query": {
+    "limit": "100",
+    "includeFeedbackReport": "true"
+  },
+  "status": 200,
+  "ms": 284,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "transfer-encoding": "<present>",
+    "connection": "<present>",
+    "access-control-allow-credentials": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-embedder-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "expect-ct": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "set-cookie": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "api--850cc0ca-4178-43a5-ab4f-5caf6623f810",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-robots-tag": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "1.1 {id}e2805d3a.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "items": {
+      "_array": 100,
+      "_item": {
+        "_id": "<objectId>",
+        "name": "<string:20>",
+        "referenceId": "<uuid>",
+        "tags": {
+          "_array": 0,
+          "_item": null
+        },
+        "isDisabled": "boolean",
+        "localeReference": "<objectId>",
+        "biasTowardsParentOrChildIntents": "<string:8>",
+        "parentIntentId": "null",
+        "feedbackReport": {
+          "findings": {
+            "_array": 1,
+            "_item": {
+              "type": "lowDataIntents",
+              "intents": {
+                "_array": 2,
+                "_item": {
+                  "intentReferenceId": "<uuid>",
+                  "intentName": "<string:32>",
+                  "intentId": "<objectId>",
+                  "flowName": "<string:23>",
+                  "flowId": "<objectId>"
+                }
+              }
+            }
+          },
+          "info": {}
+        },
+        "description": "<string:0>"
+      }
+    },
+    "total": "number",
+    "previousCursor": "null",
+    "nextCursor": "<objectId>"
+  }
+}
