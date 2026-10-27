@@ -1,11 +1,11 @@
 {
-  "takenAt": "2026-10-09T14:20:50.470Z",
-  "commit": "648b758",
-  "claudeVersion": "2.1.295",
-  "pluginVersion": "1.22.0",
+  "takenAt": "2026-10-27T20:22:04.643Z",
+  "commit": "03cb253",
+  "claudeVersion": "2.1.301",
+  "pluginVersion": "1.22.3-esc.3",
   "cases": {
     "add-knowledge": {
-      "fingerprint": "861bd8d2c326",
+      "fingerprint": "260d00ff6064",
       "score": 1,
       "graders": {
         "calls-manage_knowledge": "3/3",
@@ -13,7 +13,7 @@
       }
     },
     "build-agent": {
-      "fingerprint": "31686ef38fdd",
+      "fingerprint": "bf2a04a491df",
       "score": 1,
       "graders": {
         "calls-create_ai_agent": "3/3",
@@ -21,7 +21,7 @@
       }
     },
     "deploy-webchat": {
-      "fingerprint": "2facbafeb5ff",
+      "fingerprint": "71cdf6c55c8a",
       "score": 1,
       "graders": {
         "calls-manage_webchat": "3/3",
@@ -29,14 +29,14 @@
       }
     },
     "unrelated-request": {
-      "fingerprint": "4bec5125c35b",
+      "fingerprint": "6cb539e2a670",
       "score": 1,
       "graders": {
         "no-cognigy-skill": "3/3"
       }
     },
     "voice-apply-fixes": {
-      "fingerprint": "c550a5180543",
+      "fingerprint": "1633aa5c94b4",
       "score": 1,
       "graders": {
         "checklist-loaded": "3/3",
@@ -47,7 +47,7 @@
       }
     },
     "voice-go-live": {
-      "fingerprint": "86f2fcb9ce94",
+      "fingerprint": "85fb913bcc5a",
       "score": 1,
       "graders": {
         "calls-audit_voice_agent": "3/3",
@@ -55,7 +55,7 @@
       }
     },
     "backup-gate": {
-      "fingerprint": "e3b5d379af9a",
+      "fingerprint": "377d42476b80",
       "score": 1,
       "graders": {
         "asks-about-backup": "3/3",
@@ -63,7 +63,7 @@
       }
     },
     "general-tool-type": {
-      "fingerprint": "017442630cd5",
+      "fingerprint": "7d781284911e",
       "score": 1,
       "graders": {
         "calls-create_tool": "3/3",
@@ -71,7 +71,7 @@
       }
     },
     "list-projects": {
-      "fingerprint": "9d575dc215c0",
+      "fingerprint": "cf37f2e2b8d9",
       "score": 1,
       "graders": {
         "calls-list_resources": "3/3",
