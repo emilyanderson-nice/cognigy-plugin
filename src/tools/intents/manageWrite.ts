@@ -10,6 +10,7 @@ import {
   type Op,
   type Result,
 } from "./manageCommon.js";
+import { importCsv, importTree } from "./fileImport.js";
 import { importSentences } from "./sentences.js";
 import { buildTree, checkCreate, checkMove, type IntentTree } from "./tree.js";
 import { intentsPath, statusField, type IntentApi } from "./types.js";
@@ -289,4 +290,37 @@ export async function build(
           "Training was accepted but has not finished. Check with manage_intents model_state later; do not assume it succeeded.",
       })
     : out;
+}
+
+/** import_csv / import_tree: project check first, then the file-based import. */
+export async function fileImportOp(
+  api: IntentApi,
+  a: Op<"import_csv"> | Op<"import_tree">,
+  deps: ManageDeps,
+): Promise<Result> {
+  const verified = await verifyProject(api, a.operation, a.flowId, a.projectId);
+  if ("error" in verified) return verified.error;
+  return a.operation === "import_csv"
+    ? importCsv(
+        api,
+        {
+          flowId: a.flowId,
+          file: a.file,
+          mode: a.mode,
+          createMissing: a.createMissing,
+          deadlineSeconds: a.deadlineSeconds,
+        },
+        deps,
+      )
+    : importTree(
+        api,
+        {
+          flowId: a.flowId,
+          specFile: a.specFile,
+          sentencesFile: a.sentencesFile,
+          mode: a.mode,
+          deadlineSeconds: a.deadlineSeconds,
+        },
+        deps,
+      );
 }

@@ -1215,6 +1215,24 @@ export const manageIntentsSchema = z
       mode: z.enum(["full", "quick"]).optional(),
       waitSeconds: z.number().int().min(0).max(300).optional(),
     }),
+    z.object({
+      operation: z.literal("import_csv"),
+      flowId: idSchema,
+      projectId: idSchema,
+      file: z.string().min(1).max(500),
+      mode: z.enum(["add", "replace"]),
+      createMissing: z.boolean().optional(),
+      deadlineSeconds: z.number().int().min(1).max(600).optional(),
+    }),
+    z.object({
+      operation: z.literal("import_tree"),
+      flowId: idSchema,
+      projectId: idSchema,
+      specFile: z.string().min(1).max(500),
+      sentencesFile: z.string().min(1).max(500).optional(),
+      mode: z.enum(["add", "replace"]).optional(),
+      deadlineSeconds: z.number().int().min(1).max(600).optional(),
+    }),
   ])
   .superRefine((d, ctx) => {
     if (

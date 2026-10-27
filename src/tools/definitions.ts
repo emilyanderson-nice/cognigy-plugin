@@ -2335,7 +2335,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "manage_intents",
     description:
-      "Read and manage the NLU intents of a flow (up to 3 levels: family, group, tag), including example sentences, and train the model. Reads: list, get, export_tree, below_minimum, compare (against a CSV file), model_state. All write operations (create, update, move, delete, import_sentences and build) change the flow's NLU and are held by the backup gate until a backup is offered or declined. Never guess an intent: pass an id, a unique name or a Parent/Child path. import_sentences adds or replaces sentences in batches; results never echo sentences or upstream errors.",
+      "Read and manage the NLU intents of a flow (up to 3 levels: family, group, tag), including example sentences, and train the model. Reads: list, get, export_tree, below_minimum, compare (against a CSV file), model_state. All write operations (create, update, move, delete, import_sentences and build) change the flow's NLU and are held by the backup gate until a backup is offered or declined. Never guess an intent: pass an id, a unique name or a Parent/Child path. import_csv and import_tree read sentences (and a tree spec) from project files so the text never passes through the conversation; both are held by the backup gate. Results never echo sentences or upstream errors.",
     annotations: {
       title: "Manage Intents",
       readOnlyHint: false,
@@ -2361,6 +2361,8 @@ export const tools: ToolDefinition[] = [
             "delete",
             "import_sentences",
             "build",
+            "import_csv",
+            "import_tree",
           ],
           description: "Operation to perform",
         },
@@ -2438,7 +2440,7 @@ export const tools: ToolDefinition[] = [
           type: "string",
           enum: ["add", "replace", "full", "quick"],
           description:
-            "import_sentences: add or replace (required). build: full or quick (default full)",
+            "import_sentences, import_csv: add or replace (required); import_tree default add. build: full or quick (default full)",
         },
         min: {
           type: "integer",
@@ -2451,7 +2453,7 @@ export const tools: ToolDefinition[] = [
           minLength: 1,
           maxLength: 500,
           description:
-            "compare: CSV path inside the project (no header; intent,exampleSentence,sentence)",
+            "compare, import_csv: CSV path inside the project (no header; intent,exampleSentence,sentence)",
         },
         includeSentenceCounts: {
           type: "boolean",
@@ -2464,6 +2466,23 @@ export const tools: ToolDefinition[] = [
         includeSentences: {
           type: "boolean",
           description: "get: also return the intent's sentences",
+        },
+        specFile: {
+          type: "string",
+          maxLength: 500,
+          description:
+            "import_tree: JSON spec path ({families:[{name,intent?,groups:[{name,intent?,tags:[names]}]}]})",
+        },
+        sentencesFile: {
+          type: "string",
+          maxLength: 500,
+          description:
+            "import_tree: optional CSV of tag sentences (same format as file)",
+        },
+        createMissing: {
+          type: "boolean",
+          description:
+            "import_csv: create intents missing from the flow as roots (default true)",
         },
         waitSeconds: {
           type: "integer",

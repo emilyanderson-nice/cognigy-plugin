@@ -45,6 +45,16 @@ Write operations need `projectId`. `create` refuses a name already used by a sib
 - Sentences go in batches of 50 operations per request, one intent after another, with a time limit. `deadlineSeconds` (1-600, default 60) sets that limit. A result with `status: "partial"` lists each intent as `ok`, `failed`, `incomplete` (some batches sent, then stopped) or `not_attempted` (nothing sent); repeat the call to finish, which is safe.
 - The result holds counts and ids, never sentence text.
 
+## Importing from files (`import_csv`, `import_tree`)
+
+For large catalogues use files in the project folder (or `COGNIGY_FILE_ROOT`, 2 MiB each) so the sentences never pass through the conversation. Both are writes (project check, backup gate) and need `projectId`.
+
+- `import_csv { file, mode, createMissing = true, deadlineSeconds }`: the CSV has no header, three columns (intent name, `exampleSentence`, sentence). Intents missing from the flow are created as roots; an intent name that exists under several parents refuses the call (`ambiguous_intents`).
+- `import_tree { specFile, sentencesFile?, mode = "add", deadlineSeconds }`: `specFile` is JSON, `{ "families": [ { "name", "intent"?, "groups": [ { "name", "intent"?, "tags": ["tag intent name", ...] } ] } ] }` (family, group, tag; `intent` overrides `name` as the Cognigy intent name; no "/" in names, at most 200 characters, at most 2000 intents). Families and groups are created with `childFeatures: true`. Only siblings need unique names, so the same group name may repeat under different families; tag names are unique across the spec. `sentencesFile` rows are matched to tags by name; other rows are skipped and counted. Existing parents with `childFeatures: false` are reported in `parentsNeedingChildFeatures`, not changed.
+- A bad spec (`spec_invalid`) or a bad CSV row (`csv_errors`, with line numbers) refuses the whole call before anything changes.
+- An intent over 200 distinct sentences is skipped and reported (`overCap`); everything else imports.
+- The result holds counts and at most 20 names per list, never sentences. `status: "partial"` is repeat-safe: run the same call again and it continues where it stopped.
+
 ## Building the model
 
 - `build { mode: "full" | "quick", waitSeconds }` starts the training task and waits up to `waitSeconds` (default 60). `status: "done"` means finished. `status: "pending"` means it was accepted and is still running: check with `model_state` later. Do not report a pending build as finished.

@@ -30,6 +30,8 @@ const OPERATIONS = [
   "delete",
   "import_sentences",
   "build",
+  "import_csv",
+  "import_tree",
 ] as const;
 
 const WRITE_OPERATIONS = [
@@ -39,6 +41,8 @@ const WRITE_OPERATIONS = [
   "delete",
   "import_sentences",
   "build",
+  "import_csv",
+  "import_tree",
 ] as const;
 const READ_OPERATIONS = [
   "list",
@@ -91,6 +95,19 @@ const VALID: Record<string, Record<string, unknown>> = {
     entries: [{ intent: "Billing question", sentences: ["where is my bill"] }],
   },
   build: { operation: "build", flowId: FLOW, projectId: PROJECT },
+  import_csv: {
+    operation: "import_csv",
+    flowId: FLOW,
+    projectId: PROJECT,
+    file: "sentences.csv",
+    mode: "add",
+  },
+  import_tree: {
+    operation: "import_tree",
+    flowId: FLOW,
+    projectId: PROJECT,
+    specFile: "tree.csv",
+  },
 };
 
 const parses = (payload: unknown): boolean =>
@@ -353,6 +370,77 @@ describe("manageIntentsSchema", () => {
     );
   });
 
+  it("import_csv: file is 1-500 chars, mode is required add|replace", () => {
+    expect(parses(withFields("import_csv", { file: "" }))).toBe(false);
+    expect(parses(withFields("import_csv", { file: "f".repeat(500) }))).toBe(
+      true,
+    );
+    expect(parses(withFields("import_csv", { file: "f".repeat(501) }))).toBe(
+      false,
+    );
+    expect(parses(withFields("import_csv", {}, ["file"]))).toBe(false);
+    expect(parses(withFields("import_csv", {}, ["mode"]))).toBe(false);
+    expect(parses(withFields("import_csv", { mode: "replace" }))).toBe(true);
+    expect(parses(withFields("import_csv", { mode: "merge" }))).toBe(false);
+    expect(parses(withFields("import_csv", {}, ["projectId"]))).toBe(false);
+    expect(parses(withFields("import_csv", { flowId: "bad" }))).toBe(false);
+  });
+
+  it("import_csv: createMissing is an optional boolean", () => {
+    for (const createMissing of [true, false]) {
+      const p = withFields("import_csv", { createMissing });
+      expect(manageIntentsSchema.parse(p)).toEqual(p);
+    }
+    expect(parses(withFields("import_csv", { createMissing: "true" }))).toBe(
+      false,
+    );
+  });
+
+  it("import_csv and import_tree: deadlineSeconds is an integer 1-600", () => {
+    for (const op of ["import_csv", "import_tree"]) {
+      for (const deadlineSeconds of [1, 600]) {
+        const p = withFields(op, { deadlineSeconds });
+        expect(manageIntentsSchema.parse(p)).toEqual(p);
+      }
+      for (const deadlineSeconds of [0, 601, 1.5]) {
+        expect(parses(withFields(op, { deadlineSeconds }))).toBe(false);
+      }
+    }
+  });
+
+  it("import_tree: accepts the minimal payload and all optional fields", () => {
+    const full = withFields("import_tree", {
+      sentencesFile: "sentences.csv",
+      mode: "replace",
+      deadlineSeconds: 120,
+    });
+    expect(manageIntentsSchema.parse(full)).toEqual(full);
+    expect(parses(withFields("import_tree", { mode: "add" }))).toBe(true);
+    expect(parses(withFields("import_tree", { mode: "merge" }))).toBe(false);
+  });
+
+  it("import_tree: specFile and sentencesFile are 1-500 chars, specFile required", () => {
+    expect(parses(withFields("import_tree", {}, ["specFile"]))).toBe(false);
+    expect(parses(withFields("import_tree", {}, ["projectId"]))).toBe(false);
+    expect(parses(withFields("import_tree", { specFile: "" }))).toBe(false);
+    expect(
+      parses(withFields("import_tree", { specFile: "f".repeat(500) })),
+    ).toBe(true);
+    expect(
+      parses(withFields("import_tree", { specFile: "f".repeat(501) })),
+    ).toBe(false);
+    expect(parses(withFields("import_tree", { sentencesFile: "" }))).toBe(
+      false,
+    );
+    expect(
+      parses(withFields("import_tree", { sentencesFile: "f".repeat(500) })),
+    ).toBe(true);
+    expect(
+      parses(withFields("import_tree", { sentencesFile: "f".repeat(501) })),
+    ).toBe(false);
+    expect(parses(withFields("import_tree", { flowId: "bad" }))).toBe(false);
+  });
+
   it("import_sentences: deadlineSeconds is an optional integer from 1 to 600", () => {
     expect(parses(VALID.import_sentences)).toBe(true);
     for (const deadlineSeconds of [1, 60, 600]) {
@@ -397,18 +485,40 @@ describe("manage_intents tool definition", () => {
     expect(d.toLowerCase()).toContain("backup");
   });
 
+  it("mentions import_csv and import_tree as file-reading operations", () => {
+    const d = tool!.description;
+    expect(d).toContain("import_csv");
+    expect(d).toContain("import_tree");
+    expect(d).toContain("file");
+  });
+
   it("is not read-only", () => {
     expect(tool!.annotations.readOnlyHint).toBe(false);
   });
 
-  it("lists exactly the 12 operations and requires operation and flowId", () => {
+  it("lists exactly the 14 operations and requires operation and flowId", () => {
     const schema = tool!.inputSchema as any;
     expect(schema.type).toBe("object");
-    expect(schema.properties.operation.enum).toEqual([...OPERATIONS]);
+    expect(schema.properties.operation.enum).toEqual([
+      "list",
+      "get",
+      "export_tree",
+      "below_minimum",
+      "compare",
+      "model_state",
+      "create",
+      "update",
+      "move",
+      "delete",
+      "import_sentences",
+      "build",
+      "import_csv",
+      "import_tree",
+    ]);
     expect(schema.required).toEqual(["operation", "flowId"]);
   });
 
-  it("declares the 16 named properties plus deadlineSeconds (17) with short, non-empty descriptions", () => {
+  it("declares the 20 named properties (16 original, deadlineSeconds, specFile, sentencesFile, createMissing) with short, non-empty descriptions", () => {
     const props = (tool!.inputSchema as any).properties;
     const names = [
       "flowId",
@@ -428,14 +538,26 @@ describe("manage_intents tool definition", () => {
       "includeSentences",
       "waitSeconds",
       "deadlineSeconds",
+      "specFile",
+      "sentencesFile",
+      "createMissing",
     ];
-    expect(names).toHaveLength(17);
+    expect(names).toHaveLength(20);
     for (const n of names) {
       expect(props[n]).toBeDefined();
       expect(typeof props[n].description).toBe("string");
       expect(props[n].description.length).toBeGreaterThan(0);
       expect(props[n].description.length).toBeLessThanOrEqual(450);
     }
+  });
+
+  it("types the new file and createMissing properties", () => {
+    const p = (tool!.inputSchema as any).properties;
+    expect(p.specFile.type).toBe("string");
+    expect(p.specFile.maxLength).toBe(500);
+    expect(p.sentencesFile.type).toBe("string");
+    expect(p.sentencesFile.maxLength).toBe(500);
+    expect(p.createMissing.type).toBe("boolean");
   });
 
   it("carries the zod limits in the JSON input schema", () => {
@@ -584,6 +706,40 @@ describe("manage_intents backup gate", () => {
     expect(valid.error).toBe("backup_not_offered");
   });
 
+  it.each([
+    ["import_csv", "mode"],
+    ["import_tree", "specFile"],
+  ])(
+    "does not consume the hold on an invalid %s call missing %s",
+    async (op, missing) => {
+      await expect(
+        h.handleToolCall("manage_intents", withFields(op, {}, [missing])),
+      ).rejects.toBeDefined();
+      expect(calls(api)).toBe(0);
+
+      const valid = await h.handleToolCall("manage_intents", VALID[op]);
+      expect(valid.error).toBe("backup_not_offered");
+      expect(calls(api)).toBe(0);
+    },
+  );
+
+  it.each(["import_csv", "import_tree"])(
+    "keeps the answer per project for %s: declining A still holds B",
+    async (op) => {
+      await h.handleToolCall("manage_snapshots", {
+        operation: "decline",
+        projectId: PROJECT,
+      });
+      const onB = await h.handleToolCall("manage_intents", {
+        ...VALID[op],
+        projectId: PROJECT_B,
+      });
+      expect(onB.error).toBe("backup_not_offered");
+      expect(onB.projectId).toBe(PROJECT_B);
+      expect(calls(api)).toBe(0);
+    },
+  );
+
   it("keeps the answer per project: declining A still holds a write on B", async () => {
     await h.handleToolCall("manage_snapshots", {
       operation: "decline",
@@ -697,6 +853,48 @@ describe("manage_intents logging", () => {
       name: "Billing question",
       sentences: "[REDACTED]",
     });
+  });
+
+  it("logs file paths normally and still redacts entries and sentences", async () => {
+    await h.handleToolCall("manage_intents", {
+      operation: "import_csv",
+      flowId: FLOW,
+      projectId: PROJECT,
+      file: "data/sentences.csv",
+      mode: "add",
+      entries: [{ intent: "Billing", sentences: [SENTINEL_A] }],
+      sentences: [SENTINEL_B],
+    });
+    await h.handleToolCall("manage_intents", {
+      operation: "import_tree",
+      flowId: FLOW,
+      projectId: PROJECT,
+      specFile: "data/tree.csv",
+      sentencesFile: "data/more.csv",
+    });
+    const lines = spies[0].mock.calls.filter(([m]) =>
+      String(m).startsWith("Handling tool call: manage_intents"),
+    );
+    expect(lines).toHaveLength(2);
+    expect((lines[0][1] as any).args).toEqual({
+      operation: "import_csv",
+      flowId: FLOW,
+      projectId: PROJECT,
+      file: "data/sentences.csv",
+      mode: "add",
+      entries: "[REDACTED]",
+      sentences: "[REDACTED]",
+    });
+    expect((lines[1][1] as any).args).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      projectId: PROJECT,
+      specFile: "data/tree.csv",
+      sentencesFile: "data/more.csv",
+    });
+    const logged = everythingLogged();
+    expect(logged).not.toContain(SENTINEL_A);
+    expect(logged).not.toContain(SENTINEL_B);
   });
 
   it("still logs non-sensitive args of other tools unredacted", async () => {
