@@ -21,6 +21,7 @@ tools:
     audit_voice_agent,
     manage_snapshots,
     manage_a2a_server,
+    manage_intents,
   ]
 abort_when: Never abort the run.
 ---

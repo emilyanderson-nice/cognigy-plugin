@@ -1128,3 +1128,116 @@ export const manageA2AServerSchema = z.object({
   enableStreaming: z.boolean().optional(),
   authenticationType: z.enum(["none", "apiKey"]).optional(),
 });
+
+// Tool 20: manage_intents (NLU intents of a flow; logic in src/tools/intents/)
+const intentRefSchema = z.string().min(1).max(300);
+const intentSentencesSchema = z.array(z.string().min(1).max(500)).max(200);
+const MAX_IMPORT_SENTENCES = 10000;
+
+export const manageIntentsSchema = z
+  .discriminatedUnion("operation", [
+    z.object({
+      operation: z.literal("list"),
+      flowId: idSchema,
+      includeSentenceCounts: z.boolean().optional(),
+      includeStatus: z.boolean().optional(),
+    }),
+    z.object({
+      operation: z.literal("get"),
+      flowId: idSchema,
+      intent: intentRefSchema,
+      includeSentences: z.boolean().optional(),
+    }),
+    z.object({ operation: z.literal("export_tree"), flowId: idSchema }),
+    z.object({ operation: z.literal("model_state"), flowId: idSchema }),
+    z.object({
+      operation: z.literal("below_minimum"),
+      flowId: idSchema,
+      min: z.number().int().min(1).max(200).optional(),
+    }),
+    z.object({
+      operation: z.literal("compare"),
+      flowId: idSchema,
+      file: z.string().min(1).max(500),
+    }),
+    z.object({
+      operation: z.literal("create"),
+      flowId: idSchema,
+      projectId: idSchema,
+      name: z.string().min(1).max(200),
+      parent: intentRefSchema.optional(),
+      childFeatures: z.boolean().optional(),
+      priority: z.enum(["parents", "children"]).optional(),
+      sentences: intentSentencesSchema.optional(),
+    }),
+    z.object({
+      operation: z.literal("update"),
+      flowId: idSchema,
+      projectId: idSchema,
+      intent: intentRefSchema,
+      name: z.string().min(1).max(200).optional(),
+      childFeatures: z.boolean().optional(),
+      priority: z.enum(["parents", "children"]).optional(),
+    }),
+    z.object({
+      operation: z.literal("move"),
+      flowId: idSchema,
+      projectId: idSchema,
+      intent: intentRefSchema,
+      parent: intentRefSchema.nullable(),
+    }),
+    z.object({
+      operation: z.literal("delete"),
+      flowId: idSchema,
+      projectId: idSchema,
+      intent: intentRefSchema,
+    }),
+    z.object({
+      operation: z.literal("import_sentences"),
+      flowId: idSchema,
+      projectId: idSchema,
+      mode: z.enum(["add", "replace"]),
+      deadlineSeconds: z.number().int().min(1).max(600).optional(),
+      entries: z
+        .array(
+          z.object({
+            intent: intentRefSchema,
+            sentences: intentSentencesSchema,
+          }),
+        )
+        .min(1)
+        .max(500),
+    }),
+    z.object({
+      operation: z.literal("build"),
+      flowId: idSchema,
+      projectId: idSchema,
+      mode: z.enum(["full", "quick"]).optional(),
+      waitSeconds: z.number().int().min(0).max(300).optional(),
+    }),
+  ])
+  .superRefine((d, ctx) => {
+    if (
+      d.operation === "update" &&
+      d.name === undefined &&
+      d.childFeatures === undefined &&
+      d.priority === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "update needs at least one of name, childFeatures, priority",
+        path: ["name"],
+      });
+    }
+    if (
+      d.operation === "import_sentences" &&
+      d.entries.reduce((n, e) => n + e.sentences.length, 0) >
+        MAX_IMPORT_SENTENCES
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `At most ${MAX_IMPORT_SENTENCES} sentences per call`,
+        path: ["entries"],
+      });
+    }
+  });

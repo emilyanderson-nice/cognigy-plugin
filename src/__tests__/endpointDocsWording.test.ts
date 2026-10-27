@@ -50,8 +50,8 @@ const offendingLines = (file: string, word: RegExp): string[] =>
     .map(({ n }) => `${file}:${n}`);
 
 describe("tool definitions wording (K2d, K3)", () => {
-  it("keeps exactly 19 tools", () => {
-    expect(tools).toHaveLength(19);
+  it("keeps exactly 20 tools", () => {
+    expect(tools).toHaveLength(20);
   });
 
   it("talk_to_agent has an endpointId parameter and its description mentions endpointId", () => {

@@ -92,8 +92,8 @@ describe("manage_flow_nodes schema (F5)", () => {
 });
 
 describe("manage_flow_nodes tool definition (F5)", () => {
-  it("keeps the tool count at 19", () => {
-    expect(tools.length).toBe(19);
+  it("keeps the tool count at 20", () => {
+    expect(tools.length).toBe(20);
   });
 
   it("lists compare in the operation enum", () => {
