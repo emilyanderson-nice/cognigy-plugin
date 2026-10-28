@@ -1,4 +1,5 @@
 import {
+  countStatus,
   createIntent,
   distinctCount,
   EMPTY_RUN,
@@ -14,6 +15,7 @@ import {
   readTreeOnce,
   runSentenceImport,
   firstNames,
+  MAX_NAMES_SHOWN,
   type FileImportDeps,
   type Out,
   type SentenceRun,
@@ -23,7 +25,12 @@ import {
   type ImportEntry,
   type ImportMode,
 } from "./sentences.js";
-import { planTree, parseTreeSpec, pathKey } from "./treeSpec.js";
+import {
+  planTree,
+  parseTreeSpec,
+  pathKey,
+  specPathsInOrder,
+} from "./treeSpec.js";
 import { resolveIntent, type IntentInput } from "./tree.js";
 import type { IntentApi } from "./types.js";
 
@@ -94,6 +101,7 @@ export async function importCsv(
   // Create missing intents as flat roots, in file order.
   const createdId = new Map<string, string>();
   const createFailed: string[] = [];
+  const failedByStatus: Record<string, number> = {};
   let neverCreated = 0;
   if (a.createMissing !== false) {
     for (const name of missing) {
@@ -101,9 +109,12 @@ export async function importCsv(
         neverCreated += 1;
         continue;
       }
-      const id = await createIntent(api, a.flowId, { name });
-      if (id === null) createFailed.push(name);
-      else createdId.set(name, id);
+      const made = await createIntent(api, a.flowId, { name });
+      if ("id" in made) createdId.set(name, made.id);
+      else {
+        createFailed.push(name);
+        countStatus(failedByStatus, made.status);
+      }
     }
   }
 
@@ -156,6 +167,9 @@ export async function importCsv(
       existing: existingId.size,
       created: createdId.size,
       createFailed: createFailed.length,
+      ...(nonEmpty(failedByStatus)
+        ? { createFailedByStatus: failedByStatus }
+        : {}),
     },
     sentences: sentenceTotals(csv.value.length, run),
     batches: run.totals.batches,
@@ -163,7 +177,11 @@ export async function importCsv(
     ...(nonEmpty(notDone) ? { notDone } : {}),
     ...(nonEmpty(names) ? { names } : {}),
   };
-  return finishResult(out, createFailed.length > 0 || nonEmpty(notDone));
+  return finishResult(
+    out,
+    createFailed.length > 0 || nonEmpty(notDone),
+    failedByStatus,
+  );
 }
 
 // -------------------------------------------------------------- import_tree
@@ -208,6 +226,24 @@ export async function importTree(
   const { tree } = got.value;
   const plan = planTree(spec, tree);
 
+  // Names are unique across the whole flow: refuse before any write.
+  const creating = new Set(plan.create.map((c) => pathKey(c.path)));
+  const clashes = specPathsInOrder(spec.nodes).filter(
+    ({ path }) =>
+      creating.has(pathKey(path)) &&
+      tree.nodes.some((n) => n.name.trim() === path[path.length - 1]),
+  );
+  if (clashes.length > 0) {
+    return {
+      ...base,
+      error: "name_in_use",
+      count: clashes.length,
+      problems: clashes
+        .slice(0, MAX_NAMES_SHOWN)
+        .map(({ at }) => ({ path: at, reason: "name_in_use" })),
+    };
+  }
+
   // Ids by spec path: existing first, then each created intent.
   const idOf = new Map<string, string>(
     plan.existing.map((e) => [pathKey(e.path), e.id]),
@@ -216,6 +252,7 @@ export async function importTree(
   const added: IntentInput[] = [];
   const created = { 1: 0, 2: 0, 3: 0 };
   const createFailed: string[] = [];
+  const failedByStatus: Record<string, number> = {};
   let notAttempted = 0;
 
   for (const level of [1, 2, 3] as const) {
@@ -230,18 +267,19 @@ export async function importTree(
       const name = item.path[item.path.length - 1];
       const parentId =
         parentKey === null ? null : (idOf.get(parentKey) ?? null);
-      const id = await createIntent(api, a.flowId, {
+      const made = await createIntent(api, a.flowId, {
         name,
         ...(parentId !== null ? { parentIntentId: parentId } : {}),
         ...(level < 3 ? { childFeatures: true } : {}),
       });
-      if (id === null) {
+      if (!("id" in made)) {
         unusable.add(key);
         createFailed.push(name);
+        countStatus(failedByStatus, made.status);
         continue;
       }
-      idOf.set(key, id);
-      added.push({ id, name, parentId });
+      idOf.set(key, made.id);
+      added.push({ id: made.id, name, parentId });
       created[level] += 1;
     }
   }
@@ -335,6 +373,9 @@ export async function importTree(
       },
       created: { families: created[1], groups: created[2], tags: created[3] },
       createFailed: createFailed.length,
+      ...(nonEmpty(failedByStatus)
+        ? { createFailedByStatus: failedByStatus }
+        : {}),
       notAttempted,
     },
     ...(a.sentencesFile !== undefined
@@ -358,5 +399,6 @@ export async function importTree(
   return finishResult(
     out,
     createFailed.length > 0 || notAttempted > 0 || nonEmpty(notDone),
+    failedByStatus,
   );
 }

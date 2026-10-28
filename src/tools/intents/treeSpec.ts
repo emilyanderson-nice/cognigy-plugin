@@ -24,7 +24,7 @@ export type SpecProblem = {
     | "name_too_long"
     | "slash_in_name"
     | "duplicate_sibling"
-    | "duplicate_tag"
+    | "duplicate_name"
     | "too_many_intents";
 };
 
@@ -94,9 +94,16 @@ export function parseTreeSpec(
   const families: TreeSpecNode[] = [];
   const groups: TreeSpecNode[] = [];
   const tags: TreeSpecNode[] = [];
-  const tagOwner = new Map<string, string>();
   let total = 0;
-  const familyNames = new Set<string>();
+  // Names are unique across the whole spec: name -> parents it was seen under.
+  const seenUnder = new Map<string, Set<string>>();
+  const checkUnique = (name: string, parentKey: string, path: string): void => {
+    if (name === "") return;
+    const parents = seenUnder.get(name) ?? new Set<string>();
+    if (parents.has(parentKey)) add(path, "duplicate_sibling");
+    else if (parents.size > 0) add(path, "duplicate_name");
+    seenUnder.set(name, parents.add(parentKey));
+  };
 
   familiesRaw.forEach((family: unknown, fi) => {
     const fPath = `families[${fi}]`;
@@ -107,8 +114,7 @@ export function parseTreeSpec(
     total += 1;
     const fName = intentNameOf(family);
     checkName(fName, fPath);
-    if (familyNames.has(fName) && fName !== "") add(fPath, "duplicate_sibling");
-    familyNames.add(fName);
+    checkUnique(fName, "", fPath);
     families.push({ level: 1, path: [fName] });
 
     const groupsRaw = family.groups;
@@ -117,7 +123,6 @@ export function parseTreeSpec(
       add(`${fPath}.groups`, "shape");
       return;
     }
-    const groupNames = new Set<string>();
     groupsRaw.forEach((group: unknown, gi) => {
       const gPath = `${fPath}.groups[${gi}]`;
       if (!isPlainObject(group)) {
@@ -127,10 +132,7 @@ export function parseTreeSpec(
       total += 1;
       const gName = intentNameOf(group);
       checkName(gName, gPath);
-      if (groupNames.has(gName) && gName !== "") {
-        add(gPath, "duplicate_sibling");
-      }
-      groupNames.add(gName);
+      checkUnique(gName, fPath, gPath);
       groups.push({ level: 2, path: [fName, gName] });
 
       const tagsRaw = group.tags;
@@ -139,8 +141,6 @@ export function parseTreeSpec(
         add(`${gPath}.tags`, "shape");
         return;
       }
-      const groupKey = `${fi}/${gi}`;
-      const siblingTags = new Set<string>();
       tagsRaw.forEach((tag: unknown, ti) => {
         const tPath = `${gPath}.tags[${ti}]`;
         if (typeof tag !== "string") {
@@ -150,14 +150,7 @@ export function parseTreeSpec(
         total += 1;
         const tName = tag.trim();
         checkName(tName, tPath);
-        if (tName !== "") {
-          if (siblingTags.has(tName)) add(tPath, "duplicate_sibling");
-          else if (tagOwner.has(tName) && tagOwner.get(tName) !== groupKey) {
-            add(tPath, "duplicate_tag");
-          }
-          siblingTags.add(tName);
-          if (!tagOwner.has(tName)) tagOwner.set(tName, groupKey);
-        }
+        checkUnique(tName, gPath, tPath);
         tags.push({ level: 3, path: [fName, gName, tName] });
       });
     });
@@ -190,6 +183,31 @@ export interface TreePlan {
 
 export const pathKey = (path: string[]): string => JSON.stringify(path);
 
+/**
+ * The spec nodes of a valid spec in document order, each with the path
+ * parseTreeSpec reports problems at (`families[0].groups[1].tags[2]`). Names
+ * are unique among siblings, so a node's array index is its rank under its parent.
+ */
+export function specPathsInOrder(
+  nodes: TreeSpecNode[],
+): Array<{ path: string[]; at: string }> {
+  const childrenOf = new Map<string, TreeSpecNode[]>();
+  for (const node of nodes) {
+    const parentKey = pathKey(node.path.slice(0, -1));
+    childrenOf.set(parentKey, [...(childrenOf.get(parentKey) ?? []), node]);
+  }
+  const walk = (
+    parentKey: string,
+    parentAt: string,
+  ): Array<{ path: string[]; at: string }> =>
+    (childrenOf.get(parentKey) ?? []).flatMap((node, rank) => {
+      const list = ["families", "groups", "tags"][node.level - 1];
+      const at = `${parentAt}${list}[${rank}]`;
+      return [{ path: node.path, at }, ...walk(pathKey(node.path), `${at}.`)];
+    });
+  return walk(pathKey([]), "");
+}
+
 /** Which spec nodes already exist in the tree and which must be created. */
 export function planTree(spec: TreeSpec, tree: IntentTree): TreePlan {
   const byId = new Map(tree.nodes.map((n) => [n.id, n]));
@@ -208,7 +226,8 @@ export function planTree(spec: TreeSpec, tree: IntentTree): TreePlan {
       candidates =
         parentId === undefined ? [] : (byId.get(parentId)?.childIds ?? []);
     }
-    const match = candidates.find((id) => byId.get(id)?.name === name);
+    // The platform refuses padded names, but a legacy flow may still hold some.
+    const match = candidates.find((id) => byId.get(id)?.name.trim() === name);
     if (match !== undefined) {
       idOf.set(pathKey(node.path), match);
       plan.existing.push({ path: node.path, level: node.level, id: match });

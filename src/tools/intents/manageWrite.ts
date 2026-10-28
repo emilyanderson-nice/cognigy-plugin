@@ -51,18 +51,17 @@ async function verifyProject(
   return { flow };
 }
 
-const hasSibling = (
+/**
+ * Id of the first intent in the flow with this (trimmed, case-sensitive) name,
+ * at any level. Observed on Cognigy 2026.21.1: names are unique per flow, not
+ * per parent (findings I22-I25 in docs/platform-versions).
+ */
+const findName = (
   tree: IntentTree,
-  parentId: string | null,
   name: string,
   exceptId?: string,
 ): string | undefined =>
-  tree.nodes.find(
-    (n) =>
-      n.parentId === parentId &&
-      n.id !== exceptId &&
-      n.name.trim() === name.trim(),
-  )?.id;
+  tree.nodes.find((n) => n.id !== exceptId && n.name.trim() === name)?.id;
 
 const nameExists = (operation: string, id: string): Result =>
   failure(operation, "name_exists", { id });
@@ -84,12 +83,14 @@ export async function create(api: IntentApi, a: Op<"create">): Promise<Result> {
   if (!check.ok) {
     return failure(a.operation, check.error, { message: check.message });
   }
-  const existing = hasSibling(tree, parentId, a.name);
+  const name = a.name.trim();
+  if (name === "") return failure(a.operation, "empty_name");
+  const existing = findName(tree, name);
   if (existing !== undefined) return nameExists(a.operation, existing);
 
   // The platform rejects localeReference on intent create; never send it.
   const created: unknown = await api.post(intentsPath(a.flowId), {
-    name: a.name,
+    name,
     ...(parentId !== null ? { parentIntentId: parentId } : {}),
     ...(a.childFeatures !== undefined
       ? { childFeatures: a.childFeatures }
@@ -110,7 +111,7 @@ export async function create(api: IntentApi, a: Op<"create">): Promise<Result> {
   const result: Result = {
     operation: a.operation,
     flowId: a.flowId,
-    intent: { id, name: a.name, parentId, depth: check.depth },
+    intent: { id, name, parentId, depth: check.depth },
   };
   if (a.sentences === undefined) return result;
 
@@ -119,7 +120,7 @@ export async function create(api: IntentApi, a: Op<"create">): Promise<Result> {
     const r = await importSentences(
       api,
       a.flowId,
-      buildTree([...tree.nodes, { id, name: a.name, parentId }]),
+      buildTree([...tree.nodes, { id, name, parentId }]),
       [{ intent: id, sentences: a.sentences }],
       { mode: "add" },
     );
@@ -147,15 +148,17 @@ export async function update(api: IntentApi, a: Op<"update">): Promise<Result> {
   if ("error" in target) return target.error;
   const { node } = target;
 
-  if (a.name !== undefined) {
-    const clash = hasSibling(got.read.tree, node.parentId, a.name, node.id);
+  const name = a.name?.trim();
+  if (name === "") return failure(a.operation, "empty_name");
+  if (name !== undefined && name !== node.name.trim()) {
+    const clash = findName(got.read.tree, name, node.id);
     if (clash !== undefined) return nameExists(a.operation, clash);
   }
 
   const changed: string[] = [];
   const body: Record<string, unknown> = {};
-  if (a.name !== undefined) {
-    body.name = a.name;
+  if (name !== undefined) {
+    body.name = name;
     changed.push("name");
   }
   if (a.childFeatures !== undefined) {
@@ -170,7 +173,7 @@ export async function update(api: IntentApi, a: Op<"update">): Promise<Result> {
   return {
     operation: a.operation,
     flowId: a.flowId,
-    intent: { id: node.id, name: a.name ?? node.name },
+    intent: { id: node.id, name: name ?? node.name },
     changed,
   };
 }
@@ -194,9 +197,6 @@ export async function move(api: IntentApi, a: Op<"move">): Promise<Result> {
   if (!check.ok) {
     return failure(a.operation, check.error, { message: check.message });
   }
-  const clash = hasSibling(tree, parentId, target.node.name, target.node.id);
-  if (clash !== undefined) return nameExists(a.operation, clash);
-
   await api.patch(`${intentsPath(a.flowId)}/${target.node.id}`, {
     parentIntentId: parentId,
   });

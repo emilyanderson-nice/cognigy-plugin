@@ -1613,11 +1613,18 @@ describe("manage_intents create", () => {
     noSentence(r);
   });
 
-  describe("duplicate sibling names", () => {
+  describe("flow-wide unique names", () => {
     const seed = (): SeedIntent[] => [
       ...defaultSeed(),
       { id: hid("a", 7), name: "Group", parent: OTH, sentences: [] },
     ];
+
+    it("refuses a name that is empty after trimming", async () => {
+      const p = makePlatform();
+      const r = await call(p, { ...base, name: "   " });
+      expect(r).toEqual({ operation: "create", error: "empty_name" });
+      noWrites(p);
+    });
 
     it("refuses a root name that already exists", async () => {
       const p = makePlatform();
@@ -1640,34 +1647,94 @@ describe("manage_intents create", () => {
       noWrites(p);
     });
 
-    it("allows the same name under a different parent", async () => {
+    it("refuses a name that exists under a different parent", async () => {
       const p = makePlatform();
       const r = await call(p, { ...base, name: "Group", parent: "Other" });
-      expect(r.error).toBeUndefined();
-      expect(r.intent).toEqual({
-        id: NEW1,
-        name: "Group",
-        parentId: OTH,
-        depth: 2,
-      });
-      expect(p.writes()).toHaveLength(1);
+      expect(r).toEqual({ operation: "create", error: "name_exists", id: GRP });
+      noWrites(p);
     });
 
-    it("allows a root name that only exists below a parent", async () => {
+    it("refuses a root name that only exists below a parent", async () => {
       const p = makePlatform();
       const r = await call(p, { ...base, name: "Tag" });
+      expect(r).toEqual({ operation: "create", error: "name_exists", id: TAG });
+      noWrites(p);
+    });
+
+    it("refuses a level-3 name that exists at the root and a root name that exists at level 2", async () => {
+      const p = makePlatform();
+      const a = await call(p, {
+        ...base,
+        name: "Other",
+        parent: "Family/Group",
+      });
+      const b = await call(p, { ...base, name: "Group" });
+      expect(a).toEqual({ operation: "create", error: "name_exists", id: OTH });
+      expect(b).toEqual({ operation: "create", error: "name_exists", id: GRP });
+      noWrites(p);
+    });
+
+    it("answers with the first intent in tree order when the name exists more than once (seeded copy under Other)", async () => {
+      const p = makePlatform({ intents: seed() });
+      const r = await call(p, { ...base, name: "Group", parent: "Family" });
+      expect(r).toEqual({ operation: "create", error: "name_exists", id: GRP });
+      noWrites(p);
+    });
+
+    it("legacy duplicates (two roots named Dup) do not break the rule: the first one is reported", async () => {
+      const p = makePlatform({ intents: [...defaultSeed(), ...dupSeeds()] });
+      const r = await call(p, { ...base, name: "Dup", parent: "Other" });
+      expect(r).toEqual({
+        operation: "create",
+        error: "name_exists",
+        id: DUP1,
+      });
+      noWrites(p);
+    });
+
+    it("a name that differs only by case is allowed and sent as given", async () => {
+      const p = makePlatform();
+      const r = await call(p, { ...base, name: "group" });
+      expect(p.writes()).toEqual([
+        { method: "post", path: LIST_PATH, body: { name: "group" } },
+      ]);
+      expect(r).toEqual({
+        operation: "create",
+        flowId: FLOW,
+        intent: { id: NEW1, name: "group", parentId: null, depth: 1 },
+      });
+    });
+
+    it("builds the request body from the trimmed name", async () => {
+      const p = makePlatform();
+      const r = await call(p, { ...base, name: "  Fresh  " });
+      expect(p.writes()).toEqual([
+        { method: "post", path: LIST_PATH, body: { name: "Fresh" } },
+      ]);
       expect(r.intent).toEqual({
         id: NEW1,
-        name: "Tag",
+        name: "Fresh",
         parentId: null,
         depth: 1,
       });
     });
 
-    it("does not confuse a sibling elsewhere with a clash (seeded copy under Other)", async () => {
-      const p = makePlatform({ intents: seed() });
-      const r = await call(p, { ...base, name: "Group", parent: "Family" });
-      expect(r).toEqual({ operation: "create", error: "name_exists", id: GRP });
+    it("sends the trimmed name together with the optional fields under a parent", async () => {
+      const p = makePlatform();
+      const r = await call(p, {
+        ...base,
+        name: " Fresh ",
+        parent: "Other",
+        childFeatures: true,
+      });
+      expect(p.writes()).toEqual([
+        {
+          method: "post",
+          path: LIST_PATH,
+          body: { name: "Fresh", parentIntentId: OTH, childFeatures: true },
+        },
+      ]);
+      expect(r.intent.name).toBe("Fresh");
     });
   });
 });
@@ -1677,6 +1744,18 @@ describe("manage_intents create", () => {
 // ---------------------------------------------------------------------------
 describe("manage_intents update", () => {
   const base = { operation: "update", projectId: PROJECT };
+
+  it("refuses a name that is empty after trimming and sends nothing", async () => {
+    const p = makePlatform();
+    const r = await call(p, {
+      ...base,
+      intent: "Group",
+      name: "   ",
+      childFeatures: false,
+    });
+    expect(r).toEqual({ operation: "update", error: "empty_name" });
+    noWrites(p);
+  });
 
   it("sends only provided fields and lists changed in name, childFeatures, priority order", async () => {
     const p = makePlatform();
@@ -1754,13 +1833,45 @@ describe("manage_intents update", () => {
     noWrites(p);
   });
 
-  it("allows renaming to a name that exists only under another parent", async () => {
+  it("refuses a rename to a name that exists only under another parent, with that intent's id", async () => {
     const p = makePlatform();
     const r = await call(p, { ...base, intent: "Other", name: "Tag" });
+    expect(r).toEqual({ operation: "update", error: "name_exists", id: TAG });
+    noWrites(p);
+  });
+
+  it("refuses a rename to a name that exists at a different level (level 3 to a root name, root to a level-2 name)", async () => {
+    const p = makePlatform();
+    const a = await call(p, { ...base, intent: "Tag", name: "Other" });
+    const b = await call(p, { ...base, intent: "Other", name: "Group" });
+    expect(a).toEqual({ operation: "update", error: "name_exists", id: OTH });
+    expect(b).toEqual({ operation: "update", error: "name_exists", id: GRP });
+    noWrites(p);
+  });
+
+  it("allows a rename to a name that differs only by case and sends it as given", async () => {
+    const p = makePlatform();
+    const r = await call(p, { ...base, intent: "Other", name: "family" });
     expect(r.error).toBeUndefined();
     expect(p.writes()).toEqual([
-      { method: "patch", path: intentPath(OTH), body: { name: "Tag" } },
+      { method: "patch", path: intentPath(OTH), body: { name: "family" } },
     ]);
+  });
+
+  it("sends the trimmed name in the PATCH body", async () => {
+    const p = makePlatform();
+    const r = await call(p, { ...base, intent: "Other", name: "  Fresh  " });
+    expect(r.error).toBeUndefined();
+    expect(p.writes()).toEqual([
+      { method: "patch", path: intentPath(OTH), body: { name: "Fresh" } },
+    ]);
+  });
+
+  it("legacy duplicates: a rename to a name two intents hold reports the first one", async () => {
+    const p = makePlatform({ intents: [...defaultSeed(), ...dupSeeds()] });
+    const r = await call(p, { ...base, intent: "Other", name: "Dup" });
+    expect(r).toEqual({ operation: "update", error: "name_exists", id: DUP1 });
+    noWrites(p);
   });
 
   it("does not treat the intent's own current name as a clash", async () => {
@@ -1769,6 +1880,15 @@ describe("manage_intents update", () => {
     expect(r.error).toBeUndefined();
     expect(p.writes()).toEqual([
       { method: "patch", path: intentPath(GRP), body: { name: "Group" } },
+    ]);
+  });
+
+  it("the own-name exception holds when the trimmed new name equals the own name and a legacy twin exists", async () => {
+    const p = makePlatform({ intents: [...defaultSeed(), ...dupSeeds()] });
+    const r = await call(p, { ...base, intent: DUP2, name: " Dup " });
+    expect(r.error).toBeUndefined();
+    expect(p.writes()).toEqual([
+      { method: "patch", path: intentPath(DUP2), body: { name: "Dup" } },
     ]);
   });
 
@@ -1883,7 +2003,7 @@ describe("manage_intents move", () => {
     noWrites(p);
   });
 
-  describe("duplicate sibling names", () => {
+  describe("never checks names (a move does not change a name)", () => {
     const CLASH = hid("a", 7);
     const ROOT_TAG = hid("a", 8);
     const seed = (): SeedIntent[] => [
@@ -1892,29 +2012,55 @@ describe("manage_intents move", () => {
       { id: ROOT_TAG, name: "Tag", parent: null, sentences: [] },
     ];
 
-    it("refuses a move under a parent that already has a child with that name", async () => {
+    it("moves under a parent that already has a child with that name (legacy duplicate), body exactly {parentIntentId}", async () => {
       const p = makePlatform({ intents: seed() });
       const r = await call(p, {
         ...base,
         intent: "Family/Group",
         parent: "Other",
       });
-      expect(r).toEqual({ operation: "move", error: "name_exists", id: CLASH });
-      noWrites(p);
+      expect(r.error).toBeUndefined();
+      expect(p.writes()).toEqual([
+        {
+          method: "patch",
+          path: intentPath(GRP),
+          body: { parentIntentId: OTH },
+        },
+      ]);
     });
 
-    it("refuses a move to the root when a root has that name", async () => {
+    it("moves to the root when a root has that name (legacy duplicate), body exactly {parentIntentId: null}", async () => {
       const p = makePlatform({ intents: seed() });
       const r = await call(p, {
         ...base,
         intent: "Family/Group/Tag",
         parent: null,
       });
-      expect(r).toEqual({
-        operation: "move",
-        error: "name_exists",
-        id: ROOT_TAG,
+      expect(r.error).toBeUndefined();
+      expect(r.parentId).toBeNull();
+      expect(p.writes()).toEqual([
+        {
+          method: "patch",
+          path: intentPath(TAG),
+          body: { parentIntentId: null },
+        },
+      ]);
+    });
+
+    it("still enforces the depth and cycle checks when the name also exists elsewhere", async () => {
+      const p = makePlatform({ intents: seed() });
+      const deep = await call(p, {
+        ...base,
+        intent: "Family",
+        parent: "Other",
       });
+      const cycle = await call(p, {
+        ...base,
+        intent: "Family",
+        parent: "Family/Group/Tag",
+      });
+      expect(deep.error).toBe("max_depth_exceeded");
+      expect(cycle.error).toBe("cycle");
       noWrites(p);
     });
 
@@ -3040,7 +3186,7 @@ describe("manage_intents whitespace in platform-side names", () => {
       noWrites(p);
     });
 
-    it("move refuses with name_exists and writes nothing", async () => {
+    it("move makes no name check and sends exactly the parent PATCH", async () => {
       const p = makePlatform({
         intents: [
           ...defaultSeed(),
@@ -3054,12 +3200,14 @@ describe("manage_intents whitespace in platform-side names", () => {
         intent: MOVER,
         parent: "Other",
       });
-      expect(r).toEqual({
-        operation: "move",
-        error: "name_exists",
-        id: EXISTING,
-      });
-      noWrites(p);
+      expect(r.error).toBeUndefined();
+      expect(p.writes()).toEqual([
+        {
+          method: "patch",
+          path: intentPath(MOVER),
+          body: { parentIntentId: OTH },
+        },
+      ]);
     });
   });
 });
@@ -3572,7 +3720,13 @@ describe("manage_intents import_csv", () => {
       ok: true,
       mode: "add",
       status: "partial",
-      intents: { inFile: 2, existing: 1, created: 0, createFailed: 1 },
+      intents: {
+        inFile: 2,
+        existing: 1,
+        created: 0,
+        createFailed: 1,
+        createFailedByStatus: { "400": 1 },
+      },
       sentences: {
         rows: 3,
         created: 1,
@@ -3584,6 +3738,7 @@ describe("manage_intents import_csv", () => {
       names: { createFailed: ["Brandnew"] },
       _hints: { warning: expect.any(String), action: expect.any(String) },
     });
+    expect(r._hints.action).not.toContain("409");
     hint(r);
     noSecret(r);
     noSentence(r);
@@ -3595,7 +3750,31 @@ describe("manage_intents import_csv", () => {
     const r = await run(p, CSV);
     expect(r.status).toBe("partial");
     expect(r.intents.createFailed).toBe(1);
+    expect(r.intents.createFailedByStatus).toEqual({ none: 1 });
     expect(sentencePatches(p).map((c) => c.path)).toEqual([sentPath(OTH)]);
+  });
+
+  it("a creation POST answered with 409 is counted under 409 and the action hint explains it", async () => {
+    const p = makePlatform();
+    p.fail({
+      method: "post",
+      path: new RegExp(`${LIST_PATH}$`),
+      status: 409,
+      shape: "plain",
+    });
+    const r = await run(p, CSV);
+    expect(r.status).toBe("partial");
+    expect(r.intents).toEqual({
+      inFile: 2,
+      existing: 1,
+      created: 0,
+      createFailed: 1,
+      createFailedByStatus: { "409": 1 },
+    });
+    expect(r._hints.action).toBe(
+      "Check the counts and names, then run the same call again; what is already there is skipped. A 409 means the name already exists elsewhere in this flow; intent names must be unique across the whole flow (case-sensitive).",
+    );
+    noSecret(r);
   });
 
   it("a failed sentence PATCH is reported by status without upstream text", async () => {
@@ -3833,7 +4012,7 @@ describe("manage_intents import_tree", () => {
     });
   });
 
-  it("creates the same group name once under each family that lists it", async () => {
+  it("refuses a spec that lists the same group name under two families as spec_invalid / duplicate_name and changes nothing", async () => {
     const p = makePlatform({ intents: [] });
     const spec = {
       families: [
@@ -3842,15 +4021,53 @@ describe("manage_intents import_tree", () => {
       ],
     };
     const r = await run(p, spec);
-    expect(intentPosts(p).map((c) => c.body)).toEqual([
-      { name: "Fam A", childFeatures: true },
-      { name: "Fam B", childFeatures: true },
-      { name: "Shared", parentIntentId: hid("d", 1), childFeatures: true },
-      { name: "Shared", parentIntentId: hid("d", 2), childFeatures: true },
-      { name: "T1", parentIntentId: hid("d", 3) },
-      { name: "T2", parentIntentId: hid("d", 4) },
-    ]);
-    expect(r.intents.created).toEqual({ families: 2, groups: 2, tags: 2 });
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      error: "spec_invalid",
+      count: 1,
+      problems: [{ path: "families[1].groups[0]", reason: "duplicate_name" }],
+    });
+    noWrites(p);
+    expect(p.gets(LIST_PATH)).toEqual([]);
+  });
+
+  it("refuses with name_in_use when a new node's name already exists elsewhere in the flow, and writes nothing", async () => {
+    // "Other" exists at the root; the spec wants a new group called Other under Fam A
+    const p = makePlatform();
+    const spec = {
+      families: [{ name: "Fam A", groups: [{ name: "Other", tags: ["T1"] }] }],
+    };
+    const r = await run(p, spec, csv([["T1", `${SENTINEL} t1`]]));
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      error: "name_in_use",
+      count: 1,
+      problems: [{ path: "families[0].groups[0]", reason: "name_in_use" }],
+    });
+    noWrites(p);
+    noSentence(r);
+  });
+
+  it("lists name_in_use clashes in document order, a parent before its child", async () => {
+    // "Other" and "Tag" both exist in the flow; the spec wants both again under a new family
+    const p = makePlatform();
+    const spec = {
+      families: [{ name: "Fam A", groups: [{ name: "Other", tags: ["Tag"] }] }],
+    };
+    const r = await run(p, spec);
+    expect(r).toEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      error: "name_in_use",
+      count: 2,
+      problems: [
+        { path: "families[0].groups[0]", reason: "name_in_use" },
+        { path: "families[0].groups[0].tags[0]", reason: "name_in_use" },
+      ],
+    });
+    noWrites(p);
   });
 
   it("reuses existing intents, reports a parent whose childFeatures is false and changes nothing else", async () => {
@@ -3932,6 +4149,7 @@ describe("manage_intents import_tree", () => {
         existing: { families: 0, groups: 0, tags: 0 },
         created: { families: 1, groups: 0, tags: 0 },
         createFailed: 1,
+        createFailedByStatus: { "500": 1 },
         notAttempted: 2,
       },
       sentences: {
