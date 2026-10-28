@@ -70,7 +70,7 @@ describe("backup gate classification", () => {
     manage_snapshots: "the backup tool itself",
     talk_to_agent: "sends a message; changes no configuration",
     manage_flows:
-      "create and clone are additive; rename is trivially reversible, and deleting a flow still goes through the gated delete_resource",
+      "create and clone are additive; rename is trivially reversible; create_endpoint adds an endpoint, and endpoints are NOT captured in a snapshot; deleting a flow still goes through the gated delete_resource",
   };
 
   it("classifies every tool", () => {

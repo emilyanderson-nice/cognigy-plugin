@@ -762,6 +762,35 @@ A raw LLM call driven by a **freeform system prompt** (`config.prompt`). Support
 }
 ```
 
+### knowledgeSearchV2 — Knowledge Search
+
+Category: ai
+
+Searches a Knowledge Store and stores the best chunks in the input or context. Use it in a plain flow to check retrieval (the `knowledge-setup` skill has the recipe). The older `knowledgeSearch` type cannot be created; always use `knowledgeSearchV2`.
+
+**Config:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| knowledgeStoreId | string | Yes | The store's **referenceId** (a UUID, as `list_resources` and `manage_knowledge create_store` return it), not the 24-char id |
+| topK | number | No | Number of hits (default 3) |
+| storeLocation | string | No | `input` (default) or `context` |
+| inputKey / contextKey | string | No | Where the result goes (default `knowledgeSearch`) |
+
+**Result:** with the default `storeLocation`, `input.knowledgeSearch.topK` is a list of hits, each `{ text, distance, sourceMetaData: { sourceName, sourceType }, chunkMetaData }`, highest `distance` first (observed); a higher `distance` presumably means closer (inferred from that ranking). A hit carries no chunk id or source id (observed). `chunkMetaData` is presumably the chunk's own metadata (inferred; it was empty for a chunk ingested from a text file). With `storeLocation: "context"` the result is expected under `contextKey` instead (not verified). A section's heading chunk can rank above its body chunk (observed). A knowledge _tool_ on an agent writes its result under `context.knowledgeSearch.data.topK` instead; do not mix the two paths up.
+
+**Example:**
+
+```json
+{
+  "operation": "create",
+  "flowId": "<flowId>",
+  "nodeType": "knowledgeSearchV2",
+  "label": "Search KB",
+  "mode": "append",
+  "config": { "knowledgeStoreId": "<store referenceId>", "topK": 5 }
+}
+```
+
 ---
 
 ## Branching nodes
