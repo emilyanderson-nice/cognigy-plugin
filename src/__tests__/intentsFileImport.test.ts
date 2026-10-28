@@ -245,7 +245,7 @@ function readerFor(files: Record<string, string | Error>) {
 }
 
 const spec = (families: any[]): string => JSON.stringify({ families });
-/** F1 > [G1 > [t1,t2], G2 > [t3]], F2 > [G1 > [t4]]  (G1 repeats under two families) */
+/** F1 > [G1 > [t1,t2], G2 > [t3]], F2 > [G3 > [t4]]  (every name is unique across the whole spec) */
 const BIG_SPEC = spec([
   {
     name: "F1",
@@ -254,8 +254,12 @@ const BIG_SPEC = spec([
       { name: "G2", tags: ["t3"] },
     ],
   },
-  { name: "Family two", intent: "F2", groups: [{ name: "G1", tags: ["t4"] }] },
+  { name: "Family two", intent: "F2", groups: [{ name: "G3", tags: ["t4"] }] },
 ]);
+
+/** The action hint when at least one failed create answered HTTP 409 (exact text). */
+const ACTION_409 =
+  "Check the counts and names, then run the same call again; what is already there is skipped. A 409 means the name already exists elsewhere in this flow; intent names must be unique across the whole flow (case-sensitive).";
 const SMALL_SPEC = spec([
   { name: "F1", groups: [{ name: "G1", tags: ["t1", "t2"] }] },
 ]);
@@ -669,18 +673,21 @@ describe("importCsv: existing and missing intents", () => {
       "a rejected POST",
       (_b: any, n: number) =>
         n === 1 ? httpError(500, SENTINEL_ERR) : undefined,
+      { "500": 1 },
     ],
     [
       "a response without _id",
       (_b: any, n: number) => (n === 1 ? ("noid" as const) : undefined),
+      { none: 1 },
     ],
     [
       "a non-string _id",
       (_b: any, n: number) => (n === 1 ? ("numericid" as const) : undefined),
+      { none: 1 },
     ],
   ])(
     "counts %s as createFailed, never attempts its sentences, and still imports the others",
-    async (_label, postFail) => {
+    async (_label, postFail, byStatus) => {
       const { fake, run } = csvRun(
         { intents: [{ id: ALPHA, name: "Alpha" }], postFail },
         csv([
@@ -705,7 +712,13 @@ describe("importCsv: existing and missing intents", () => {
         ok: true,
         mode: "add",
         status: "partial",
-        intents: { inFile: 3, existing: 1, created: 1, createFailed: 1 },
+        intents: {
+          inFile: 3,
+          existing: 1,
+          created: 1,
+          createFailed: 1,
+          createFailedByStatus: byStatus,
+        },
         sentences: {
           rows: 3,
           created: 2,
@@ -717,11 +730,182 @@ describe("importCsv: existing and missing intents", () => {
         names: { createFailed: ["Bad"] },
         _hints: HINTS,
       });
+      expect(result._hints.action).not.toContain("409");
       const json = JSON.stringify(result);
       expect(json).not.toContain(SENTINEL_ERR);
       expect(json).not.toContain(SENTINEL_SENTENCE);
     },
   );
+
+  it.each([
+    ["err.response.status", (m: string) => httpError(409, m)],
+    ["err.status", (m: string) => statusError(409, m)],
+  ])(
+    "a 409 on a create (%s) is counted under createFailedByStatus and extends only the action hint",
+    async (_label, mk) => {
+      const text = csv([
+        ["Bad", `${SENTINEL_SENTENCE} 1`],
+        ["Good", "g sample 1"],
+        ["Alpha", "a sample 1"],
+      ]);
+      const { fake, run } = csvRun(
+        {
+          intents: [{ id: ALPHA, name: "Alpha" }],
+          postFail: (_b, n) => (n === 1 ? mk(SENTINEL_ERR) : undefined),
+        },
+        text,
+      );
+      const result = await run();
+      const reference = await csvRun(
+        {
+          intents: [{ id: ALPHA, name: "Alpha" }],
+          postFail: (_b, n) =>
+            n === 1 ? httpError(500, SENTINEL_ERR) : undefined,
+        },
+        text,
+      ).run();
+      expect(fake.posts()).toHaveLength(2);
+      expect(result).toStrictEqual({
+        operation: "import_csv",
+        flowId: FLOW,
+        ok: true,
+        mode: "add",
+        status: "partial",
+        intents: {
+          inFile: 3,
+          existing: 1,
+          created: 1,
+          createFailed: 1,
+          createFailedByStatus: { "409": 1 },
+        },
+        sentences: {
+          rows: 3,
+          created: 2,
+          deleted: 0,
+          skippedExisting: 0,
+          duplicatesDropped: 0,
+        },
+        batches: 2,
+        names: { createFailed: ["Bad"] },
+        _hints: { warning: reference._hints.warning, action: ACTION_409 },
+      });
+      expect(reference._hints.action).not.toBe(ACTION_409);
+      const json = JSON.stringify(result);
+      expect(json).not.toContain(SENTINEL_ERR);
+      expect(json).not.toContain(SENTINEL_SENTENCE);
+    },
+  );
+
+  it("counts failed creates per status: several 409, a 400, a status-less error and a response without _id", async () => {
+    const { fake, run } = csvRun(
+      {
+        postFail: (_b, n) =>
+          [
+            httpError(409, SENTINEL_ERR),
+            statusError(400, SENTINEL_ERR),
+            httpError(409, SENTINEL_ERR),
+            new Error(SENTINEL_ERR),
+            "noid" as const,
+            undefined,
+          ][n - 1],
+      },
+      csv([
+        ["M1", "m sample 1"],
+        ["M2", "m sample 2"],
+        ["M3", "m sample 3"],
+        ["M4", "m sample 4"],
+        ["M5", "m sample 5"],
+        ["M6", "m sample 6"],
+      ]),
+    );
+    const result = await run();
+    expect(fake.posts()).toHaveLength(6);
+    expect(result.intents).toStrictEqual({
+      inFile: 6,
+      existing: 0,
+      created: 1,
+      createFailed: 5,
+      createFailedByStatus: { "409": 2, "400": 1, none: 2 },
+    });
+    expect(result.status).toBe("partial");
+    expect(result.names).toStrictEqual({
+      createFailed: ["M1", "M2", "M3", "M4", "M5"],
+    });
+    expect(result._hints.action).toBe(ACTION_409);
+    expect(JSON.stringify(result)).not.toContain(SENTINEL_ERR);
+  });
+
+  it("without any 409 the hints stay as before even when other statuses fail", async () => {
+    const { run } = csvRun(
+      {
+        postFail: (_b, n) =>
+          n === 1 ? httpError(400, SENTINEL_ERR) : httpError(503, SENTINEL_ERR),
+      },
+      csv([
+        ["M1", "m sample 1"],
+        ["M2", "m sample 2"],
+      ]),
+    );
+    const result = await run();
+    expect(result.intents.createFailedByStatus).toStrictEqual({
+      "400": 1,
+      "503": 1,
+    });
+    expect(result._hints).toStrictEqual(HINTS);
+    expect(result._hints.action).not.toContain("409");
+    expect(result._hints.action).not.toContain("unique");
+  });
+
+  it("does not count intents that were not attempted after the deadline as failed creates", async () => {
+    let t = 0;
+    const { fake, run } = csvRun(
+      {
+        intents: [{ id: ALPHA, name: "Alpha" }],
+        onPost: () => {
+          t = 1000;
+        },
+        postFail: (_b, n) =>
+          n === 1 ? httpError(409, SENTINEL_ERR) : undefined,
+      },
+      csv([
+        ["Alpha", "a sample 1"],
+        ["M1", "m sample 1"],
+        ["M2", "m sample 2"],
+        ["M3", "m sample 3"],
+      ]),
+      { deadlineSeconds: 1, now: () => t },
+    );
+    const result = await run();
+    expect(fake.posts()).toHaveLength(1);
+    expect(result.status).toBe("partial");
+    expect(result.intents).toStrictEqual({
+      inFile: 4,
+      existing: 1,
+      created: 0,
+      createFailed: 1,
+      createFailedByStatus: { "409": 1 },
+    });
+    expect(result._hints.action).toBe(ACTION_409);
+  });
+
+  it("a failed sentence import is not a failed create: no createFailedByStatus key", async () => {
+    const { run } = csvRun(
+      {
+        intents: [{ id: ALPHA, name: "Alpha" }],
+        failPatch: () => httpError(409, SENTINEL_ERR),
+      },
+      csv(rowsFor("Alpha", ["a sample 1"])),
+    );
+    const result = await run();
+    expect(result.status).toBe("partial");
+    expect(result.intents).toStrictEqual({
+      inFile: 1,
+      existing: 1,
+      created: 0,
+      createFailed: 0,
+    });
+    expect(result._hints.action).not.toContain("409");
+  });
 
   it("caps every names list at 20 (first 20 in file order) while counts stay exact", async () => {
     const names = Array.from(
@@ -741,7 +925,13 @@ describe("importCsv: existing and missing intents", () => {
       ok: true,
       mode: "add",
       status: "partial",
-      intents: { inFile: 25, existing: 0, created: 0, createFailed: 25 },
+      intents: {
+        inFile: 25,
+        existing: 0,
+        created: 0,
+        createFailed: 25,
+        createFailedByStatus: { "500": 25 },
+      },
       sentences: zeroSentences(25),
       batches: 0,
       names: { createFailed: names.slice(0, 20) },
@@ -1381,20 +1571,236 @@ describe("importTree: refusals make no write call", () => {
 });
 
 // ---------------------------------------------------------------------------
+// import_tree: flow-wide names (spec duplicates and the name_in_use pre-check)
+// ---------------------------------------------------------------------------
+
+describe("importTree: names are unique across the whole spec and the whole flow", () => {
+  const niu = (problems: Array<{ path: string }>, count = problems.length) => ({
+    operation: "import_tree",
+    flowId: FLOW,
+    error: "name_in_use",
+    count,
+    problems: problems.map((p) => ({ path: p.path, reason: "name_in_use" })),
+  });
+
+  it("refuses a spec that repeats a group name under two families as spec_invalid / duplicate_name, before any platform call", async () => {
+    const { fake, run } = treeRun(
+      {},
+      spec([
+        { name: "F1", groups: [{ name: "G1", tags: ["t1"] }] },
+        { name: "F2", groups: [{ name: "G1", tags: ["t2"] }] },
+      ]),
+      undefined,
+    );
+    expect(await run()).toStrictEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      error: "spec_invalid",
+      count: 1,
+      problems: [{ path: "families[1].groups[0]", reason: "duplicate_name" }],
+    });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it.each([
+    [
+      "a root intent with a new group's name",
+      [{ id: id(1), name: "G1" }],
+      "families[0].groups[0]",
+    ],
+    [
+      "a level-2 intent under another family with a new family's name",
+      [
+        { id: id(1), name: "Support" },
+        { id: id(2), name: "F1", parentId: id(1) },
+      ],
+      "families[0]",
+    ],
+    [
+      "a level-3 intent under another family with a new tag's name",
+      [
+        { id: id(1), name: "Support" },
+        { id: id(2), name: "Sub", parentId: id(1) },
+        { id: id(3), name: "t1", parentId: id(2) },
+      ],
+      "families[0].groups[0].tags[0]",
+    ],
+  ] as Array<[string, SeedIntent[], string]>)(
+    "refuses the whole call when %s exists: name_in_use at the spec path, nothing written",
+    async (_label, intents, path) => {
+      const { fake, run } = treeRun({ intents }, SMALL_SPEC, undefined);
+      expect(await run()).toStrictEqual(niu([{ path }]));
+      expect(fake.writes()).toEqual([]);
+      expect(fake.listGets()).toHaveLength(1);
+    },
+  );
+
+  it.each([
+    ["mode add, with sentences", "add" as const],
+    ["mode replace, with sentences", "replace" as const],
+    ["default mode, with sentences", undefined],
+  ])(
+    "refuses before the first POST even when the clash is the LAST node and everything before it is new (%s)",
+    async (_label, mode) => {
+      // F1, G1 and t1 are all new and valid; only t2 clashes with a root intent
+      const { fake, run } = treeRun(
+        { intents: [{ id: id(1), name: "t2" }] },
+        SMALL_SPEC,
+        csv([
+          ...rowsFor("t1", ["t1 sample 1"]),
+          ...rowsFor("t2", ["t2 sample 1"]),
+        ]),
+        { mode },
+      );
+      expect(await run()).toStrictEqual(
+        niu([{ path: "families[0].groups[0].tags[1]" }]),
+      );
+      expect(fake.posts()).toEqual([]);
+      expect(fake.patches()).toEqual([]);
+      expect(fake.writes()).toEqual([]);
+    },
+  );
+
+  it("counts every clash but lists only the first 20, in spec order", async () => {
+    const names = Array.from({ length: 25 }, (_, i) => `tag-${i + 1}`);
+    const { fake, run } = treeRun(
+      {
+        intents: names.map((name, i) => ({ id: id(i + 1), name })),
+      },
+      spec([{ name: "F1", groups: [{ name: "G1", tags: names }] }]),
+      undefined,
+    );
+    expect(await run()).toStrictEqual(
+      niu(
+        Array.from({ length: 20 }, (_, i) => ({
+          path: `families[0].groups[0].tags[${i}]`,
+        })),
+        25,
+      ),
+    );
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("does not count a node that exists at its own path, only the new node that clashes elsewhere", async () => {
+    // F1 and G1 exist at their own paths; G2 is new under F1 but already exists under Other
+    const { fake, run } = treeRun(
+      {
+        intents: [
+          { id: id(1), name: "F1", childFeatures: true },
+          { id: id(2), name: "G1", parentId: id(1) },
+          { id: id(3), name: "Other" },
+          { id: id(4), name: "G2", parentId: id(3) },
+        ],
+      },
+      spec([{ name: "F1", groups: [{ name: "G1" }, { name: "G2" }] }]),
+      undefined,
+    );
+    expect(await run()).toStrictEqual(niu([{ path: "families[0].groups[1]" }]));
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("a rerun of a complete import stays a no-op even when the same names also exist elsewhere (legacy duplicates)", async () => {
+    const { fake, run } = treeRun(
+      {
+        intents: [
+          { id: id(1), name: "F1", childFeatures: true },
+          { id: id(2), name: "G1", parentId: id(1), childFeatures: true },
+          { id: id(3), name: "t1", parentId: id(2) },
+          { id: id(4), name: "t2", parentId: id(2) },
+          // legacy duplicates of names the spec already finds at their own paths
+          { id: id(5), name: "t1" },
+          { id: id(6), name: "Other" },
+          { id: id(7), name: "G1", parentId: id(6) },
+        ],
+      },
+      SMALL_SPEC,
+      undefined,
+    );
+    expect(await run()).toStrictEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "complete",
+      intents: {
+        planned: { families: 1, groups: 1, tags: 2 },
+        existing: { families: 1, groups: 1, tags: 2 },
+        created: { families: 0, groups: 0, tags: 0 },
+        createFailed: 0,
+        notAttempted: 0,
+      },
+    });
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("names are matched after trimming the flow's names: padded names at their own path are existing, not a clash", async () => {
+    const { fake, run } = treeRun(
+      {
+        intents: [
+          { id: id(1), name: "F1 ", childFeatures: true },
+          { id: id(2), name: " G1", parentId: id(1), childFeatures: true },
+          { id: id(3), name: "t1 ", parentId: id(2) },
+          { id: id(4), name: "t2", parentId: id(2) },
+        ],
+      },
+      SMALL_SPEC,
+      undefined,
+    );
+    const result = await run();
+    expect(fake.writes()).toEqual([]);
+    expect(result.status).toBe("complete");
+    expect(result.intents.existing).toStrictEqual({
+      families: 1,
+      groups: 1,
+      tags: 2,
+    });
+  });
+
+  it("a padded name elsewhere in the flow is a clash (trimmed compare)", async () => {
+    const { fake, run } = treeRun(
+      { intents: [{ id: id(1), name: "G1 " }] },
+      SMALL_SPEC,
+      undefined,
+    );
+    expect(await run()).toStrictEqual(niu([{ path: "families[0].groups[0]" }]));
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it("names that differ only by case are not a clash: the tree is created", async () => {
+    const { fake, run } = treeRun(
+      { intents: [{ id: id(1), name: "billing" }] },
+      spec([{ name: "F1", groups: [{ name: "Billing" }] }]),
+      undefined,
+    );
+    const result = await run();
+    expect(fake.posts().map((c) => c.body)).toStrictEqual([
+      { name: "F1", childFeatures: true },
+      { name: "Billing", parentIntentId: cid(1), childFeatures: true },
+    ]);
+    expect(result.status).toBe("complete");
+    expect(result.intents.created).toStrictEqual({
+      families: 1,
+      groups: 1,
+      tags: 0,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // import_tree: creation
 // ---------------------------------------------------------------------------
 
 describe("importTree: creation", () => {
-  it("creates level by level in spec order with exact bodies; the same group name under each family; no sentence calls without sentencesFile", async () => {
+  it("creates level by level in spec order with exact bodies; no sentence calls without sentencesFile", async () => {
     const { fake, run } = treeRun({}, BIG_SPEC, undefined);
     const result = await run();
-    // families F1=1, F2=2 (name from `intent`), groups F1/G1=3, F1/G2=4, F2/G1=5, tags t1..t4 = 6..9
+    // families F1=1, F2=2 (name from `intent`), groups F1/G1=3, F1/G2=4, F2/G3=5, tags t1..t4 = 6..9
     expect(fake.posts().map((c) => [c.path, c.body])).toStrictEqual([
       [LIST_PATH, { name: "F1", childFeatures: true }],
       [LIST_PATH, { name: "F2", childFeatures: true }],
       [LIST_PATH, { name: "G1", parentIntentId: cid(1), childFeatures: true }],
       [LIST_PATH, { name: "G2", parentIntentId: cid(1), childFeatures: true }],
-      [LIST_PATH, { name: "G1", parentIntentId: cid(2), childFeatures: true }],
+      [LIST_PATH, { name: "G3", parentIntentId: cid(2), childFeatures: true }],
       [LIST_PATH, { name: "t1", parentIntentId: cid(3) }],
       [LIST_PATH, { name: "t2", parentIntentId: cid(3) }],
       [LIST_PATH, { name: "t3", parentIntentId: cid(4) }],
@@ -1419,7 +1825,7 @@ describe("importTree: creation", () => {
     });
   });
 
-  it("reuses existing intents (no POST for them), creates the rest under the right existing or new parents, and never creates the same group name under the wrong family", async () => {
+  it("reuses existing intents (no POST for them) and creates the rest under the right existing or new parents", async () => {
     const { fake, run } = treeRun(
       {
         intents: [
@@ -1434,7 +1840,7 @@ describe("importTree: creation", () => {
     expect(fake.posts().map((c) => c.body)).toStrictEqual([
       { name: "F2", childFeatures: true },
       { name: "G2", parentIntentId: id(1), childFeatures: true },
-      { name: "G1", parentIntentId: cid(1), childFeatures: true },
+      { name: "G3", parentIntentId: cid(1), childFeatures: true },
       { name: "t1", parentIntentId: id(2) },
       { name: "t2", parentIntentId: id(2) },
       { name: "t3", parentIntentId: cid(2) },
@@ -1516,11 +1922,11 @@ describe("importTree: creation", () => {
       undefined,
     );
     const result = await run();
-    // F1 fails (1); F2 (2); groups: F1/G1 and F1/G2 are not attempted, F2/G1 (3); tags: only t4 (4)
+    // F1 fails (1); F2 (2); groups: F1/G1 and F1/G2 are not attempted, F2/G3 (3); tags: only t4 (4)
     expect(fake.posts().map((c) => c.body)).toStrictEqual([
       { name: "F1", childFeatures: true },
       { name: "F2", childFeatures: true },
-      { name: "G1", parentIntentId: cid(1), childFeatures: true },
+      { name: "G3", parentIntentId: cid(1), childFeatures: true },
       { name: "t4", parentIntentId: cid(2) },
     ]);
     expect(result).toStrictEqual({
@@ -1534,6 +1940,7 @@ describe("importTree: creation", () => {
         existing: { families: 0, groups: 0, tags: 0 },
         created: { families: 1, groups: 1, tags: 1 },
         createFailed: 1,
+        createFailedByStatus: { "500": 1 },
         notAttempted: 5,
       },
       names: { createFailed: ["F1"] },
@@ -1542,8 +1949,75 @@ describe("importTree: creation", () => {
     expect(JSON.stringify(result)).not.toContain(SENTINEL_ERR);
   });
 
+  it("a 409 on a family counts one failed create (its 5 descendants are notAttempted, not counted per status) and extends the action hint", async () => {
+    const { fake, run } = treeRun(
+      {
+        postFail: (_b, n) =>
+          n === 1 ? httpError(409, SENTINEL_ERR) : undefined,
+      },
+      BIG_SPEC,
+      undefined,
+    );
+    const result = await run();
+    expect(fake.posts()).toHaveLength(4);
+    expect(result).toStrictEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "partial",
+      intents: {
+        planned: { families: 2, groups: 3, tags: 4 },
+        existing: { families: 0, groups: 0, tags: 0 },
+        created: { families: 1, groups: 1, tags: 1 },
+        createFailed: 1,
+        createFailedByStatus: { "409": 1 },
+        notAttempted: 5,
+      },
+      names: { createFailed: ["F1"] },
+      _hints: { warning: expect.stringMatching(/\S/), action: ACTION_409 },
+    });
+    expect(JSON.stringify(result)).not.toContain(SENTINEL_ERR);
+  });
+
+  it("counts failed tag creates per status (409 via err.response.status, 500 via err.status) and keeps the 409 hint", async () => {
+    // F1=1, G1=2 ok; t1 (3) fails 409; t2 (4) fails 500
+    const { fake, run } = treeRun(
+      {
+        postFail: (_b, n) =>
+          n === 3
+            ? httpError(409, SENTINEL_ERR)
+            : n === 4
+              ? statusError(500, SENTINEL_ERR)
+              : undefined,
+      },
+      SMALL_SPEC,
+      undefined,
+    );
+    const result = await run();
+    expect(fake.posts()).toHaveLength(4);
+    expect(result).toStrictEqual({
+      operation: "import_tree",
+      flowId: FLOW,
+      ok: true,
+      mode: "add",
+      status: "partial",
+      intents: {
+        planned: { families: 1, groups: 1, tags: 2 },
+        existing: { families: 0, groups: 0, tags: 0 },
+        created: { families: 1, groups: 1, tags: 0 },
+        createFailed: 2,
+        createFailedByStatus: { "409": 1, "500": 1 },
+        notAttempted: 0,
+      },
+      names: { createFailed: ["t1", "t2"] },
+      _hints: { warning: expect.stringMatching(/\S/), action: ACTION_409 },
+    });
+    expect(JSON.stringify(result)).not.toContain(SENTINEL_ERR);
+  });
+
   it("a failed group creation (response without _id) makes only its tags notAttempted", async () => {
-    // order: F1=1, F2=2, F1/G1=3, F1/G2=4, F2/G1=5 (fails), t1=6, t2=7, t3=8
+    // order: F1=1, F2=2, F1/G1=3, F1/G2=4, F2/G3=5 (fails), t1=6, t2=7, t3=8
     const { fake, run } = treeRun(
       { postFail: (_b, n) => (n === 5 ? "noid" : undefined) },
       BIG_SPEC,
@@ -1562,9 +2036,10 @@ describe("importTree: creation", () => {
         existing: { families: 0, groups: 0, tags: 0 },
         created: { families: 2, groups: 2, tags: 3 },
         createFailed: 1,
+        createFailedByStatus: { none: 1 },
         notAttempted: 1,
       },
-      names: { createFailed: ["G1"] },
+      names: { createFailed: ["G3"] },
       _hints: HINTS,
     });
   });
@@ -1685,6 +2160,7 @@ describe("importTree: sentences", () => {
         existing: { families: 0, groups: 0, tags: 0 },
         created: { families: 1, groups: 1, tags: 1 },
         createFailed: 1,
+        createFailedByStatus: { "500": 1 },
         notAttempted: 5,
       },
       sentences: {
@@ -2120,7 +2596,13 @@ describe("a creation POST that resolves with a non-object", () => {
         ok: true,
         mode: "add",
         status: "partial",
-        intents: { inFile: 2, existing: 1, created: 0, createFailed: 1 },
+        intents: {
+          inFile: 2,
+          existing: 1,
+          created: 0,
+          createFailed: 1,
+          createFailedByStatus: { none: 1 },
+        },
         sentences: {
           rows: 2,
           created: 1,
@@ -2158,6 +2640,7 @@ describe("a creation POST that resolves with a non-object", () => {
           existing: { families: 0, groups: 0, tags: 0 },
           created: { families: 1, groups: 0, tags: 0 },
           createFailed: 1,
+          createFailedByStatus: { none: 1 },
           notAttempted: 2,
         },
         sentences: zeroSentences(2),
@@ -2196,6 +2679,7 @@ describe("a creation POST that resolves with a non-object", () => {
           existing: { families: 0, groups: 0, tags: 0 },
           created: { families: 1, groups: 1, tags: 1 },
           createFailed: 1,
+          createFailedByStatus: { none: 1 },
           notAttempted: 0,
         },
         sentences: {
@@ -2280,7 +2764,7 @@ describe("importTree: scale (11 families, 87 groups, 367 tags, 7,197 rows)", () 
   it("makes one tree read, 465 POSTs, and the hand-computed sentence calls; no result string holds sentence text", async () => {
     // Groups per family: the first 10 families have 8 groups, the last has 7 (10*8 + 7 = 87).
     // Tags per group: the first 19 groups have 5 tags, the other 68 have 4 (19*5 + 68*4 = 367).
-    // Group names repeat across families (grp-1..grp-8), tag names are unique (tag-1..tag-367).
+    // Every name is unique across the whole spec (fam-N, grp-1..grp-87, tag-1..tag-367).
     const families: any[] = [];
     let groupSeq = 0;
     let tagSeq = 0;
@@ -2292,7 +2776,7 @@ describe("importTree: scale (11 families, 87 groups, 367 tags, 7,197 rows)", () 
         const tagCount = groupSeq <= 19 ? 5 : 4;
         const tags: string[] = [];
         for (let k = 0; k < tagCount; k++) tags.push(`tag-${++tagSeq}`);
-        groups.push({ name: `grp-${g}`, tags });
+        groups.push({ name: `grp-${groupSeq}`, tags });
       }
       families.push({ name: `fam-${f}`, groups });
     }

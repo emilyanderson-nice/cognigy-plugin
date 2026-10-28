@@ -8,7 +8,7 @@ import {
   type ImportMode,
 } from "./sentences.js";
 import { buildTree, type IntentInput, type IntentTree } from "./tree.js";
-import { intentsPath, type IntentApi } from "./types.js";
+import { intentsPath, statusField, type IntentApi } from "./types.js";
 
 /** Shared steps of the file-based imports (import_csv, import_tree). */
 
@@ -157,23 +157,35 @@ export function groupRows(rows: CsvRow[]): RowGroup[] {
 export const distinctCount = (sentences: string[]): number =>
   new Set(sentences.map((s) => s.trim())).size;
 
-/** Creates one intent; the new id, or null when rejected or without an id. */
+/**
+ * Creates one intent: the new id, or the HTTP status of the failure ("none"
+ * when it has no numeric status or the response carried no id). Nothing else
+ * of the error is kept.
+ */
 export async function createIntent(
   api: IntentApi,
   flowId: string,
   body: Record<string, unknown>,
-): Promise<string | null> {
+): Promise<{ id: string } | { status: string }> {
   try {
     const res: unknown = await api.post(intentsPath(flowId), body);
     const id =
       typeof res === "object" && res !== null
         ? (res as { _id?: unknown })._id
         : undefined;
-    return typeof id === "string" && id !== "" ? id : null;
-  } catch {
-    return null;
+    return typeof id === "string" && id !== "" ? { id } : { status: "none" };
+  } catch (err) {
+    return { status: String(statusField(err).httpStatus ?? "none") };
   }
 }
+
+/** Counts one failed create under its status. */
+export const countStatus = (
+  counts: Record<string, number>,
+  status: string,
+): void => {
+  counts[status] = (counts[status] ?? 0) + 1;
+};
 
 export const growTree = (tree: IntentTree, added: IntentInput[]): IntentTree =>
   added.length === 0 ? tree : buildTree([...tree.nodes, ...added]);
@@ -249,15 +261,25 @@ export async function runSentenceImport(
   };
 }
 
-/** Adds the partial warning and repeat-safe action to an out object. */
-export function finishResult(out: Out, partial: boolean): Out {
+/**
+ * Adds the partial warning and repeat-safe action to an out object; the
+ * action also explains a 409 when a create failed with one.
+ */
+export function finishResult(
+  out: Out,
+  partial: boolean,
+  createFailedByStatus: Record<string, number> = {},
+): Out {
   out.status = partial ? "partial" : "complete";
   return partial
     ? withHints(out, {
         warning:
           "The import is partial: some intents failed, are incomplete or were not attempted.",
         action:
-          "Check the counts and names, then run the same call again; what is already there is skipped.",
+          "Check the counts and names, then run the same call again; what is already there is skipped." +
+          ("409" in createFailedByStatus
+            ? " A 409 means the name already exists elsewhere in this flow; intent names must be unique across the whole flow (case-sensitive)."
+            : ""),
       })
     : out;
 }

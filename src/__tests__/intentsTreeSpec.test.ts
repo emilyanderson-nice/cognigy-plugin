@@ -202,20 +202,24 @@ describe("parseTreeSpec valid specs", () => {
     ]);
   });
 
-  it("allows the same group name under different families", () => {
+  it("allows the same name in different cases across the whole spec and levels", () => {
     const spec = parse({
       families: [
-        { name: "F1", groups: [{ name: "Shared" }] },
-        { name: "F2", groups: [{ name: "Shared" }] },
+        { name: "F1", groups: [{ name: "Grp-Case", tags: ["Tag-Case"] }] },
+        { name: "F2", groups: [{ name: "grp-case", tags: ["tag-case"] }] },
+        { name: "f1" },
       ],
     });
     expect(spec.nodes).toEqual([
       { level: 1, path: ["F1"] },
       { level: 1, path: ["F2"] },
-      { level: 2, path: ["F1", "Shared"] },
-      { level: 2, path: ["F2", "Shared"] },
+      { level: 1, path: ["f1"] },
+      { level: 2, path: ["F1", "Grp-Case"] },
+      { level: 2, path: ["F2", "grp-case"] },
+      { level: 3, path: ["F1", "Grp-Case", "Tag-Case"] },
+      { level: 3, path: ["F2", "grp-case", "tag-case"] },
     ]);
-    expect(spec.counts).toEqual({ families: 2, groups: 2, tags: 0 });
+    expect(spec.counts).toEqual({ families: 3, groups: 2, tags: 2 });
   });
 
   it("names are case-sensitive: Billing and billing are different siblings", () => {
@@ -462,7 +466,12 @@ describe("parseTreeSpec problems", () => {
             { name: "A", intent: long },
             {
               name: "B",
-              groups: [{ name: long, tags: [long.replace(/n/g, "m")] }],
+              groups: [
+                {
+                  name: long.replace(/n/g, "p"),
+                  tags: [long.replace(/n/g, "m")],
+                },
+              ],
             },
           ],
         }),
@@ -605,7 +614,7 @@ describe("parseTreeSpec problems", () => {
     });
   });
 
-  it("duplicate_tag: the same tag under a different group of the same family, at the later occurrence", () => {
+  it("duplicate_name: the same tag under a different group of the same family, at the later occurrence", () => {
     expect(
       parseTreeSpec(
         json({
@@ -624,12 +633,31 @@ describe("parseTreeSpec problems", () => {
       ok: false,
       count: 1,
       problems: [
-        { path: "families[0].groups[1].tags[1]", reason: "duplicate_tag" },
+        { path: "families[0].groups[1].tags[1]", reason: "duplicate_name" },
       ],
     });
   });
 
-  it("duplicate_tag: the same tag under a group of a different family", () => {
+  it("duplicate_name: the same tag under a group of a different family", () => {
+    expect(
+      parseTreeSpec(
+        json({
+          families: [
+            { name: "A", groups: [{ name: "G1", tags: ["t"] }] },
+            { name: "B", groups: [{ name: "G2", tags: ["t"] }] },
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 1,
+      problems: [
+        { path: "families[1].groups[0].tags[0]", reason: "duplicate_name" },
+      ],
+    });
+  });
+
+  it("duplicate_name: the same group name under a different family, and its same-named tags too (two problems, group first)", () => {
     expect(
       parseTreeSpec(
         json({
@@ -641,14 +669,202 @@ describe("parseTreeSpec problems", () => {
       ),
     ).toEqual({
       ok: false,
-      count: 1,
+      count: 2,
       problems: [
-        { path: "families[1].groups[0].tags[0]", reason: "duplicate_tag" },
+        { path: "families[1].groups[0]", reason: "duplicate_name" },
+        { path: "families[1].groups[0].tags[0]", reason: "duplicate_name" },
       ],
     });
   });
 
-  it("duplicate_tag: tag names are compared case-sensitively and after trimming", () => {
+  it("duplicate_name: a group with the name of a family that is not its parent", () => {
+    expect(
+      parseTreeSpec(
+        json({
+          families: [{ name: "A" }, { name: "B", groups: [{ name: "A" }] }],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 1,
+      problems: [{ path: "families[1].groups[0]", reason: "duplicate_name" }],
+    });
+  });
+
+  it("duplicate_name: a group with the name of its own parent family", () => {
+    expect(
+      parseTreeSpec(
+        json({ families: [{ name: "A", groups: [{ name: "A" }] }] }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 1,
+      problems: [{ path: "families[0].groups[0]", reason: "duplicate_name" }],
+    });
+  });
+
+  it("duplicate_name: a tag with the name of a family in another branch", () => {
+    expect(
+      parseTreeSpec(
+        json({
+          families: [
+            { name: "X" },
+            { name: "F", groups: [{ name: "G", tags: ["ok", "X"] }] },
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 1,
+      problems: [
+        { path: "families[1].groups[0].tags[1]", reason: "duplicate_name" },
+      ],
+    });
+  });
+
+  it("duplicate_name: a tag with the name of its own group", () => {
+    expect(
+      parseTreeSpec(
+        json({
+          families: [{ name: "F", groups: [{ name: "G", tags: ["G"] }] }],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 1,
+      problems: [
+        { path: "families[0].groups[0].tags[0]", reason: "duplicate_name" },
+      ],
+    });
+  });
+
+  it("duplicate_name: the intent field decides the name, not the label", () => {
+    expect(
+      parseTreeSpec(
+        json({
+          families: [
+            { name: "Label", intent: "X" },
+            { name: "Y", groups: [{ name: "Other label", intent: "X" }] },
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 1,
+      problems: [{ path: "families[1].groups[0]", reason: "duplicate_name" }],
+    });
+  });
+
+  it("duplicate_name: names differing only by surrounding whitespace in different branches", () => {
+    expect(
+      parseTreeSpec(
+        json({
+          families: [
+            { name: "F1", groups: [{ name: "Grp " }] },
+            { name: "F2", groups: [{ name: "Grp" }] },
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 1,
+      problems: [{ path: "families[1].groups[0]", reason: "duplicate_name" }],
+    });
+  });
+
+  it("duplicate_name: names differing only by case in different branches are not duplicates", () => {
+    expect(
+      parseTreeSpec(
+        json({
+          families: [
+            { name: "F1", groups: [{ name: "Grp-Case" }] },
+            { name: "F2", groups: [{ name: "grp-case" }] },
+          ],
+        }),
+      ).ok,
+    ).toBe(true);
+  });
+
+  it("duplicate_sibling wins when the later occurrence shares a parent with ANY earlier one, never both reasons", () => {
+    // first t is under A/G1; the second t (B/G2) is a duplicate_name; the third t
+    // is a sibling of the second, so it is a duplicate_sibling and not also a duplicate_name
+    expect(
+      parseTreeSpec(
+        json({
+          families: [
+            { name: "A", groups: [{ name: "G1", tags: ["t"] }] },
+            { name: "B", groups: [{ name: "G2", tags: ["t", "t"] }] },
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 2,
+      problems: [
+        { path: "families[1].groups[0].tags[0]", reason: "duplicate_name" },
+        { path: "families[1].groups[0].tags[1]", reason: "duplicate_sibling" },
+      ],
+    });
+  });
+
+  it("a family and a group with the same name that share no parent is a duplicate_name, not a sibling", () => {
+    // two root families named X (sibling) and a group named X elsewhere (name)
+    expect(
+      parseTreeSpec(
+        json({
+          families: [
+            { name: "X" },
+            { name: "X" },
+            { name: "F", groups: [{ name: "X" }] },
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 2,
+      problems: [
+        { path: "families[1]", reason: "duplicate_sibling" },
+        { path: "families[2].groups[0]", reason: "duplicate_name" },
+      ],
+    });
+  });
+
+  it("an empty name is not registered: two empty groups report only empty_name", () => {
+    expect(
+      parseTreeSpec(
+        json({
+          families: [
+            { name: "A", groups: [{ name: "" }] },
+            { name: "B", groups: [{ name: "   " }] },
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      count: 2,
+      problems: [
+        { path: "families[0].groups[0]", reason: "empty_name" },
+        { path: "families[1].groups[0]", reason: "empty_name" },
+      ],
+    });
+  });
+
+  it("duplicate_name counts every later occurrence and lists the first 20 (25 later duplicates)", () => {
+    const families = Array.from({ length: 26 }, (_, i) => ({
+      name: `F${i}`,
+      groups: [{ name: "g" }],
+    }));
+    const r = problemsOf({ families });
+    expect(r.count).toBe(25);
+    expect(r.problems).toEqual(
+      Array.from({ length: 20 }, (_, i) => ({
+        path: `families[${i + 1}].groups[0]`,
+        reason: "duplicate_name",
+      })),
+    );
+  });
+
+  it("duplicate_name: tag names are compared case-sensitively and after trimming", () => {
     expect(
       parseTreeSpec(
         json({
@@ -667,9 +883,29 @@ describe("parseTreeSpec problems", () => {
       ok: false,
       count: 1,
       problems: [
-        { path: "families[0].groups[1].tags[1]", reason: "duplicate_tag" },
+        { path: "families[0].groups[1].tags[1]", reason: "duplicate_name" },
       ],
     });
+  });
+
+  it("the reason duplicate_tag no longer appears for any duplicate tag", () => {
+    expect(
+      JSON.stringify(
+        parseTreeSpec(
+          json({
+            families: [
+              {
+                name: "A",
+                groups: [
+                  { name: "G1", tags: ["t"] },
+                  { name: "G2", tags: ["t"] },
+                ],
+              },
+            ],
+          }),
+        ),
+      ),
+    ).not.toContain("duplicate_tag");
   });
 
   it("too_many_intents: 2001 nodes gives one problem with an empty path", () => {
@@ -823,20 +1059,66 @@ describe("planTree", () => {
     const s = parse({
       families: [
         { name: "Billing", groups: [{ name: "Cards" }] },
-        { name: "Support", groups: [{ name: "Cards" }] },
+        { name: "Support", groups: [{ name: "Wallet" }] },
       ],
     });
     const items: IntentInput[] = [
       { id: id(1), name: "Billing", parentId: null },
       { id: id(2), name: "Support", parentId: null },
       { id: id(3), name: "Cards", parentId: id(2) },
+      { id: id(4), name: "Wallet", parentId: id(2) },
     ];
     expect(planTree(s, buildTree(items))).toEqual({
       existing: [
         { path: ["Billing"], level: 1, id: id(1) },
         { path: ["Support"], level: 1, id: id(2) },
-        { path: ["Support", "Cards"], level: 2, id: id(3) },
+        { path: ["Support", "Wallet"], level: 2, id: id(4) },
       ],
+      create: [
+        { path: ["Billing", "Cards"], level: 2, parentPath: ["Billing"] },
+      ],
+    });
+  });
+
+  it("matches an existing node by trimmed name: a flow name with a trailing or leading space counts as existing", () => {
+    const items: IntentInput[] = [
+      { id: id(1), name: " Billing", parentId: null },
+      { id: id(2), name: "Cards ", parentId: id(1) },
+      { id: id(4), name: "lost card ", parentId: id(2) },
+    ];
+    expect(planTree(spec(), buildTree(items))).toEqual({
+      existing: [
+        { path: ["Billing"], level: 1, id: id(1) },
+        { path: ["Billing", "Cards"], level: 2, id: id(2) },
+        { path: ["Billing", "Cards", "lost card"], level: 3, id: id(4) },
+      ],
+      create: [
+        { path: ["Billing", "Plans"], level: 2, parentPath: ["Billing"] },
+        {
+          path: ["Billing", "Cards", "new card"],
+          level: 3,
+          parentPath: ["Billing", "Cards"],
+        },
+        {
+          path: ["Billing", "Plans", "upgrade plan"],
+          level: 3,
+          parentPath: ["Billing", "Plans"],
+        },
+      ],
+    });
+  });
+
+  it("trimmed matching is still case-sensitive and still needs the same parent", () => {
+    const s = parse({
+      families: [{ name: "Billing", groups: [{ name: "Cards" }] }],
+    });
+    const items: IntentInput[] = [
+      { id: id(1), name: "Billing ", parentId: null },
+      { id: id(2), name: "cards ", parentId: id(1) },
+      { id: id(3), name: "Cards ", parentId: null },
+    ];
+    expect(planTree(s, buildTree(items))).toEqual({
+      existing: [{ path: ["Billing"], level: 1, id: id(1) }],
       create: [
         { path: ["Billing", "Cards"], level: 2, parentPath: ["Billing"] },
       ],
