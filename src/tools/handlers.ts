@@ -1375,6 +1375,7 @@ export class ToolHandlers {
    * list / render) must not trigger the offer.
    */
   private static isBackupWorthyCall(toolName: string, args: any): boolean {
+    "get_knowledge_ai",
     if (!BACKUP_WORTHY_TOOLS.has(toolName)) return false;
 
     // A call that cannot run must not consume the one-shot hold.
