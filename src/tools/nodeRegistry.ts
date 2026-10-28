@@ -408,6 +408,24 @@ export const NODE_REGISTRY: Record<string, NodeRegistryEntry> = {
     ],
     requiredConfigKeys: [],
   },
+
+  knowledgeSearchV2: {
+    type: "knowledgeSearchV2",
+    extension: "@cognigy/basic-nodes",
+    category: "service",
+    summary:
+      "Knowledge Search — queries a knowledge store and stores the topK hits (each with text, distance, sourceMetaData, chunkMetaData) in input.knowledgeSearch, or in context.knowledgeSearch when storeLocation is context. knowledgeStoreId is the store's referenceId (a UUID), not its 24-char id.",
+    placement: "flow",
+    configKeys: [
+      "knowledgeStoreId",
+      "topK",
+      "storeLocation",
+      "inputKey",
+      "contextKey",
+    ],
+    requiredConfigKeys: ["knowledgeStoreId"],
+    allowedConfigValues: { storeLocation: ["input", "context"] },
+  },
 };
 
 /** Return a registry entry or null if the node type is not supported. */

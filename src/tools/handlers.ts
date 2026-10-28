@@ -33,6 +33,14 @@ import {
 } from "./filters.js";
 import { listFlowNodes } from "./flowNodeList.js";
 import {
+  createFlowEndpoint,
+  createRestEndpoint,
+  endpointIdOf,
+  findRestEndpoint,
+  restEndpointName,
+} from "./restEndpoint.js";
+import { statusField } from "./intents/types.js";
+import {
   hasUrlToken,
   redactEndpoint,
   resolveRestEndpointToken,
@@ -1367,6 +1375,7 @@ export class ToolHandlers {
     "export_tree",
     "below_minimum",
     "model_state",
+    "get_knowledge_ai",
   ]);
 
   /**
@@ -1375,7 +1384,6 @@ export class ToolHandlers {
    * list / render) must not trigger the offer.
    */
   private static isBackupWorthyCall(toolName: string, args: any): boolean {
-    "get_knowledge_ai",
     if (!BACKUP_WORTHY_TOOLS.has(toolName)) return false;
 
     // A call that cannot run must not consume the one-shot hold.
@@ -2469,7 +2477,7 @@ export class ToolHandlers {
         flow,
         data.name,
       );
-      endpointId = endpoint._id || endpoint.id;
+      endpointId = endpointIdOf(endpoint) ?? null;
 
       // Step 6: LLM status — derived from the auto-assign attempt in Step 4a
       // If auto-assignment succeeded, we know the LLM is configured.
@@ -2504,7 +2512,7 @@ export class ToolHandlers {
         agent: filterResponse("agent", agent),
         flow: filterResponse("flow", flow),
         endpoint: redactEndpoint(filterResponse("endpoint", endpoint)),
-        endpointId: endpoint._id || endpoint.id,
+        endpointId: endpointIdOf(endpoint),
         hasToken: hasUrlToken(endpoint.URLToken),
         llmStatus,
         // Which model the job node ended up on. Always reported, because the
@@ -2647,11 +2655,10 @@ export class ToolHandlers {
     flow: any,
     name: string,
   ): Promise<any> {
-    return this.apiClient.post("/v2.0/endpoints", {
+    return createRestEndpoint(this.apiClient, {
       projectId,
-      channel: "rest",
-      flowId: flow.referenceId,
-      name: `${name} REST Endpoint`,
+      flowRef: flow.referenceId,
+      name: restEndpointName(name),
     });
   }
 
@@ -2808,7 +2815,7 @@ export class ToolHandlers {
         flow,
         data.name,
       );
-      endpointId = endpoint._id || endpoint.id;
+      endpointId = endpointIdOf(endpoint) ?? null;
 
       const llmStatus: "configured" | "unknown" = llmRefId
         ? "configured"
@@ -2835,7 +2842,7 @@ export class ToolHandlers {
           label: conventionalLabel("llmPromptV2", data.name),
         },
         endpoint: redactEndpoint(filterResponse("endpoint", endpoint)),
-        endpointId: endpoint._id || endpoint.id,
+        endpointId: endpointIdOf(endpoint),
         hasToken: hasUrlToken(endpoint.URLToken),
         llmStatus,
         // Which model the prompt node ended up on. Always reported, because
@@ -3559,27 +3566,11 @@ export class ToolHandlers {
       }
 
       // Search for an existing REST endpoint connected to this flow
-      let existingEndpoint: any = null;
-      const pageSize = 100;
-      let offset = 0;
-      let hasMore = true;
-
-      while (hasMore && !existingEndpoint) {
-        const eps: any = await this.apiClient.get("/v2.0/endpoints", {
-          params: { projectId, limit: pageSize, skip: offset },
-        });
-        const epItems = eps.items ?? eps;
-        if (!Array.isArray(epItems) || epItems.length === 0) break;
-
-        existingEndpoint = epItems.find(
-          (ep: any) =>
-            ep.channel === "rest" &&
-            (ep.flowId === flowId || ep.flowId === flowReferenceId),
-        );
-
-        hasMore = epItems.length >= pageSize;
-        offset += pageSize;
-      }
+      const existingEndpoint = await findRestEndpoint(this.apiClient, {
+        projectId,
+        flowId,
+        flowReferenceId,
+      });
 
       if (existingEndpoint) {
         resolvedToken = existingEndpoint.URLToken || undefined;
@@ -3588,17 +3579,16 @@ export class ToolHandlers {
           : undefined;
         endpointMeta = {
           resolved: true,
-          endpointId: existingEndpoint._id || existingEndpoint.id,
+          endpointId: endpointIdOf(existingEndpoint),
         };
       } else {
         // Auto-create REST endpoint
         try {
           const flowRef = flowReferenceId || flowId;
-          const endpoint: any = await this.apiClient.post("/v2.0/endpoints", {
+          const endpoint: any = await createRestEndpoint(this.apiClient, {
             projectId,
-            channel: "rest",
-            flowId: flowRef,
-            name: `${agent.name} REST Endpoint`,
+            flowRef,
+            name: restEndpointName(agent.name),
           });
           resolvedToken = endpoint.URLToken || undefined;
           endpointUrl = resolvedToken
@@ -3606,7 +3596,7 @@ export class ToolHandlers {
             : undefined;
           endpointMeta = {
             autoCreated: true,
-            endpointId: endpoint._id || endpoint.id,
+            endpointId: endpointIdOf(endpoint),
           };
         } catch (createErr: any) {
           return withHints(
@@ -4878,9 +4868,53 @@ export class ToolHandlers {
             type: s.type,
             status: s.status,
             description: s.description,
+            ...(typeof s.chunkCount === "number"
+              ? { chunkCount: s.chunkCount }
+              : {}),
           })),
           total: Array.isArray(items) ? items.length : 0,
         };
+      }
+      case "delete_source": {
+        const missing = !data.knowledgeStoreId
+          ? "knowledgeStoreId"
+          : !data.sourceId
+            ? "sourceId"
+            : undefined;
+        if (missing) {
+          return withHints(
+            { error: `${missing} is required for delete_source` },
+            {
+              action:
+                "Use list_sources { knowledgeStoreId } to find source IDs.",
+            },
+          );
+        }
+        try {
+          await this.apiClient.delete(
+            `/v2.0/knowledgestores/${data.knowledgeStoreId}/sources/${data.sourceId}`,
+          );
+        } catch (err) {
+          const status = statusField(err);
+          return {
+            operation: "delete_source",
+            error:
+              status.httpStatus === 404 ? "source_not_found" : "request_failed",
+            ...(status.httpStatus === 404 ? {} : status),
+          };
+        }
+        return withHints(
+          {
+            operation: "delete_source",
+            knowledgeStoreId: data.knowledgeStoreId,
+            sourceId: data.sourceId,
+            deleted: true,
+          },
+          {
+            warning:
+              "The source's chunks were removed with it. To restore the content, add it again with create_source.",
+          },
+        );
       }
       default:
         throw new Error(`Unknown operation: ${data.operation}`);
@@ -5970,6 +6004,9 @@ export class ToolHandlers {
           clonedFrom: data.flowId,
         };
       }
+
+      case "create_endpoint":
+        return createFlowEndpoint(this.apiClient, data.flowId, data.name);
     }
   }
 

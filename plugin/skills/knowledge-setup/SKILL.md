@@ -68,6 +68,19 @@ After attaching the knowledge tool, run **Check that the agent and its tools agr
 - Text sources are best for structured FAQ content
 - File sources are best for existing documents (PDFs, Word docs, etc.)
 
+## Check retrieval (without an AI Agent)
+
+To see which chunks a question retrieves, for example after changing the embedding model, no LLM is needed:
+
+1. `manage_flows { operation: "create", projectId, name }` creates a plain flow.
+2. `manage_flow_nodes create` a `knowledgeSearchV2` node with `config { knowledgeStoreId, topK: 5 }`. `knowledgeStoreId` is the store's **referenceId** (a UUID), not the 24-char id. The `flow-nodes` skill has the fields and the result shape.
+3. After it, a `code` node that says the result, for example `api.say(JSON.stringify(input.knowledgeSearch.topK.map((h) => ({ distance: h.distance, source: h.sourceMetaData.sourceName, meta: h.chunkMetaData }))));`. Add the chunk `text` only when you need it: retrieved text may be personal data, and the output may be kept in the endpoint's conversation record.
+4. `manage_flows { operation: "create_endpoint", flowId }` returns an `endpointId` (an existing REST endpoint for the flow is reused).
+5. `talk_to_agent { endpointId, message }` once per question (test mode, not billed). A hit carries no chunk id: match it to a chunk by its metadata when the chunks were ingested with some (for example a `kbId`; not tested here) or by its text with `list_chunks { filter }`.
+6. When done, remove the endpoint with `delete_resource { resourceType: "endpoint", id: endpointId }`. A flow cannot be deleted by the plugin, only renamed.
+
+To re-ingest, `manage_knowledge delete_source { knowledgeStoreId, sourceId }` removes a source and its chunks permanently (confirm the environment first); then `create_source` again, supplying the file or URL again. `list_sources` shows each source's `status` and `chunkCount`; a source can read `ingesting` while its chunks are already listed. The API does not say which embedding model built a store, so record that yourself per store.
+
 > Model selection, reuse, caching, and reporting rules live in **Workflow Policy** below — the single source of truth. Tool-vs-persona attachment is covered in step 6 of **Steps**.
 
 ## Workflow Policy (source of truth for model selection & reporting)

@@ -598,7 +598,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "manage_knowledge",
     description:
-      "Manage Knowledge AI stores for RAG. Operations: create_store, create_source (type 'url' scrapes a page, 'manual' stores text, 'file' uploads a local PDF/TXT/DOCX/CTXT/PPTX; ingestion is async), list_sources, and list_chunks to verify what was ingested. The project needs an embedding model and Knowledge AI settings (manage_settings set_knowledge_ai) before a store is created; the knowledge-setup skill has the order. Stores are listed with list_resources and deleted with delete_resource. Attach a store to an agent with create_tool toolType 'knowledge'.",
+      "Manage Knowledge AI stores for RAG. Operations: create_store, create_source (type 'url' scrapes a page, 'manual' stores text, 'file' uploads a local PDF/TXT/DOCX/CTXT/PPTX; ingestion is async), list_sources (with chunkCount), delete_source (removes one source and its chunks), and list_chunks to verify what was ingested. The project needs an embedding model and Knowledge AI settings (manage_settings set_knowledge_ai) before a store is created; the knowledge-setup skill has the order. Stores are listed with list_resources and deleted with delete_resource. Attach a store to an agent with create_tool toolType 'knowledge'.",
     annotations: {
       title: "Manage Knowledge",
       readOnlyHint: false,
@@ -616,9 +616,10 @@ export const tools: ToolDefinition[] = [
             "create_source",
             "list_chunks",
             "list_sources",
+            "delete_source",
           ],
           description:
-            "create_store: new knowledge base. create_source: add content from URL, text, or file. list_chunks: list/filter chunks in a source. list_sources: list all sources in a knowledge store.",
+            "create_store: new knowledge base. create_source: add content from URL, text, or file. list_chunks: list/filter chunks in a source. list_sources: list all sources in a knowledge store. delete_source: remove one source and its chunks.",
         },
         projectId: {
           type: "string",
@@ -627,12 +628,12 @@ export const tools: ToolDefinition[] = [
         knowledgeStoreId: {
           type: "string",
           description:
-            "24-char hex store ID (required for create_source, list_chunks)",
+            "24-char hex store ID (required for create_source, list_chunks, list_sources, delete_source)",
         },
         sourceId: {
           type: "string",
           description:
-            "24-char hex source ID (optional for list_chunks — if omitted, uses the first source in the store)",
+            "24-char hex source ID (required for delete_source; optional for list_chunks — if omitted, uses the first source in the store)",
         },
         name: {
           type: "string",
@@ -1131,7 +1132,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "manage_flows",
     description:
-      "Create, rename and clone Flows. Use it to build a Flow that is not an AI Agent (a shared subroutine, an error handler, a classic Node-based dialog) or to add a second Flow to a project that already has an agent; create_ai_agent provisions its own Flow, so do not call this first when building an agent. Operations: create (a new empty Flow with just Start and End nodes; needs projectId and name; returns the flow id and referenceId; add logic with manage_flow_nodes, which can append without a parentNodeId in a Flow with no AI Agent node), update (rename or change the description; needs flowId plus name and/or description), clone (copy a Flow with its nodes inside the same project; needs flowId). To list flows use list_resources { resourceType: 'flow', projectId }; to delete one use delete_resource { resourceType: 'flow', id }. A Flow's referenceId (a UUID, not the 24-char hex id) is what executeFlow and goTo nodes point at, passed as flowId.",
+      "Create, rename and clone Flows, or give one a REST endpoint. Use it for a Flow that is not an AI Agent (shared subroutine, error handler, classic dialog) or a second Flow in a project; create_ai_agent provisions its own Flow, so do not call this first when building an agent. Operations: create (empty Flow with Start and End; needs projectId and name; returns the flow id and referenceId; add logic with manage_flow_nodes), update (rename or change the description; needs flowId plus name and/or description), clone (copy a Flow with its nodes in the same project; needs flowId), create_endpoint (reuse or create the REST endpoint serving the Flow; needs flowId, optional name; returns endpointId, never the URL or token). A Flow's referenceId (a UUID, not the 24-char hex id) is what executeFlow and goTo nodes point at, passed as flowId.",
     annotations: {
       title: "Manage Flows",
       readOnlyHint: false,
@@ -1144,7 +1145,7 @@ export const tools: ToolDefinition[] = [
       properties: {
         operation: {
           type: "string",
-          enum: ["create", "update", "clone"],
+          enum: ["create", "update", "clone", "create_endpoint"],
           description: "Which operation to perform",
         },
         projectId: {
@@ -1154,12 +1155,12 @@ export const tools: ToolDefinition[] = [
         flowId: {
           type: "string",
           description:
-            "24-char hex flow ID (required for update and clone). This is the id, not the referenceId UUID.",
+            "24-char hex flow ID (required for update, clone and create_endpoint). This is the id, not the referenceId UUID.",
         },
         name: {
           type: "string",
           description:
-            "Flow name (required for create, optional for update). Shown in the Cognigy UI and used to find the flow later.",
+            "Flow name (required for create, optional for update). Endpoint name for create_endpoint (optional, defaults to '<flow name> REST Endpoint'). Shown in the Cognigy UI.",
         },
         description: {
           type: "string",

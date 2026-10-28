@@ -409,6 +409,11 @@ export const manageFlowsSchema = z.discriminatedUnion("operation", [
     operation: z.literal("clone"),
     flowId: idSchema,
   }),
+  z.object({
+    operation: z.literal("create_endpoint"),
+    flowId: idSchema,
+    name: z.string().min(1).max(200).optional(),
+  }),
 ]);
 
 export const deleteResourceSchema = z
@@ -441,6 +446,7 @@ export const manageKnowledgeSchema = z.object({
     "create_source",
     "list_chunks",
     "list_sources",
+    "delete_source",
   ]),
   projectId: idSchema.optional(),
   knowledgeStoreId: idSchema.optional(),
