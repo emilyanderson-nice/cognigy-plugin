@@ -459,6 +459,11 @@ export const tools: ToolDefinition[] = [
           description:
             "log only — per-message character cap for the 'entries' view (also with sessionId and view 'entries'), 100-4000, default 500. Messages are still scrubbed best-effort and may contain personal data. Ignored by the summary view.",
         },
+        rawMessages: {
+          type: "boolean",
+          description:
+            "log only, view 'entries' — return messages with URL queries or JSON bodies instead of a safe template. Still scrubbed best-effort; may contain personal data.",
+        },
         revealToken: {
           type: "boolean",
           description:

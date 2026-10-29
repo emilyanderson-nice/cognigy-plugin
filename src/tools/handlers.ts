@@ -3795,6 +3795,7 @@ export class ToolHandlers {
       sessionId: data.sessionId,
       view: data.view,
       msgChars: data.msgChars,
+      rawMessages: data.rawMessages,
       limit: data.limit,
       skip: data.skip,
       sort: data.sort,

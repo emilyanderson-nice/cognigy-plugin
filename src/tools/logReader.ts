@@ -12,6 +12,7 @@ export interface LogReadArgs {
   sessionId?: string;
   view?: "summary" | "entries";
   msgChars?: number;
+  rawMessages?: boolean;
   limit?: number;
   skip?: number;
   sort?: string;
@@ -167,6 +168,32 @@ function withWindowNote(
 }
 
 const MSG_CHARS_MAX = 4000;
+const RAW_NOTE =
+  "rawMessages is on: messages are not reduced to a template, only scrubbed best-effort, so they may contain personal data; names and addresses are never masked.";
+
+const PII_NOTE =
+  "Log text can contain personal data even after scrubbing: report counts, templates and error types, do not quote lines that hold a name, phone, amount or address, and do not copy log text into files, prompts or pull requests.";
+
+// Entries view only: lines are about to be read, so say how to handle them. An
+// empty result has nothing to quote.
+function withPiiNote(
+  hint: LogReadResult["hint"],
+  count: number,
+): LogReadResult["hint"] {
+  return count === 0
+    ? hint
+    : { ...hint, action: [hint?.action, PII_NOTE].filter(Boolean).join(" ") };
+}
+
+// Entries view only: rawMessages was asked for, so say what that exposes.
+function withRawNote(
+  hint: LogReadResult["hint"],
+  args: LogReadArgs,
+): LogReadResult["hint"] {
+  return args.rawMessages === true
+    ? { ...hint, action: [hint?.action, RAW_NOTE].filter(Boolean).join(" ") }
+    : hint;
+}
 
 // Entries view only: tells the caller when the per-message cap cut a message.
 // A cut message is exactly `cap` characters and ends with the ellipsis.
@@ -251,7 +278,11 @@ async function readSession(
     args.view === "entries"
       ? (args.msgChars ?? MAX_MESSAGE_CHARS)
       : MAX_MESSAGE_CHARS;
-  const entries = itemsOf(data).map((item) => toLogEntry(item, cap));
+  const entries = itemsOf(data).map((item) =>
+    args.view === "entries"
+      ? toLogEntry(item, cap, { rawMessages: args.rawMessages })
+      : toLogEntry(item, cap),
+  );
   const truncated = entries.length >= TAIL_MAX_ITEMS;
   const body =
     args.view === "entries"
@@ -270,7 +301,13 @@ async function readSession(
   const hint = successHint(entries.length, truncated);
   return {
     body,
-    hint: args.view === "entries" ? withCutNote(hint, entries, cap) : hint,
+    hint:
+      args.view === "entries"
+        ? withRawNote(
+            withCutNote(withPiiNote(hint, entries.length), entries, cap),
+            args,
+          )
+        : hint,
   };
 }
 
@@ -299,7 +336,7 @@ async function readEntries(
   }
   const cap = args.msgChars ?? MAX_MESSAGE_CHARS;
   const entries: LogEntry[] = itemsOf(data).map((item) =>
-    toLogEntry(item, cap),
+    toLogEntry(item, cap, { rawMessages: args.rawMessages }),
   );
   const total = totalOf(data);
   return {
@@ -310,10 +347,16 @@ async function readEntries(
       returned: entries.length,
       entries,
     },
-    hint: withCutNote(
-      withWindowNote(successHint(entries.length, false), args),
-      entries,
-      cap,
+    hint: withRawNote(
+      withCutNote(
+        withWindowNote(
+          withPiiNote(successHint(entries.length, false), entries.length),
+          args,
+        ),
+        entries,
+        cap,
+      ),
+      args,
     ),
   };
 }
@@ -372,7 +415,7 @@ async function readSummary(
     if (page === 0) total = totalOf(data);
     const items = itemsOf(data);
     if (page > 0 && spread && items.length > 0) spreadSlices++;
-    entries.push(...items.map(toLogEntry));
+    entries.push(...items.map((item) => toLogEntry(item)));
     if (items.length < SUMMARY_PAGE_SIZE) break;
     if (total !== null && entries.length >= total) break;
     if (page === SUMMARY_MAX_PAGES - 1) truncated = true;
@@ -401,6 +444,9 @@ export async function readLogs(
   args: LogReadArgs,
   options: { now?: () => number; deadlineMs?: number } = {},
 ): Promise<LogReadResult> {
+  if (args.rawMessages === true && args.view !== "entries") {
+    return fail("rawMessages is only supported with view entries.");
+  }
   if (args.sessionId) return readSession(client, args);
   if (args.sort !== undefined && !SORT_VALUE.test(args.sort)) {
     return fail("sort must be one of: timestamp:desc, timestamp:asc.");

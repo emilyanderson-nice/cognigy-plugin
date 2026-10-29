@@ -428,6 +428,10 @@
             "maximum": 4000,
             "description": "log only — per-message character cap for the 'entries' view (also with sessionId and view 'entries'), 100-4000, default 500. Messages are still scrubbed best-effort and may contain personal data. Ignored by the summary view."
           },
+          "rawMessages": {
+            "type": "boolean",
+            "description": "log only, view 'entries' — return messages with URL queries or JSON bodies instead of a safe template. Still scrubbed best-effort; may contain personal data."
+          },
           "revealToken": {
             "type": "boolean",
             "description": "endpoint only — include the URL token and endpoint URL, which are credentials: anyone holding the token can send messages to the endpoint. Default false (items show hasToken instead). Use only when a URL is really needed; talk_to_agent takes endpointId."
