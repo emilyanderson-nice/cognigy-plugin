@@ -19,6 +19,23 @@ const FORM_RUN = /(?<![\w.%=-])[\w.%-]+=[^\s&]*(?:&[\w.%-]+=[^\s&]*)+/g;
 const KEY_NAME = /^[a-z][A-Za-z0-9_]{0,29}$/;
 const MAX_PAYLOAD_KEYS = 8;
 
+// `host:port` as opposed to `user:password`: a 1-5 digit port after the last
+// `:` and a host-like name (dotted, `localhost` or a bracketed IPv6 literal)
+// before it, ignoring any `user@` prefix. A dotted username with a numeric
+// password prefix before a reserved character is indistinguishable from this
+// and is read as host:port (documented gap).
+const PORT = /^\d{1,5}$/;
+function isHostPort(authority: string): boolean {
+  const colon = authority.lastIndexOf(":");
+  if (colon === -1 || !PORT.test(authority.slice(colon + 1))) return false;
+  const host = authority.slice(authority.lastIndexOf("@", colon) + 1, colon);
+  return (
+    host.includes(".") ||
+    host.toLowerCase() === "localhost" ||
+    (host.startsWith("[") && host.endsWith("]"))
+  );
+}
+
 function reduceUrls(text: string): { text: string; risky: boolean } {
   let out = "";
   let from = 0;
@@ -36,9 +53,16 @@ function reduceUrls(text: string): { text: string; risky: boolean } {
     // A password may contain `/`, `?` or `#`, which would end the authority
     // before its `@`. With a `:` in the authority (user:password, or host:port)
     // the userinfo therefore runs to the last `@` of the whole token, so no
-    // part of a credential survives; a host:port followed by an email in the
-    // query then shows the email's domain instead of the host.
-    const at = (authority.includes(":") ? rest : authority).lastIndexOf("@");
+    // part of a credential survives. The exception is a host-like name with a
+    // numeric port: that is host:port, so an `@` in the path or query (a
+    // `/@scope/pkg` route, an email) is not userinfo.
+    const at = (
+      isHostPort(authority)
+        ? authority
+        : authority.includes(":")
+          ? rest
+          : authority
+    ).lastIndexOf("@");
     const remainder = rest.slice(at + 1);
     const query = remainder.search(QUERY_OR_FRAGMENT);
     risky ||= at !== -1 || query !== -1;

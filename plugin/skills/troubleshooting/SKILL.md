@@ -140,7 +140,8 @@ test mode, and the user has accepted the billing.
   Not handled, so treat these as possibly holding personal data: URL path segments (kept, they can
   hold a name), key names (they can themselves be data), text before the first `{` or after the
   last `}`, `name=Jane Doe` style text separated by spaces, an unencoded space inside a URL query,
-  and a 7-digit local phone number.
+  a 7-digit local phone number, and a username that looks like a host with a numeric password
+  prefix (`john.doe:123#...@host`), which can show the username.
 - Treat every log line as possibly holding personal data, however it was scrubbed. When you report
   what the logs show, give counts, error types and templates, and never quote a line that holds a
   name, phone number, amount or address. Do not copy log text into files, commits, pull requests,

@@ -344,6 +344,45 @@ describe("toLogEntry safe form (B)", () => {
     });
   });
 
+  // A host followed by a numeric port is not userinfo, so an "@" in the path
+  // or query (scoped packages, /@user routes, emails) must not swallow the host.
+  describe("host:port with an @ later in the token", () => {
+    it.each([
+      ["https://example.com:443/@alice?x=1", "example.com:N/@alice"],
+      [
+        "https://registry.test:443/@scope/pkg?x=1",
+        "registry.test:N/@scope/pkg",
+      ],
+      ["http://localhost:3000/@vite/client?t=1", "localhost:N/@vite/client"],
+      ["http://[::1]:8080/@a?x=1", "[::N]:N/@a"],
+      ["https://h.test:443/x?e=a@b.com", "h.test:N/x"],
+      ["https://bob@host.test:8443/@x?y=1", "host.test:N/@x"],
+    ])("%p keeps the host: %p", (input, expected) => {
+      expect(msgOf(input)).toBe(expected);
+    });
+
+    it.each([
+      ["postgres://admin:123#x@db.host/app", "db.host/app"],
+      ["postgres://admin:123/x@db.host/app", "db.host/app"],
+      ["postgres://svc:9?x@db.host/app", "db.host/app"],
+    ])(
+      "a numeric-looking password after a non-host user is still stripped: %p",
+      (input, expected) => {
+        const m = msgOf(input);
+        expect(m).toBe(expected);
+        expect(m).not.toContain("admin");
+        expect(m).not.toContain("svc");
+      },
+    );
+
+    it("known gap: a dotted username with a numeric password prefix before a reserved character is read as host:port", () => {
+      // john.doe:123 looks exactly like host:port, so it cannot be told apart.
+      expect(msgOf("postgres://john.doe:123#abc@db.host/app")).toBe(
+        "john.doe:N",
+      );
+    });
+  });
+
   it("the safe form is also applied when the cap is raised", () => {
     expect(msgOf(FIXTURE, undefined, 4000)).toBe(SAFE);
   });
