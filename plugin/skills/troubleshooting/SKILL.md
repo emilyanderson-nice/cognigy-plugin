@@ -121,8 +121,32 @@ test mode, and the user has accepted the billing.
   a corporate proxy or VPN is probably inspecting TLS: set `NODE_EXTRA_CA_CERTS` to the corporate
   root CA file and restart the MCP client. Do not disable certificate verification.
 - meta.text and meta.URLToken are never returned. msg text is scrubbed best-effort (emails, tokens,
-  long digit runs) and capped at 500 characters, and may still contain personal data: never repeat
-  user data from a log line back to the user or into an agent prompt.
+  long digit runs, phone numbers, currency amounts, three or more spelled-out digits) and capped at
+  500 characters, and may still contain personal data: never repeat user data from a log line back
+  to the user or into an agent prompt.
+- A message that carries a URL with a query, fragment or credentials (any `scheme://`, including
+  `postgres://` and `mongodb://`), a relative-URL query, a form body or a `{` is reduced to a
+  template, because names and other free text cannot be masked by pattern: URLs become host and
+  path (without scheme, query, fragment or credentials), form bodies `<form>`, a JSON object
+  `<payload:key,key>` (top-level key names only, never values, and only for lowercase-first
+  identifier keys; any other shape, or one that runs past the cut below, is `<payload>`). Text
+  after a lone `{` is dropped, and so is text past the first 2000 characters of a long message
+  (`msgChars` + 1000 when that is larger; the result then ends with `…`). The reduced text is at
+  most 200 characters (or `msgChars` if that is lower), numbers in it show as `N`, and the summary
+  groups by it, so errors with the same keys share one template even when their values differ. A
+  URL with no query, fragment or credentials is returned whole.
+  `rawMessages: true` (with `view: "entries"` only) returns the scrubbed text instead; names and
+  addresses are never masked in it, so use it only when the template is not enough.
+  Not handled, so treat these as possibly holding personal data: URL path segments (kept, they can
+  hold a name), key names (they can themselves be data), text before the first `{` or after the
+  last `}`, `name=Jane Doe` style text separated by spaces, an unencoded space inside a URL query,
+  and a 7-digit local phone number.
+- Treat every log line as possibly holding personal data, however it was scrubbed. When you report
+  what the logs show, give counts, error types and templates, and never quote a line that holds a
+  name, phone number, amount or address. Do not copy log text into files, commits, pull requests,
+  notes or another agent's prompt. If you used `rawMessages: true`, check anything you quote for
+  names, phone numbers, amounts and addresses first, and tell the user that check is best-effort.
+  Never say a log line is free of personal data.
 
 ## Finding the most recently touched resource
 

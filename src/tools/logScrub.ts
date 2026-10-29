@@ -1,3 +1,5 @@
+import { reduceRisky } from "./logSafeForm.js";
+
 export const MAX_MESSAGE_CHARS = 500;
 export const MAX_TEMPLATE_CHARS = 200;
 export const MAX_SCRUB_INPUT_CHARS = 2000;
@@ -22,6 +24,25 @@ const UUID_SRC =
 const OBJECT_ID_SRC = "(?<![A-Za-z0-9])[0-9a-fA-F]{24}(?![A-Za-z0-9])";
 const DIGITS_OR_ID = new RegExp(`${UUID_SRC}|${OBJECT_ID_SRC}|\\d{9,}`, "g");
 const ID_ONLY = new RegExp(`${UUID_SRC}|${OBJECT_ID_SRC}`, "g");
+// Bare space-separated groups are not phones; a `+` form needs 8+ digits.
+const PHONE =
+  /(?<![\d.])(?:\+\d{1,3}[ .-]?)?(?:\(\d{3}\) ?\d{3}[-. ]\d{4}|\d{3}-\d{3}-\d{4}|\d{3}\.\d{3}\.\d{4})(?!\d|\.\d)|(?<!\d)\+\d{1,3}(?:[ .-]\d{1,4}){2,5}(?!\d)/g;
+const MIN_PLUS_PHONE_DIGITS = 8;
+const CURRENCY_SYMBOL = "[$€£¥₹]";
+const ISO_CODE = "(?:USD|EUR|GBP|CAD|AUD|CHF|JPY|INR|SEK|NOK|DKK|NZD|CNY)";
+// A lone digit after a symbol ($5) is not an amount. The lookbehinds start a
+// number only at its first digit, which keeps the scan linear.
+const AMOUNT = new RegExp(
+  `${CURRENCY_SYMBOL}\\s?\\d[\\d.,]*\\d` +
+    `|(?<![\\w.,=-])\\d(?:[\\d.,]*\\d)?\\s?(?:${CURRENCY_SYMBOL}(?!\\d)|${ISO_CODE}\\b)` +
+    `|\\b${ISO_CODE}\\s?\\d(?:[\\d.,]*\\d)?`,
+  "gi",
+);
+const DIGIT_WORD = "(?:zero|one|two|three|four|five|six|seven|eight|nine)";
+const SPOKEN_DIGITS = new RegExp(
+  `\\b${DIGIT_WORD}(?:[ ,-]+${DIGIT_WORD}\\b){2,}`,
+  "gi",
+);
 const QUOTED = /"([^"]*)"|'([^']*)'/g;
 const NUMBER =
   /(\b(?:status|http|code|error|errno)\s*[:=]?\s*)(\d{3})(?!\d)|\d+(?:\.\d+)?/gi;
@@ -45,11 +66,19 @@ export function scrubText(
   inputChars: number = MAX_SCRUB_INPUT_CHARS,
 ): string {
   if (typeof input !== "string") return "";
+  // Load-bearing: this cut bounds the cost of the whole regex chain below.
   const cleaned = collapse(input.slice(0, inputChars))
     .replace(EMAIL, "<email>")
     .replace(JWT, "<token>")
     .replace(BEARER, "$1 <token>")
     .replace(OPAQUE, "<token>")
+    .replace(AMOUNT, "<amount>")
+    .replace(PHONE, (match) =>
+      match.replace(/\D/g, "").length >= MIN_PLUS_PHONE_DIGITS
+        ? "<phone>"
+        : match,
+    )
+    .replace(SPOKEN_DIGITS, "<digits>")
     .replace(DIGITS_OR_ID, (match) =>
       /^\d{9,}$/.test(match) ? "<digits>" : match,
     );
@@ -80,9 +109,18 @@ function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+// A message that may carry a request URL query, a form body or a JSON body is
+// the likely carrier of personal data that no pattern can list, so it is
+// reduced to a template (logSafeForm.ts) instead of being scrubbed.
+function safeFormOf(msg: string, scanChars: number, maxChars: number) {
+  const reduced = reduceRisky(msg, scanChars);
+  return reduced === null ? null : truncate(messageTemplate(reduced), maxChars);
+}
+
 export function toLogEntry(
   raw: unknown,
   msgChars: number = MAX_MESSAGE_CHARS,
+  options: { rawMessages?: boolean } = {},
 ): LogEntry {
   const source = isPlainObject(raw) ? raw : {};
   const metadata = isPlainObject(source.metadata) ? source.metadata : {};
@@ -94,7 +132,10 @@ export function toLogEntry(
       nonEmptyString(metadata.type) ??
       "unknown"
     ).slice(0, 20),
-    msg: scrubText(source.msg, msgChars, inputCutFor(msgChars)),
+    msg:
+      (options.rawMessages !== true && typeof source.msg === "string"
+        ? safeFormOf(source.msg, inputCutFor(msgChars), msgChars)
+        : null) ?? scrubText(source.msg, msgChars, inputCutFor(msgChars)),
   };
   if (isPlainObject(source.meta)) {
     const flowId = nonEmptyString(source.meta.flowId);
