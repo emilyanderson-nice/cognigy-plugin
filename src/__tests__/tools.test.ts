@@ -1343,10 +1343,31 @@ describe("ToolHandlers v2", () => {
       expect(result.items[0].toolType).toBe("aiAgentJobTool");
     });
 
-    it("lists conversations with date filters", async () => {
+    it("filters conversations by date and channel in the plugin, not on the platform", async () => {
+      // The platform ignores limit, dates and channel on this endpoint (N4, T2),
+      // so only projectId is sent and the filtering happens here.
       api.get.mockResolvedValue({
-        items: [{ sessionId: "s1", channel: "rest" }],
-        total: 1,
+        items: [
+          {
+            _id: "s1",
+            channel: "rest",
+            startTime: "2024-06-01T00:00:00.000Z",
+            messages: 2,
+          },
+          {
+            _id: "s2",
+            channel: "webchat",
+            startTime: "2024-06-02T00:00:00.000Z",
+            messages: 2,
+          },
+          {
+            _id: "s3",
+            channel: "rest",
+            startTime: "2025-02-01T00:00:00.000Z",
+            messages: 2,
+          },
+        ],
+        total: 3,
       });
 
       const result = await h.handleToolCall("list_resources", {
@@ -1358,13 +1379,10 @@ describe("ToolHandlers v2", () => {
       });
 
       expect(api.get).toHaveBeenCalledWith("/v2.0/conversations", {
-        params: expect.objectContaining({
-          startDate: "2024-01-01",
-          endDate: "2024-12-31",
-          channel: "rest",
-        }),
+        params: { projectId: ID.project },
       });
-      expect(result.items).toHaveLength(1);
+      expect(result.items.map((i: any) => i.sessionId)).toEqual(["s1"]);
+      expect(result.total).toBe(1);
     });
 
     it("lists each resource type correctly", async () => {
