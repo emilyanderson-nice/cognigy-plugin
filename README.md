@@ -380,6 +380,23 @@ then use `view: 'entries'` to read single lines, or pass the session id from `ta
 and `meta.URLToken` are never returned. Message text is scrubbed best-effort and may still
 contain personal data. Details and evidence: `docs/platform-versions/README.md`.
 
+### 10. Read conversation transcripts
+
+```
+Show me the transcript of the session I just tested, then list last week's
+webchat conversations in project <projectId> that had at least 5 messages.
+```
+
+This uses `get_resource` and `list_resources` with `resourceType: 'conversation'` (read-only). The
+`transcripts` skill first asks whether you want one session, a set of recent conversations or an
+overview, and whether you need the words or only the shape. A single session returns an outline by
+default (who spoke, when, how long, no text); `view: 'text'` returns the message text, masked
+best-effort, and `rawText: true` returns it unmasked. The platform returns every conversation of a
+project in one call and ignores paging and date parameters, so the plugin filters (`startDate`,
+`endDate`, `channel`, `flowName`, `minMessages`, `contactIds`) and pages the list itself, newest
+first. Endpoint tokens, contact ids and message data values are never returned, and transcripts may
+still contain personal data. Details and evidence: `docs/platform-versions/README.md`.
+
 ## Tools
 
 | Tool                   | Type  | Description                                                                                                    |
