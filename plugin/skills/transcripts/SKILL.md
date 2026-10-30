@@ -29,6 +29,7 @@ Then ask whether they need the **words** or only the **shape** (who spoke, when,
 
 `list_resources { resourceType: "conversation", projectId, ... }` returns summary rows, newest first, 25 by default (`limit` up to 100, `skip` to page). Filters: `startDate` / `endDate` (ISO 8601, on the start time), `channel`, `flowName` (exact), `minMessages`, `contactIds`.
 
+- `flowName` and `channel` match exactly and case-sensitively. A short name such as "Phone Support" will not match a flow called "Phone Support Flow": list without the filter and copy the name from a row, or read it from `list_resources { resourceType: "flow", projectId }`. If the hint says conversations were read but none matched, fix the filter before concluding there are none.
 - The platform returns every conversation of the project in one call and ignores paging and date parameters, so the plugin filters and pages the result itself. On a project with thousands of conversations, narrow with `contactIds` or a short window first. `truncated: true` means only the first 5000 rows were considered.
 - A row's `messages` is the platform's number and is not the count the session read returns (one exchange showed 1 against 2 items).
 - Take `sessionId` from a row, then read that session as above.

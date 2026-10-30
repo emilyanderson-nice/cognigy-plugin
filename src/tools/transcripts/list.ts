@@ -139,8 +139,12 @@ export async function listConversations(
     const next = `More conversations follow: call again with skip: ${skip + items.length}.`;
     hint.action = hint.action ? `${hint.action} ${next}` : next;
   } else if (items.length === 0 && total === 0) {
+    // Rows read but all excluded is a filter problem (usually an inexact
+    // flowName or channel); no rows at all is where collection may be off.
     const none =
-      "Result is empty: no conversation matched. Check the filters, and note the project may not collect conversations (the endpoint needs Collect Analytics / Conversations enabled).";
+      rows.length > 0
+        ? `Result is empty: no conversation matched. ${rows.length} ${rows.length === 1 ? "conversation was" : "conversations were"} read from this project, but none matched the filters: flowName and channel must match exactly (case-sensitive), startDate and endDate compare the start time.`
+        : "Result is empty: no conversation matched. Check the filters, and note the project may not collect conversations (the endpoint needs Collect Analytics / Conversations enabled).";
     hint.action = hint.action ? `${hint.action} ${none}` : none;
   }
   return { body, hint };
