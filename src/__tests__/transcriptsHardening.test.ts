@@ -8,6 +8,7 @@ import { describe, it, expect, jest } from "@jest/globals";
 import { listConversations } from "../tools/transcripts/list.js";
 import { readConversation } from "../tools/transcripts/read.js";
 import { getResourceSchema, listResourcesSchema } from "../schemas/tools.js";
+import { tools } from "../tools/definitions.js";
 
 type Get = (url: string, config?: any) => Promise<any>;
 const clientOf = (response: unknown) => ({
@@ -207,6 +208,32 @@ describe("readConversation: pass-through fields are scalars", () => {
     expect("intent" in messages[2]).toBe(false);
     expect("intentScore" in messages[2]).toBe(false);
     expect(JSON.stringify(r.body)).not.toContain("NESTED-INTENT");
+  });
+});
+
+describe("personal-data wording does not overclaim", () => {
+  it("the text-view hint says names and addresses are not masked", async () => {
+    const r = await readConversation(
+      clientOf({
+        items: [msg({ inputText: "Jane Doe called from 12 Elm Street" })],
+      }),
+      { id: "s", view: "text" },
+    );
+    expect(r.hint?.action?.toLowerCase()).toContain(
+      "names and addresses are not masked",
+    );
+    // The documented limit is real: a name and an address pass through.
+    expect((r.body.messages as any[])[0].text).toBe(
+      "Jane Doe called from 12 Elm Street",
+    );
+  });
+
+  it("the get_resource view field names the best-effort masking and the personal data", () => {
+    const tool = tools.find((t) => t.name === "get_resource") as any;
+    const description = tool.inputSchema.properties.view.description as string;
+    expect(description).toContain("best-effort");
+    expect(description).toContain("names and addresses are not masked");
+    expect(description).toContain("personal data");
   });
 });
 

@@ -99,7 +99,7 @@ function buildMessage(
 }
 
 const PII_ACTION =
-  "The text may hold personal data: report counts and topics rather than quoting lines, and do not copy it into files, commits or prompts.";
+  "The text may hold personal data: names and addresses are not masked. Report counts and topics rather than quoting lines, and do not copy it into files, commits or prompts.";
 
 export async function readConversation(
   client: ConversationClient,

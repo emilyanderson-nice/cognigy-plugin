@@ -19,7 +19,7 @@ Then ask whether they need the **words** or only the **shape** (who spoke, when,
 
 `get_resource { resourceType: "conversation", id: "<sessionId>", projectId }` returns an **outline** by default: per message the position, `type`, `source`, time and text length, plus totals, duration and a count per source. No text is returned.
 
-- Words: add `view: "text"`. The text is masked best-effort (emails, tokens, long digit runs, phone numbers, amounts) and cut at 500 characters per message; raise `msgChars` (100 to 4000) when messages are longer.
+- Words: add `view: "text"`. The text is masked best-effort (emails, tokens, long digit runs, phone numbers, amounts; names and addresses are not masked) and cut at 500 characters per message. Raise `msgChars` (100 to 4000) when messages are longer.
 - Long conversations page 50 messages at a time (`limit` up to 100, `skip` for the next page; the hint names the next `skip`).
 - `expertMode: true` adds the detected intent and its score to each message.
 - `rawText: true` (with `view: "text"` only) returns the text unmasked. Use it only when the masked text is not enough, and tell the user it is unmasked.

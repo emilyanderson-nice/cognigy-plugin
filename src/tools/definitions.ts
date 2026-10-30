@@ -552,7 +552,7 @@ export const tools: ToolDefinition[] = [
           type: "string",
           enum: ["outline", "text"],
           description:
-            "conversation only — 'outline' (default: type, source, time, length) or 'text' (scrubbed message text).",
+            "conversation only — 'outline' (default: type, source, time, length) or 'text' (message text masked best-effort: names and addresses are not masked, it may contain personal data).",
         },
         expertMode: {
           type: "boolean",
