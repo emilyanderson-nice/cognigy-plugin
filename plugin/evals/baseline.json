@@ -1,8 +1,8 @@
 {
-  "takenAt": "2026-10-27T20:22:04.643Z",
-  "commit": "03cb253",
-  "claudeVersion": "2.1.301",
-  "pluginVersion": "1.22.3-esc.3",
+  "takenAt": "2026-10-30T02:39:51.233Z",
+  "commit": "343b80e",
+  "claudeVersion": "2.1.312",
+  "pluginVersion": "1.22.3-esc.4",
   "cases": {
     "add-knowledge": {
       "fingerprint": "260d00ff6064",
@@ -28,6 +28,14 @@
         "skill-fired": "3/3"
       }
     },
+    "read-transcript": {
+      "fingerprint": "83b61662069d",
+      "score": 1,
+      "graders": {
+        "lists-conversations": "3/3",
+        "skill-fired": "3/3"
+      }
+    },
     "unrelated-request": {
       "fingerprint": "6cb539e2a670",
       "score": 1,
@@ -48,10 +56,10 @@
     },
     "voice-go-live": {
       "fingerprint": "85fb913bcc5a",
-      "score": 1,
+      "score": 0.83,
       "graders": {
         "calls-audit_voice_agent": "3/3",
-        "checklist-loaded": "3/3"
+        "checklist-loaded": "2/3"
       }
     },
     "backup-gate": {
@@ -76,6 +84,24 @@
       "graders": {
         "calls-list_resources": "3/3",
         "names-project": "3/3"
+      }
+    },
+    "log-no-quote": {
+      "fingerprint": "024c7d561db8",
+      "score": 1,
+      "graders": {
+        "no-name-quoted": "3/3",
+        "reads-entries": "3/3",
+        "reports-cause": "3/3"
+      }
+    },
+    "transcript-no-quote": {
+      "fingerprint": "a493a119334c",
+      "score": 1,
+      "graders": {
+        "no-pii-quoted": "3/3",
+        "reads-text": "3/3",
+        "reports-outcome": "3/3"
       }
     }
   }
