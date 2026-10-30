@@ -324,7 +324,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "list_resources",
     description:
-      "List Cognigy resources of one type, paginated, with optional server-side sort. Types: project (no projectId needed), tool (takes aiAgentId, or flowId for an LLM Prompt flow, instead of projectId), audit_event (organisation-wide, no projectId; answers \"who changed what\" via actor and eventType; Cognigy 2026.17.0+), log (read-only project logs, typically about 24 hours deep: read the default summary first, then narrow with search, logLevel, flowName, startDate/endDate or sessionId; view 'entries' for lines, msgChars up to 4000; scrubbed best-effort, may still hold personal data; the troubleshooting skill has the recipe), and the project-scoped agent, flow, endpoint, llm_model, knowledge_store, conversation, extension, function. Endpoints show hasToken, not the token or URL; revealToken: true only when a URL is really needed. Packages and snapshots are listed by manage_packages and manage_snapshots. For recency questions use sort (e.g. 'lastChanged:desc', small limit).",
+      "List Cognigy resources of one type, paginated, with optional server-side sort. Types: project (no projectId needed), tool (takes aiAgentId, or flowId for an LLM Prompt flow, instead of projectId), audit_event (organisation-wide, no projectId; answers \"who changed what\" via actor and eventType; Cognigy 2026.17.0+), log (read-only project logs, typically about 24 hours deep: read the default summary first, then narrow with search, logLevel, flowName, startDate/endDate or sessionId; view 'entries' for lines, msgChars up to 4000; scrubbed best-effort, may still hold personal data; the troubleshooting skill has the recipe), conversation (newest first, metadata only; read one with get_resource), and the project-scoped agent, flow, endpoint, llm_model, knowledge_store, extension, function. Endpoints show hasToken, not the URL token (revealToken: true if needed). Packages and snapshots: manage_packages, manage_snapshots. For recency questions use sort (e.g. 'lastChanged:desc', small limit).",
     annotations: {
       title: "List Resources",
       readOnlyHint: true,
@@ -370,11 +370,13 @@ export const tools: ToolDefinition[] = [
         },
         startDate: {
           type: "string",
-          description: "ISO 8601 date filter (conversations only)",
+          description:
+            "ISO 8601 date or datetime, inclusive (log and conversation only)",
         },
         endDate: {
           type: "string",
-          description: "ISO 8601 date filter (conversations only)",
+          description:
+            "ISO 8601 date or datetime, inclusive (log and conversation only)",
         },
         channel: {
           type: "string",
@@ -437,7 +439,22 @@ export const tools: ToolDefinition[] = [
           type: "string",
           minLength: 1,
           maxLength: 100,
-          description: "log only — keep only entries from this flow name.",
+          description:
+            "log and conversation only — exact, case-sensitive flow name.",
+        },
+        minMessages: {
+          type: "integer",
+          minimum: 0,
+          description:
+            "conversation only — keep conversations with at least this many messages.",
+        },
+        contactIds: {
+          type: "array",
+          items: { type: "string", minLength: 1, maxLength: 64 },
+          minItems: 1,
+          maxItems: 50,
+          description:
+            "conversation only — keep conversations of these contact ids (the one filter the platform applies itself).",
         },
         sessionId: {
           type: "string",
@@ -488,7 +505,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "get_resource",
     description:
-      "Get one Cognigy resource by id, as a filtered summary by default or the complete API response with raw: true. Supports every list_resources type plus session_state (session context by session id) and user, where id 'me' returns the account the API key belongs to and a 24-char hex id another user. createdBy / lastChangedBy (returned only with raw: true) are opaque user ids: compare them with 'me' rather than guessing who they are. An audit_event carries performedBy. Endpoints leave out the URL token and endpoint URL, also with raw: true (hasToken instead; revealToken: true restores them). Use list_resources first to find ids.",
+      "Get one Cognigy resource by id, as a filtered summary by default or the complete API response with raw: true. Supports every list_resources type plus session_state (session context by session id) and user, where id 'me' returns the account the API key belongs to and a 24-char hex id another user. createdBy / lastChangedBy (returned only with raw: true) are opaque user ids: compare them with 'me' rather than guessing who they are. An audit_event carries performedBy. A conversation (id = session id) returns an outline of its messages by default; view 'text' adds scrubbed text (best-effort, may hold personal data; msgChars, rawText for unmasked), expertMode adds intents, limit and skip page the messages. Endpoints leave out the URL token and endpoint URL, also with raw: true (hasToken instead; revealToken: true restores them). Use list_resources first to find ids.",
     annotations: {
       title: "Get Resource",
       readOnlyHint: true,
@@ -530,6 +547,39 @@ export const tools: ToolDefinition[] = [
           type: "boolean",
           description:
             "If true, return unfiltered API response (default: false)",
+        },
+        view: {
+          type: "string",
+          enum: ["outline", "text"],
+          description:
+            "conversation only — 'outline' (default: type, source, time, length) or 'text' (scrubbed message text).",
+        },
+        expertMode: {
+          type: "boolean",
+          description: "conversation only — add intent and intentScore.",
+        },
+        rawText: {
+          type: "boolean",
+          description:
+            "conversation only, view 'text' — unmasked text; only when scrubbing hides what you need.",
+        },
+        msgChars: {
+          type: "integer",
+          minimum: 100,
+          maximum: 4000,
+          description:
+            "conversation only, view 'text' — characters kept per message (default 500).",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 100,
+          description: "conversation only — messages per page (default 50).",
+        },
+        skip: {
+          type: "integer",
+          minimum: 0,
+          description: "conversation only — messages to skip.",
         },
         revealToken: {
           type: "boolean",

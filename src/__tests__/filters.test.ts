@@ -233,22 +233,6 @@ describe("filterResponse", () => {
     });
   });
 
-  it("filters conversation fields", () => {
-    const raw = {
-      sessionId: "sess-1",
-      channel: "webchat",
-      startedAt: "2024-01-01",
-      messageCount: 10,
-      messages: [{ text: "hi" }],
-    };
-    expect(filterResponse("conversation", raw)).toEqual({
-      sessionId: "sess-1",
-      channel: "webchat",
-      startedAt: "2024-01-01",
-      messageCount: 10,
-    });
-  });
-
   it("filters project fields, keeping lastChanged over createdAt", () => {
     const raw = {
       _id: "proj-1",
@@ -391,25 +375,8 @@ describe("filterList", () => {
     const extensions = [
       { _id: "e1", name: "Ext1", version: "1.0", code: "hidden" },
     ];
-    const conversations = [
-      {
-        sessionId: "s1",
-        channel: "rest",
-        startedAt: "2024-01-01",
-        messageCount: 3,
-        messages: [],
-      },
-    ];
     expect(filterList("extension", extensions)).toEqual([
       { id: "e1", name: "Ext1", version: "1.0" },
-    ]);
-    expect(filterList("conversation", conversations)).toEqual([
-      {
-        sessionId: "s1",
-        channel: "rest",
-        startedAt: "2024-01-01",
-        messageCount: 3,
-      },
     ]);
   });
 });

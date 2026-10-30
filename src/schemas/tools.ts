@@ -333,6 +333,14 @@ export const listResourcesSchema = z
     view: z.enum(["summary", "entries"]).optional(),
     msgChars: z.number().int().min(100).max(4000).optional(),
     rawMessages: z.boolean().optional(),
+    // conversation-only filters (the platform ignores most of them, so the
+    // plugin applies them itself; contactIds is the one it honours).
+    minMessages: z.number().int().min(0).optional(),
+    contactIds: z
+      .array(z.string().min(1).max(64))
+      .nonempty()
+      .max(50)
+      .optional(),
     // audit_event filters. `actor` and `eventType` are sent as repeatable query
     // params (actor[]=…), which the platform supports from 2026.17.0 onwards.
     // Named `eventType` rather than `type` so it cannot be confused with
@@ -358,7 +366,28 @@ export const listResourcesSchema = z
   .refine((d) => !d.revealToken || d.resourceType === "endpoint", {
     message: REVEAL_TOKEN_MESSAGE,
     path: ["revealToken"],
+  })
+  .superRefine((d, ctx) => {
+    if (d.resourceType === "conversation") return;
+    for (const key of ["minMessages", "contactIds"] as const) {
+      if (d[key] !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${key} applies only to resourceType 'conversation'.`,
+          path: [key],
+        });
+      }
+    }
   });
+
+const CONVERSATION_ONLY_GET_KEYS = [
+  "view",
+  "expertMode",
+  "rawText",
+  "msgChars",
+  "limit",
+  "skip",
+] as const;
 
 // Tool 6: get_resource
 export const getResourceSchema = z
@@ -381,10 +410,35 @@ export const getResourceSchema = z
     projectId: idSchema.optional(),
     raw: z.boolean().optional(),
     revealToken: z.boolean().optional(),
+    // conversation only (resourceType 'conversation', not with raw).
+    view: z.enum(["outline", "text"]).optional(),
+    expertMode: z.boolean().optional(),
+    rawText: z.boolean().optional(),
+    msgChars: z.number().int().min(100).max(4000).optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    skip: z.number().int().min(0).optional(),
   })
   .refine((d) => !d.revealToken || d.resourceType === "endpoint", {
     message: REVEAL_TOKEN_MESSAGE,
     path: ["revealToken"],
+  })
+  .superRefine((d, ctx) => {
+    const reason =
+      d.resourceType !== "conversation"
+        ? "applies only to resourceType 'conversation'."
+        : d.raw === true
+          ? "cannot be combined with raw: true, which returns the platform record as is."
+          : undefined;
+    if (!reason) return;
+    for (const key of CONVERSATION_ONLY_GET_KEYS) {
+      if (d[key] !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${key} ${reason}`,
+          path: [key],
+        });
+      }
+    }
   });
 
 // Tool 7: delete_resource

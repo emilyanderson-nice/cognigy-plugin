@@ -87,12 +87,6 @@ export const RESOURCE_FILTERS: Record<string, (raw: any) => any> = {
     description: r.description,
     sourceCount: r.sourceCount,
   }),
-  conversation: (r) => ({
-    sessionId: r.sessionId,
-    channel: r.channel,
-    startedAt: r.startedAt,
-    messageCount: r.messageCount,
-  }),
   // `lastChanged` instead of `createdAt`: for "which project am I working in"
   // recency beats creation date, and it costs 2 extra chars. Projects have no
   // `description` field at all. `lastChangedBy` is deliberately omitted — it is

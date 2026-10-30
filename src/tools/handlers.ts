@@ -165,6 +165,8 @@ import {
   type SnapshotSummary,
 } from "./snapshotManagement.js";
 import { readLogs } from "./logReader.js";
+import { listConversations } from "./transcripts/list.js";
+import { readConversation } from "./transcripts/read.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -3845,6 +3847,20 @@ export class ToolHandlers {
       );
     }
     if (resourceType === "log") return this.listLogs(data);
+    if (resourceType === "conversation") {
+      const result = await listConversations(this.apiClient, {
+        projectId,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        channel: data.channel,
+        flowName: data.flowName,
+        minMessages: data.minMessages,
+        contactIds: data.contactIds,
+        limit,
+        skip,
+      });
+      return withHints(result.body, result.hint ?? {});
+    }
     if (resourceType === "tool" && !aiAgentId && !requestedFlowId) {
       return withHints(
         { error: "aiAgentId or flowId is required for resourceType 'tool'." },
@@ -3912,18 +3928,6 @@ export class ToolHandlers {
       case "knowledge_store": {
         const res: any = await this.apiClient.get("/v2.0/knowledgestores", {
           params: { projectId, ...paging },
-        });
-        items = res.items ?? res;
-        total = res.total;
-        break;
-      }
-      case "conversation": {
-        const params: any = { projectId, ...paging };
-        if (data.startDate) params.startDate = data.startDate;
-        if (data.endDate) params.endDate = data.endDate;
-        if (data.channel) params.channel = data.channel;
-        const res: any = await this.apiClient.get("/v2.0/conversations", {
-          params,
         });
         items = res.items ?? res;
         total = res.total;
@@ -4141,6 +4145,20 @@ export class ToolHandlers {
 
     const url = endpointMap[resourceType];
     if (!url) throw new Error(`Unknown resourceType: ${resourceType}`);
+
+    if (resourceType === "conversation" && !raw) {
+      const result = await readConversation(this.apiClient, {
+        id,
+        projectId: data.projectId,
+        view: data.view,
+        expertMode: data.expertMode,
+        rawText: data.rawText,
+        msgChars: data.msgChars,
+        limit: data.limit,
+        skip: data.skip,
+      });
+      return withHints(result.body, result.hint ?? {});
+    }
 
     let result: any;
     try {
