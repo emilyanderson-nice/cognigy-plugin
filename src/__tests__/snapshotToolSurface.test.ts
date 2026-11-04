@@ -65,6 +65,8 @@ describe("backup gate classification", () => {
       "Knowledge AI is NOT captured in a snapshot, so a backup would not protect it",
     manage_packages: "import is additive; export only reads",
     manage_webchat: "endpoints are NOT captured in a snapshot",
+    manage_endpoints:
+      "endpoints are NOT captured in a snapshot; the tool demands its own backup file before changing code",
     manage_voice_gateway: "endpoints are NOT captured in a snapshot",
     manage_a2a_server: "endpoints are NOT captured in a snapshot",
     manage_snapshots: "the backup tool itself",

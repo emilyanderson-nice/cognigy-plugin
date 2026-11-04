@@ -1227,6 +1227,95 @@ export const tools: ToolDefinition[] = [
     },
   },
 
+  {
+    name: "manage_endpoints",
+    description:
+      "Change settings of an existing Endpoint (any channel with a transformer). Operations: get_transformer (switches per transformer, abortOnError, code size and hash; saveCodeTo writes the code to a file instead of returning it), update_transformer (set switches and/or replace the code from code or codeFromFile; the code is syntax-checked locally, backupTo is required when code changes because endpoints are not in a snapshot, then the endpoint is read back and verified is reported). Does not create or delete endpoints: use manage_flows, manage_webchat, manage_voice_gateway and delete_resource.",
+    annotations: {
+      title: "Manage Endpoints",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["get_transformer", "update_transformer"],
+          description: "Which operation to perform",
+        },
+        endpointId: {
+          type: "string",
+          description:
+            "24-char hex endpoint ID (list_resources { resourceType: 'endpoint', projectId }).",
+        },
+        saveCodeTo: {
+          type: "string",
+          description:
+            "get_transformer: file inside the working folder that receives the transformer code.",
+        },
+        code: {
+          type: "string",
+          description:
+            "update_transformer: new transformer code, plain JavaScript (createRestTransformer({...})). Also the executed code unless transpiledCode is given.",
+        },
+        codeFromFile: {
+          type: "string",
+          description:
+            "update_transformer: file with the new code, instead of code.",
+        },
+        transpiledCode: {
+          type: "string",
+          description:
+            "update_transformer: the executed, type-free code if it differs from code.",
+        },
+        backupTo: {
+          type: "string",
+          description:
+            "update_transformer: file that receives the current transformer block before the change. Required when the code changes.",
+        },
+        overwrite: {
+          type: "boolean",
+          description:
+            "Replace saveCodeTo or backupTo if the file exists. Default false.",
+        },
+        abortOnError: {
+          type: "boolean",
+          description:
+            "update_transformer: stop processing a message if a transformer throws.",
+        },
+        inputTransformerEnabled: {
+          type: "boolean",
+          description:
+            "update_transformer: switch the input transformer on or off.",
+        },
+        outputTransformerEnabled: {
+          type: "boolean",
+          description:
+            "update_transformer: switch the output transformer on or off.",
+        },
+        finalPingTransformerEnabled: {
+          type: "boolean",
+          description:
+            "update_transformer: switch the final ping transformer on or off.",
+        },
+        notifyTransformerEnabled: {
+          type: "boolean",
+          description:
+            "update_transformer: switch the notify transformer on or off.",
+        },
+        injectTransformerEnabled: {
+          type: "boolean",
+          description:
+            "update_transformer: switch the inject transformer on or off.",
+        },
+      },
+      required: ["operation", "endpointId"],
+    },
+  },
+
   // 12. manage_flow_nodes
   {
     name: "manage_flow_nodes",

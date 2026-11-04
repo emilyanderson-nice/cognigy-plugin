@@ -92,6 +92,7 @@ import {
 } from "./voiceChecklist.js";
 import { z } from "zod";
 import * as schemas from "../schemas/tools.js";
+import { manageEndpointTransformer } from "./endpointTransformer.js";
 import { handleManageIntents } from "./intents/manage.js";
 import {
   chartToAscii,
@@ -9104,6 +9105,14 @@ export class ToolHandlers {
         case "manage_webchat":
           result = await this.handleManageWebchat(args);
           break;
+        case "manage_endpoints": {
+          const data = schemas.manageEndpointsSchema.parse(args);
+          result = await manageEndpointTransformer(this.apiClient, {
+            ...data,
+            operation: data.operation === "get_transformer" ? "get" : "update",
+          });
+          break;
+        }
         case "manage_voice_gateway":
           result = await this.handleManageVoiceGateway(args);
           break;

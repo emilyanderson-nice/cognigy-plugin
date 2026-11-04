@@ -16,7 +16,7 @@ const MAX_DESCRIPTION_CHARS = 1000;
 // surface rather than prose. The per-tool, per-field and instructions caps are
 // unchanged. Keep these two lines as the only fork edit in this file so an
 // upstream merge stays a one-hunk conflict.
-const MAX_TOTAL_DESCRIPTION_CHARS = 15_000;
+const MAX_TOTAL_DESCRIPTION_CHARS = 16_000;
 // Raised from 60k when manage_a2a_server, the a2a tool config and the Bedrock
 // fields landed: that growth is schema structure, not prose.
 const MAX_TOTAL_DEFINITION_CHARS = 85_000;

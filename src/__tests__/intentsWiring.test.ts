@@ -481,8 +481,8 @@ describe("manageIntentsSchema", () => {
 describe("manage_intents tool definition", () => {
   const tool = tools.find((t) => t.name === "manage_intents");
 
-  it("is the 20th tool", () => {
-    expect(tools).toHaveLength(20);
+  it("is among the 21 tools", () => {
+    expect(tools).toHaveLength(21);
     expect(tool).toBeDefined();
     expect(tools.filter((t) => t.name === "manage_intents")).toHaveLength(1);
   });

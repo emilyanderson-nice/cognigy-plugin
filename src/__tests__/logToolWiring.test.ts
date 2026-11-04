@@ -168,8 +168,8 @@ describe("log wiring: tool definitions", () => {
     expect([...p.enum].sort()).toEqual(["entries", "summary"]);
   });
 
-  it("the log feature adds no tool; the tool count is 20 with manage_intents", () => {
-    expect(tools.length).toBe(20);
+  it("the log feature adds no tool; the tool count is 21 with manage_intents and manage_endpoints", () => {
+    expect(tools.length).toBe(21);
   });
 });
 

@@ -17,6 +17,7 @@ tools:
     manage_packages,
     manage_webchat,
     manage_voice_gateway,
+    manage_endpoints,
     manage_settings,
     audit_voice_agent,
     manage_snapshots,

@@ -415,6 +415,7 @@ still contain personal data. Details and evidence: `docs/platform-versions/READM
 | `manage_flow_nodes`    | Write | Create, update, delete, or list flow nodes for conversation logic                                              |
 | `manage_packages`      | Write | List exportable resources, upload, inspect, import, export, and download Cognigy package zip files             |
 | `manage_voice_gateway` | Write | Create or configure a Voice Gateway endpoint with WebRTC for browser-based voice interaction                   |
+| `manage_endpoints`     | Write | Read and change an existing endpoint's transformer: switches, abortOnError and code (with a backup file)       |
 | `manage_a2a_server`    | Write | Deploy a Flow as an A2A (Agent2Agent) server endpoint that other agents can discover and call                  |
 | `manage_settings`      | Write | Manage project-level settings including voice preview and Knowledge AI configuration                           |
 | `audit_voice_agent`    | Write | Audit a voice agent against the Go-Live Checklist; reports by default, applies safe fixes on demand            |
