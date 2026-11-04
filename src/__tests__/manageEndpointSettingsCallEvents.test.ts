@@ -100,6 +100,31 @@ describe("manage_endpoint_settings call events", () => {
     expect(r.after.callCompleted.flowId).toBe(OTHER_FLOW);
   });
 
+  it("needs a flow for the three events that run one, not for noAnswer and recognizedDtmf", async () => {
+    // observed: a configured endpoint stores callCompleted, callFailed and
+    // userInputTimeout with { enabled, action, flowId }, the other two with
+    // { enabled } only; the platform accepts every event switched on without a flow
+    for (const event of ["callCompleted", "callFailed", "userInputTimeout"]) {
+      stored.settings.callEvents[event] = { enabled: false };
+      const r = await run({
+        operation: "update_call_events",
+        endpointId: ENDPOINT,
+        events: { [event]: { enabled: true } },
+      });
+      expect(r.error).toMatch(/runs a flow and needs a flowId/);
+    }
+    expect(api.patch).not.toHaveBeenCalled();
+    for (const event of ["noAnswer", "recognizedDtmf"]) {
+      const r = await run({
+        operation: "update_call_events",
+        endpointId: ENDPOINT,
+        events: { [event]: { enabled: true } },
+      });
+      expect(r.verified).toBe(true);
+      expect(stored.settings.callEvents[event]).toEqual({ enabled: true });
+    }
+  });
+
   it("refuses to switch on an event that has no flow", async () => {
     const r = await run({
       operation: "update_call_events",

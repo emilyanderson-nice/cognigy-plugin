@@ -19,7 +19,7 @@ const baseTransformer = () => ({
   finalPingTransformerEnabled: false,
 });
 
-describe("manage_endpoint_transformer", () => {
+describe("manage_endpoint_settings transformer", () => {
   let stored: any;
   let api: { get: jest.Mock<any>; patch: jest.Mock<any> };
   let dir: string;
@@ -34,8 +34,14 @@ describe("manage_endpoint_transformer", () => {
     };
     api = {
       get: jest.fn(async () => structuredClone(stored)),
+      // The platform merges a partial transformer block and recompiles when
+      // the source is sent (both observed live on the EU trial).
       patch: jest.fn(async (_path: string, body: any) => {
-        stored = { ...stored, ...body };
+        const next = { ...stored.transformer, ...body.transformer };
+        if (body.transformer?.transformer !== undefined) {
+          next.transpiledTransformer = body.transformer.transformer;
+        }
+        stored = { ...stored, transformer: next };
         return {};
       }),
     };
@@ -79,6 +85,10 @@ describe("manage_endpoint_transformer", () => {
     expect(
       (api.patch.mock.calls[0][1] as any).transformer.inputTransformerEnabled,
     ).toBe(true);
+    // only the changed field goes out: a concurrent edit of the code survives
+    expect((api.patch.mock.calls[0][1] as any).transformer).toEqual({
+      inputTransformerEnabled: true,
+    });
     expect(r.verified).toBe(true);
     expect(r.changed).toEqual(["inputTransformerEnabled"]);
     expect(r.after.inputTransformerEnabled).toBe(true);
@@ -96,14 +106,16 @@ describe("manage_endpoint_transformer", () => {
 
   it("puts the previous block back when the platform refuses (it stores refused code anyway)", async () => {
     api.patch.mockImplementation(async (_path: string, body: any) => {
-      stored = { ...stored, ...body };
-      if (body.transformer.transformer.includes("BROKEN")) {
+      if (body.transformer.transformer?.includes("BROKEN")) {
+        // the platform stores the refused source and empties the executed code
         stored.transformer = {
           ...stored.transformer,
+          ...body.transformer,
           transpiledTransformer: "",
         };
         throw new Error("Failed to compile the transformer code");
       }
+      stored.transformer = { ...stored.transformer, ...body.transformer };
       return {};
     });
     const r: any = await run({
@@ -132,7 +144,8 @@ describe("manage_endpoint_transformer", () => {
       backupTo: "backup.json",
     });
     expect(r.rolledBack).toBe(false);
-    expect(r._hints.warning).toMatch(/Restore the backup/);
+    expect(r._hints.warning).toMatch(/Restore now/);
+    expect(r._hints.warning).toContain("backup.code.js");
   });
 
   it("writes the backup first, then changes the code and keeps the other fields", async () => {
@@ -150,17 +163,53 @@ describe("manage_endpoint_transformer", () => {
       fs.readFileSync(path.join(dir, "backup.json"), "utf8"),
     );
     expect(backup.transformer.transformer).toBe(CODE);
-    const sent = (api.patch.mock.calls[0][1] as any).transformer;
-    expect(sent.transformer).toBe(newCode);
-    expect(sent.transpiledTransformer).toBe(CODE); // not sent: the platform compiles itself
-    expect(sent.abortOnError).toBe(false);
-    expect(sent.outputTransformerEnabled).toBe(true);
+    // the plain code sits next to the JSON, so it can go back with codeFromFile
+    expect(fs.readFileSync(path.join(dir, "backup.code.js"), "utf8")).toBe(
+      CODE,
+    );
+    expect(r.backup.codeFile).toBe("backup.code.js");
+    // only the changed fields are sent: no stale executed code, no unrelated switches
+    expect((api.patch.mock.calls[0][1] as any).transformer).toEqual({
+      transformer: newCode,
+      outputTransformerEnabled: true,
+    });
     expect(r.verified).toBe(true);
     expect(r.changed).toEqual([
       "outputTransformerEnabled",
       "transformer",
       "transpiledTransformer",
     ]);
+  });
+
+  it("restores from the backup's code file with codeFromFile", async () => {
+    const newCode =
+      "createRestTransformer({ handleOutput: async ({ output }) => ({ ...output, seen: true }) });";
+    await run({
+      operation: "update",
+      endpointId: ENDPOINT,
+      code: newCode,
+      backupTo: "backup.json",
+    });
+    expect(stored.transformer.transformer).toBe(newCode);
+    const r: any = await run({
+      operation: "update",
+      endpointId: ENDPOINT,
+      codeFromFile: "backup.code.js",
+      backupTo: "backup2.json",
+    });
+    expect(r.verified).toBe(true);
+    expect(stored.transformer.transformer).toBe(CODE);
+    expect(stored.transformer.transpiledTransformer).toBe(CODE);
+  });
+
+  it("names the backup code file next to a backup without .json too", async () => {
+    await run({
+      operation: "update",
+      endpointId: ENDPOINT,
+      code: "x = 1;",
+      backupTo: "saved",
+    });
+    expect(fs.existsSync(path.join(dir, "saved.code.js"))).toBe(true);
   });
 
   it("reports a mismatch when the platform keeps other values", async () => {

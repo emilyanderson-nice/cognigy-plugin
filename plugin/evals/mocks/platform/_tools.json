@@ -1175,7 +1175,7 @@
     },
     {
       "name": "manage_endpoint_settings",
-      "description": "Change settings of an existing Endpoint (any channel with a transformer). Operations: get_transformer (switches per transformer, abortOnError, code size and hash; saveCodeTo writes the code to a file instead of returning it), update_transformer (set switches and/or replace the code from code or codeFromFile; the platform compiles it, backupTo is required when code changes because endpoints are not in a snapshot, then the endpoint is read back and verified is reported), get_call_events and update_call_events (voice call events: callCompleted, callFailed, userInputTimeout, noAnswer, recognizedDtmf; each with enabled and the flow to run). Does not create or delete endpoints: use manage_flows, manage_webchat, manage_voice_gateway and delete_resource.",
+      "description": "Change settings of an Endpoint: get/update_transformer (switches, abortOnError, code; a code change needs backupTo) and get/update_call_events (voice endpoints: callCompleted, callFailed, userInputTimeout, noAnswer, recognizedDtmf). Does not create or delete endpoints.",
       "annotations": {
         "title": "Manage Endpoint Settings",
         "readOnlyHint": false,
@@ -1202,51 +1202,51 @@
           },
           "saveCodeTo": {
             "type": "string",
-            "description": "get_transformer: file that receives the code."
+            "description": "File that receives the code."
           },
           "code": {
             "type": "string",
-            "description": "update_transformer: new code (JavaScript or TypeScript); the platform compiles it."
+            "description": "New code; the platform compiles it."
           },
           "codeFromFile": {
             "type": "string",
-            "description": "update_transformer: file with the new code."
+            "description": "File with the new code."
           },
           "backupTo": {
             "type": "string",
-            "description": "update_transformer / update_call_events: file that receives the current values first. Required when code changes."
+            "description": "File that receives the current values first. Required when code changes."
           },
           "overwrite": {
             "type": "boolean",
-            "description": "Replace an existing saveCodeTo or backupTo file."
+            "description": "Replace an existing file."
           },
           "events": {
             "type": "object",
-            "description": "update_call_events: callCompleted, callFailed, userInputTimeout, noAnswer, recognizedDtmf, each { enabled?, flowId? (referenceId UUID) }."
+            "description": "update_call_events: events to change, each { enabled?, flowId? (referenceId UUID) }."
           },
           "abortOnError": {
             "type": "boolean",
-            "description": "update_transformer: abort on transformer error."
+            "description": "Abort on transformer error."
           },
           "inputTransformerEnabled": {
             "type": "boolean",
-            "description": "update_transformer: input transformer on/off."
+            "description": "input on/off."
           },
           "outputTransformerEnabled": {
             "type": "boolean",
-            "description": "update_transformer: output transformer on/off."
+            "description": "output on/off."
           },
           "finalPingTransformerEnabled": {
             "type": "boolean",
-            "description": "update_transformer: final ping transformer on/off."
+            "description": "final ping on/off."
           },
           "notifyTransformerEnabled": {
             "type": "boolean",
-            "description": "update_transformer: notify transformer on/off."
+            "description": "notify on/off."
           },
           "injectTransformerEnabled": {
             "type": "boolean",
-            "description": "update_transformer: inject transformer on/off."
+            "description": "inject on/off."
           }
         },
         "required": [

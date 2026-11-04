@@ -23,6 +23,19 @@ export const CALL_EVENTS = [
   "recognizedDtmf",
 ] as const;
 
+/**
+ * Events that run a flow. Evidence class: observed. A configured voice endpoint
+ * stores these three as { enabled, action: "executeFlow", flowId }, while
+ * noAnswer and recognizedDtmf carry only { enabled }. The platform itself
+ * accepts enabled: true without a flow on all five (observed on the EU trial),
+ * so this guard is the tool's own safety rule, not a platform requirement.
+ */
+export const FLOW_EVENTS: ReadonlySet<string> = new Set([
+  "callCompleted",
+  "callFailed",
+  "userInputTimeout",
+]);
+
 const fileMessage = (err: unknown): string =>
   err instanceof FileAccessError || err instanceof Error
     ? err.message
@@ -67,14 +80,11 @@ export async function manageCallEvents(api: Api, data: any): Promise<any> {
     const next: Record<string, unknown> = { ...(current[event] ?? {}) };
     if (given.enabled !== undefined) next.enabled = given.enabled;
     if (given.flowId !== undefined) next.flowId = given.flowId;
-    if (
-      next.enabled === true &&
-      !next.flowId &&
-      event !== "noAnswer" &&
-      event !== "recognizedDtmf"
-    ) {
+    if (next.enabled === true && !next.flowId && FLOW_EVENTS.has(event)) {
       return withHints(
-        { error: `${event} needs a flowId (referenceId) to be switched on.` },
+        {
+          error: `${event} runs a flow and needs a flowId (referenceId) to be switched on.`,
+        },
         { action: "Pass events.<name>.flowId, the flow's referenceId UUID." },
       );
     }

@@ -1,12 +1,16 @@
 /**
- * manage_endpoint_transformer: read and change the transformer settings of an
- * Endpoint (code, the on/off switches per transformer, abortOnError).
+ * manage_endpoint_settings, transformer operations: read and change the
+ * transformer of an Endpoint (code, the on/off switches per transformer,
+ * abortOnError).
  *
  * Endpoints are NOT part of a snapshot, so a change to the code needs a backup
  * file first (`backupTo`); the tool refuses to change code without one. The
- * platform compiles the code itself on save (TypeScript with type check, so
- * typed code is fine and a type error comes back as a 400, nothing stored);
- * the change is read back afterwards and compared.
+ * backup is two files: the JSON block and the plain code next to it, so the
+ * code can be sent back with `codeFromFile`. The platform compiles the code
+ * itself on save (TypeScript with type check). A refused compile (400) is
+ * stored anyway with empty executed code (observed, see
+ * docs/platform-versions), so the previous block is put back. Only the changed
+ * fields are sent, which leaves everything else on the endpoint untouched.
  */
 import vm from "node:vm";
 import { withHints } from "./filters.js";
@@ -68,6 +72,10 @@ export function syntaxError(code: string): string | null {
     return String(err?.message ?? err);
   }
 }
+
+/** `x.json` -> `x.code.js`; any other name gets `.code.js` appended. */
+export const backupCodePath = (backupTo: string): string =>
+  backupTo.replace(/\.json$/i, "") + ".code.js";
 
 async function readEndpoint(api: Api, endpointId: string): Promise<any> {
   return api.get(`/v2.0/endpoints/${endpointId}`);
@@ -153,7 +161,8 @@ export async function manageEndpointTransformer(
     );
   }
 
-  const next: Record<string, unknown> = { ...transformer, ...flagChanges };
+  // Only what changes is sent; the platform keeps the rest (observed).
+  const patchBody: Record<string, unknown> = { ...flagChanges };
   if (hasCodeChange) {
     if (!data.backupTo) {
       return withHints(
@@ -167,20 +176,32 @@ export async function manageEndpointTransformer(
         },
       );
     }
-    next.transformer = newCode;
+    patchBody.transformer = newCode;
   }
 
   // Backup first, whenever one is asked for.
   let backup: Record<string, unknown> | undefined;
   if (data.backupTo) {
     try {
+      const overwrite = { overwrite: data.overwrite === true };
       const saved = await writeTextFile(
         data.backupTo,
         JSON.stringify({ endpointId: data.endpointId, transformer }, null, 2),
         undefined,
-        { overwrite: data.overwrite === true },
+        overwrite,
       );
-      backup = { path: saved.path, bytes: saved.bytes, sha256: saved.sha256 };
+      const code = await writeTextFile(
+        backupCodePath(data.backupTo),
+        String(transformer.transformer ?? ""),
+        undefined,
+        overwrite,
+      );
+      backup = {
+        path: saved.path,
+        bytes: saved.bytes,
+        sha256: saved.sha256,
+        codeFile: code.path,
+      };
     } catch (err) {
       return {
         error: `Backup not written, nothing was changed: ${fileMessage(err)}`,
@@ -191,7 +212,7 @@ export async function manageEndpointTransformer(
 
   try {
     await api.patch(`/v2.0/endpoints/${data.endpointId}`, {
-      transformer: next,
+      transformer: patchBody,
     });
   } catch (err: any) {
     // Verified live on the EU trial: a refused compile (400) still stores the
@@ -220,10 +241,10 @@ export async function manageEndpointTransformer(
       {
         warning: rolledBack
           ? undefined
-          : "The platform stores refused code anyway and the automatic rollback failed. Restore the backup file now: update_transformer with the backup's transformer block as codeFromFile.",
+          : `The platform stores refused code anyway and the automatic rollback failed. Restore now: update_transformer with codeFromFile set to the backup's code file${backup ? ` (${backup.codeFile})` : ""}, and the earlier switches from the backup JSON.`,
         action: rolledBack
           ? "The previous transformer was put back and checked. Fix the code and try again."
-          : "Restore the backup file now.",
+          : "Restore the backup now.",
       },
     );
   }
@@ -234,7 +255,7 @@ export async function manageEndpointTransformer(
     if (after?.[flag] !== flagChanges[flag]) mismatches.push(flag);
   }
   if (hasCodeChange) {
-    if (after?.transformer !== next.transformer) mismatches.push("transformer");
+    if (after?.transformer !== newCode) mismatches.push("transformer");
   }
   // What the endpoint will run is the platform's own transpiled output.
   const executedProblem = hasCodeChange
@@ -256,11 +277,11 @@ export async function manageEndpointTransformer(
   };
   return withHints(result, {
     warning: executedProblem
-      ? `The code the platform will run does not parse (${executedProblem}). Restore the backup now.`
+      ? `The code the platform will run does not parse (${executedProblem}). Restore the backup now (codeFromFile: the backup's code file).`
       : mismatches.length
         ? "The platform returned different values than were sent; compare before and after."
         : undefined,
     action:
-      "Test the endpoint with talk_to_agent. To undo, update again with the backup file's transformer block as codeFromFile and the earlier switches.",
+      "Test the endpoint with talk_to_agent. To undo, update again with codeFromFile set to the backup's code file and the earlier switches (see the backup JSON).",
   });
 }
