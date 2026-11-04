@@ -125,6 +125,22 @@ describe("manage_endpoint_settings call events", () => {
     }
   });
 
+  it("warns that a flow on noAnswer or recognizedDtmf is unconfirmed, but sends it", async () => {
+    const r = await run({
+      operation: "update_call_events",
+      endpointId: ENDPOINT,
+      events: { noAnswer: { enabled: true, flowId: FLOW } },
+    });
+    expect(r.verified).toBe(true);
+    expect(r._hints.warning).toMatch(/noAnswer: .*not confirmed/);
+    const quiet = await run({
+      operation: "update_call_events",
+      endpointId: ENDPOINT,
+      events: { callFailed: { enabled: true } },
+    });
+    expect(quiet._hints.warning).toBeUndefined();
+  });
+
   it("refuses to switch on an event that has no flow", async () => {
     const r = await run({
       operation: "update_call_events",

@@ -179,19 +179,38 @@ export async function manageEndpointTransformer(
     patchBody.transformer = newCode;
   }
 
-  // Backup first, whenever one is asked for.
+  // Backup first, whenever one is asked for. The pair is always x.json and
+  // x.code.js, so two different names can never share a code file.
   let backup: Record<string, unknown> | undefined;
   if (data.backupTo) {
+    if (!/\.json$/i.test(data.backupTo)) {
+      return withHints(
+        { error: "backupTo must end in .json.", field: "backupTo" },
+        {
+          action:
+            "The JSON block goes to that file and the plain code to the .code.js file next to it, for example transformer-backup.json.",
+        },
+      );
+    }
+    const overwrite = { overwrite: data.overwrite === true };
+    const codePath = backupCodePath(data.backupTo);
+    let saved;
     try {
-      const overwrite = { overwrite: data.overwrite === true };
-      const saved = await writeTextFile(
+      saved = await writeTextFile(
         data.backupTo,
         JSON.stringify({ endpointId: data.endpointId, transformer }, null, 2),
         undefined,
         overwrite,
       );
+    } catch (err) {
+      return {
+        error: `Backup not written, nothing was changed: ${fileMessage(err)}`,
+        field: "backupTo",
+      };
+    }
+    try {
       const code = await writeTextFile(
-        backupCodePath(data.backupTo),
+        codePath,
         String(transformer.transformer ?? ""),
         undefined,
         overwrite,
@@ -204,7 +223,7 @@ export async function manageEndpointTransformer(
       };
     } catch (err) {
       return {
-        error: `Backup not written, nothing was changed: ${fileMessage(err)}`,
+        error: `Backup incomplete: ${saved.path} was written, but the code file ${codePath} was not (${fileMessage(err)}). The endpoint was not changed.`,
         field: "backupTo",
       };
     }
@@ -219,15 +238,26 @@ export async function manageEndpointTransformer(
     // refused source and leaves the executed code empty. Put the previous
     // block back so the endpoint is not left broken.
     const refusal = String(err?.message ?? err);
+    // A code change gets the whole previous block back. A switch-only change
+    // gets only its own switches back: resending the code could overwrite an
+    // edit someone made in the meantime.
+    const restore: Record<string, unknown> = hasCodeChange
+      ? transformer
+      : Object.fromEntries(
+          Object.keys(flagChanges).map((flag) => [flag, transformer[flag]]),
+        );
     let rolledBack = false;
     try {
       await api.patch(`/v2.0/endpoints/${data.endpointId}`, {
-        transformer,
+        transformer: restore,
       });
       const now: any = (await readEndpoint(api, data.endpointId))?.transformer;
-      rolledBack =
-        now?.transformer === transformer.transformer &&
-        now?.transpiledTransformer === transformer.transpiledTransformer;
+      rolledBack = hasCodeChange
+        ? now?.transformer === transformer.transformer &&
+          now?.transpiledTransformer === transformer.transpiledTransformer
+        : Object.keys(flagChanges).every(
+            (flag) => now?.[flag] === transformer[flag],
+          );
     } catch {
       rolledBack = false;
     }
@@ -241,10 +271,12 @@ export async function manageEndpointTransformer(
       {
         warning: rolledBack
           ? undefined
-          : `The platform stores refused code anyway and the automatic rollback failed. Restore now: update_transformer with codeFromFile set to the backup's code file${backup ? ` (${backup.codeFile})` : ""}, and the earlier switches from the backup JSON.`,
+          : hasCodeChange
+            ? `The platform stores refused code anyway and the automatic rollback failed. Restore now: update_transformer with codeFromFile set to the backup's code file${backup ? ` (${backup.codeFile})` : ""}, and the earlier switches from the backup JSON.`
+            : "The change was refused and putting the earlier switches back failed. Read the endpoint with get_transformer and set the switches again.",
         action: rolledBack
-          ? "The previous transformer was put back and checked. Fix the code and try again."
-          : "Restore the backup now.",
+          ? "The previous settings were put back and checked. Fix the change and try again."
+          : "Restore the previous settings now.",
       },
     );
   }

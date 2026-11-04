@@ -202,14 +202,50 @@ describe("manage_endpoint_settings transformer", () => {
     expect(stored.transformer.transpiledTransformer).toBe(CODE);
   });
 
-  it("names the backup code file next to a backup without .json too", async () => {
-    await run({
+  it("requires backupTo to end in .json, so two names never share a code file", async () => {
+    const r: any = await run({
       operation: "update",
       endpointId: ENDPOINT,
       code: "x = 1;",
       backupTo: "saved",
     });
-    expect(fs.existsSync(path.join(dir, "saved.code.js"))).toBe(true);
+    expect(r.error).toMatch(/must end in \.json/);
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(dir, "saved.code.js"))).toBe(false);
+  });
+
+  it("says the backup is incomplete when the code file fails after the JSON was written", async () => {
+    fs.writeFileSync(path.join(dir, "saved.code.js"), "already here");
+    const r: any = await run({
+      operation: "update",
+      endpointId: ENDPOINT,
+      code: "x = 1;",
+      backupTo: "saved.json",
+    });
+    expect(r.error).toMatch(/Backup incomplete/);
+    expect(r.error).toContain("saved.json was written");
+    expect(r.error).toMatch(/endpoint was not changed/);
+    expect(fs.existsSync(path.join(dir, "saved.json"))).toBe(true);
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it("rolls a refused switch-only change back with the switches only, never the code", async () => {
+    let calls = 0;
+    api.patch.mockImplementation(async (_path: string, body: any) => {
+      calls += 1;
+      if (calls === 1) throw new Error("refused");
+      stored.transformer = { ...stored.transformer, ...body.transformer };
+      return {};
+    });
+    const r: any = await run({
+      operation: "update",
+      endpointId: ENDPOINT,
+      inputTransformerEnabled: true,
+    });
+    expect(r.rolledBack).toBe(true);
+    expect(api.patch.mock.calls[1][1]).toEqual({
+      transformer: { inputTransformerEnabled: false },
+    });
   });
 
   it("reports a mismatch when the platform keeps other values", async () => {

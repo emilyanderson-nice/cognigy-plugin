@@ -74,6 +74,7 @@ export async function manageCallEvents(api: Api, data: any): Promise<any> {
 
   // ---- update ----
   const changes: Record<string, any> = {};
+  const notes: string[] = [];
   for (const event of CALL_EVENTS) {
     const given = data.events?.[event];
     if (!given) continue;
@@ -89,6 +90,11 @@ export async function manageCallEvents(api: Api, data: any): Promise<any> {
       );
     }
     if (next.flowId !== undefined) next.action = "executeFlow";
+    if (!FLOW_EVENTS.has(event) && given.flowId !== undefined) {
+      notes.push(
+        `${event}: the platform accepted a flow for this event, but what it does with it is not confirmed; check it in a real call.`,
+      );
+    }
     changes[event] = next;
   }
   if (Object.keys(changes).length === 0) {
@@ -160,6 +166,7 @@ export async function manageCallEvents(api: Api, data: any): Promise<any> {
       ...(backup ? { backup } : {}),
     },
     {
+      warning: notes.length ? notes.join(" ") : undefined,
       action:
         "Endpoint settings are not in a snapshot. To undo, update again with the values under before.",
     },
