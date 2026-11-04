@@ -496,6 +496,35 @@ export const manageEndpointsSchema = z.discriminatedUnion("operation", [
     backupTo: z.string().min(1).optional(),
     overwrite: z.boolean().optional(),
   }),
+  z.object({
+    operation: z.literal("get_call_events"),
+    endpointId: idSchema,
+  }),
+  z.object({
+    operation: z.literal("update_call_events"),
+    endpointId: idSchema,
+    events: z.object(
+      Object.fromEntries(
+        [
+          "callCompleted",
+          "callFailed",
+          "userInputTimeout",
+          "noAnswer",
+          "recognizedDtmf",
+        ].map((name) => [
+          name,
+          z
+            .object({
+              enabled: z.boolean().optional(),
+              flowId: z.string().uuid().optional(),
+            })
+            .optional(),
+        ]),
+      ) as Record<string, z.ZodOptional<z.ZodObject<any>>>,
+    ),
+    backupTo: z.string().min(1).optional(),
+    overwrite: z.boolean().optional(),
+  }),
 ]);
 
 export const deleteResourceSchema = z

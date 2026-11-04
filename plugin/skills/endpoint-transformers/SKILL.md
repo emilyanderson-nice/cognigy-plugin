@@ -1,6 +1,6 @@
 ---
 name: endpoint-transformers
-description: "Use when reading or changing the transformer of a Cognigy Endpoint: switching the input, output, final ping, notify or inject transformer on or off, setting abortOnError, or replacing the transformer code."
+description: "Use when reading or changing the transformer of a Cognigy Endpoint (switching the input, output, final ping, notify or inject transformer on or off, abortOnError, the transformer code) or the voice call events of an endpoint (which flow runs on call completed, call failed, no input, no answer, DTMF)."
 ---
 
 # Endpoint Transformers
@@ -24,3 +24,7 @@ Transformers are code on an Endpoint that changes what comes in and what goes ou
 - A handler that compiles can still behave badly (for example swallow every answer), so test after each change.
 - A switch that is off keeps its code; it just does not run.
 - Works on any endpoint whose read result carries a transformer block (checked: REST, Webchat v3, Voice Gateway). Other channels: read with `get_transformer` first, an endpoint without a transformer block is reported as such.
+
+## Call events (voice endpoints)
+
+`get_call_events` returns the configured events; `update_call_events { events: { callCompleted: { enabled: true, flowId: "<flow referenceId UUID>" } } }` changes only the events you name, all other events and settings stay. An event can only be switched on when it has a flow. Events: `callCompleted`, `callFailed`, `userInputTimeout`, `noAnswer`, `recognizedDtmf`. Pass `backupTo` to write the current events to a file first; endpoint settings are not in a snapshot. The update is read back (`verified`).
