@@ -23,6 +23,8 @@ Transformers are code on an Endpoint that changes what comes in and what goes ou
 - **The platform compiles on save.** You send the source (JavaScript or TypeScript). The platform type-checks and transpiles it itself and stores the executed code. A type error or a handler that returns the wrong shape comes back as an error. The platform stores the refused source anyway and leaves the executed code empty (checked on the EU trial), so the tool puts the previous block back and checks it (`rolledBack`); if that fails it warns, and you restore the backup file at once. The tool also checks that the stored executed code parses.
 - A handler that compiles can still behave badly (for example swallow every answer), so test after each change.
 - A switch that is off keeps its code; it just does not run.
+- Which switch runs which handler (checked end to end on a REST endpoint): `handleExecutionFinished` runs with `finalPingTransformerEnabled`, not with `outputTransformerEnabled`. An edit to a handler whose switch is off has no effect, so read the answer of `talk_to_agent` or a real request after switching.
+- Call events exist only on voice endpoints. On REST and Webchat the platform refuses `update_call_events` ("callEvents does not exist for channel ...") and the tool reports that as an error.
 - Works on any endpoint whose read result carries a transformer block (checked: REST, Webchat v3, Voice Gateway). Other channels: read with `get_transformer` first, an endpoint without a transformer block is reported as such.
 
 ## Call events (voice endpoints)
