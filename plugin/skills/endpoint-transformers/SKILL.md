@@ -20,7 +20,7 @@ Transformers are code on an Endpoint that changes what comes in and what goes ou
 ## Rules that matter
 
 - **Endpoints are not in a snapshot.** A code change therefore needs `backupTo`; the tool writes the current transformer block there first and refuses without it. To undo, send the code from that file again with the earlier switches.
-- **The platform transpiles on save.** You send the source; the platform stores the executed code itself (checked on the EU trial: comments are dropped). The tool checks locally that the code parses as plain JavaScript and refuses otherwise. Code with type annotations needs `transpiledCode` (the type-free version), which is then checked instead and sent along.
-- The code is only syntax-checked (never run), and after the save the platform's own executed code is checked too; a warning says so if it does not parse. A wrong `handleOutput` that returns nothing can swallow every answer, so test after each change.
+- **The platform compiles on save.** You send the source (JavaScript or TypeScript). The platform type-checks and transpiles it itself and stores the executed code. A type error or a handler that returns the wrong shape comes back as an error. The platform stores the refused source anyway and leaves the executed code empty (checked on the EU trial), so the tool puts the previous block back and checks it (`rolledBack`); if that fails it warns, and you restore the backup file at once. The tool also checks that the stored executed code parses.
+- A handler that compiles can still behave badly (for example swallow every answer), so test after each change.
 - A switch that is off keeps its code; it just does not run.
-- A different channel can reject fields it does not know. Read with `get_transformer` first.
+- Works on any endpoint whose read result carries a transformer block (checked: REST, Webchat v3, Voice Gateway). Other channels: read with `get_transformer` first, an endpoint without a transformer block is reported as such.

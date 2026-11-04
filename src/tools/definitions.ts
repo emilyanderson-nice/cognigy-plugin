@@ -1230,7 +1230,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "manage_endpoints",
     description:
-      "Change settings of an existing Endpoint (any channel with a transformer). Operations: get_transformer (switches per transformer, abortOnError, code size and hash; saveCodeTo writes the code to a file instead of returning it), update_transformer (set switches and/or replace the code from code or codeFromFile; the code is syntax-checked locally, backupTo is required when code changes because endpoints are not in a snapshot, then the endpoint is read back and verified is reported). Does not create or delete endpoints: use manage_flows, manage_webchat, manage_voice_gateway and delete_resource.",
+      "Change settings of an existing Endpoint (any channel with a transformer). Operations: get_transformer (switches per transformer, abortOnError, code size and hash; saveCodeTo writes the code to a file instead of returning it), update_transformer (set switches and/or replace the code from code or codeFromFile; the platform compiles it, backupTo is required when code changes because endpoints are not in a snapshot, then the endpoint is read back and verified is reported). Does not create or delete endpoints: use manage_flows, manage_webchat, manage_voice_gateway and delete_resource.",
     annotations: {
       title: "Manage Endpoints",
       readOnlyHint: false,
@@ -1259,17 +1259,12 @@ export const tools: ToolDefinition[] = [
         code: {
           type: "string",
           description:
-            "update_transformer: new transformer code, plain JavaScript (createRestTransformer({...})). Also the executed code unless transpiledCode is given.",
+            "update_transformer: new transformer code, JavaScript or TypeScript (createRestTransformer({...})); the platform compiles and type-checks it.",
         },
         codeFromFile: {
           type: "string",
           description:
             "update_transformer: file with the new code, instead of code.",
-        },
-        transpiledCode: {
-          type: "string",
-          description:
-            "update_transformer: the executed, type-free code if it differs from code.",
         },
         backupTo: {
           type: "string",

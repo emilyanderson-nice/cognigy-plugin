@@ -4,8 +4,9 @@
  *
  * Endpoints are NOT part of a snapshot, so a change to the code needs a backup
  * file first (`backupTo`); the tool refuses to change code without one. The
- * code is syntax-checked locally before anything is sent, the change is read
- * back afterwards and compared.
+ * platform compiles the code itself on save (TypeScript with type check, so
+ * typed code is fine and a type error comes back as a 400, nothing stored);
+ * the change is read back afterwards and compared.
  */
 import vm from "node:vm";
 import { withHints } from "./filters.js";
@@ -166,23 +167,7 @@ export async function manageEndpointTransformer(
         },
       );
     }
-    // The platform transpiles `transformer` itself on save (verified live on
-    // the EU trial: comments and typings are dropped), so transpiledCode is
-    // only sent when the caller gives one; the local check covers what runs.
-    const problem = syntaxError(data.transpiledCode ?? newCode!);
-    if (problem) {
-      return withHints(
-        { error: `The code does not parse: ${problem}`, field: "code" },
-        {
-          action:
-            "Nothing was sent. The platform runs the transpiled code, so write plain JavaScript without type annotations or pass transpiledCode.",
-        },
-      );
-    }
     next.transformer = newCode;
-    if (data.transpiledCode !== undefined) {
-      next.transpiledTransformer = data.transpiledCode;
-    }
   }
 
   // Backup first, whenever one is asked for.
@@ -204,7 +189,44 @@ export async function manageEndpointTransformer(
     }
   }
 
-  await api.patch(`/v2.0/endpoints/${data.endpointId}`, { transformer: next });
+  try {
+    await api.patch(`/v2.0/endpoints/${data.endpointId}`, {
+      transformer: next,
+    });
+  } catch (err: any) {
+    // Verified live on the EU trial: a refused compile (400) still stores the
+    // refused source and leaves the executed code empty. Put the previous
+    // block back so the endpoint is not left broken.
+    const refusal = String(err?.message ?? err);
+    let rolledBack = false;
+    try {
+      await api.patch(`/v2.0/endpoints/${data.endpointId}`, {
+        transformer,
+      });
+      const now: any = (await readEndpoint(api, data.endpointId))?.transformer;
+      rolledBack =
+        now?.transformer === transformer.transformer &&
+        now?.transpiledTransformer === transformer.transpiledTransformer;
+    } catch {
+      rolledBack = false;
+    }
+    return withHints(
+      {
+        error: `The platform refused the change: ${refusal}`,
+        changed: false,
+        rolledBack,
+        ...(backup ? { backup } : {}),
+      },
+      {
+        warning: rolledBack
+          ? undefined
+          : "The platform stores refused code anyway and the automatic rollback failed. Restore the backup file now: update_transformer with the backup's transformer block as codeFromFile.",
+        action: rolledBack
+          ? "The previous transformer was put back and checked. Fix the code and try again."
+          : "Restore the backup file now.",
+      },
+    );
+  }
 
   const after: any = (await readEndpoint(api, data.endpointId))?.transformer;
   const mismatches: string[] = [];
@@ -213,12 +235,6 @@ export async function manageEndpointTransformer(
   }
   if (hasCodeChange) {
     if (after?.transformer !== next.transformer) mismatches.push("transformer");
-    if (
-      data.transpiledCode !== undefined &&
-      after?.transpiledTransformer !== data.transpiledCode
-    ) {
-      mismatches.push("transpiledTransformer");
-    }
   }
   // What the endpoint will run is the platform's own transpiled output.
   const executedProblem = hasCodeChange

@@ -493,7 +493,6 @@ export const manageEndpointsSchema = z.discriminatedUnion("operation", [
     injectTransformerEnabled: z.boolean().optional(),
     code: z.string().min(1).optional(),
     codeFromFile: z.string().min(1).optional(),
-    transpiledCode: z.string().min(1).optional(),
     backupTo: z.string().min(1).optional(),
     overwrite: z.boolean().optional(),
   }),

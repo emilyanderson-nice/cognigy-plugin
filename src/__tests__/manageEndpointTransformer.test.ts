@@ -94,16 +94,45 @@ describe("manage_endpoint_transformer", () => {
     expect(api.patch).not.toHaveBeenCalled();
   });
 
-  it("refuses code that does not parse, sends nothing and writes no backup", async () => {
+  it("puts the previous block back when the platform refuses (it stores refused code anyway)", async () => {
+    api.patch.mockImplementation(async (_path: string, body: any) => {
+      stored = { ...stored, ...body };
+      if (body.transformer.transformer.includes("BROKEN")) {
+        stored.transformer = {
+          ...stored.transformer,
+          transpiledTransformer: "",
+        };
+        throw new Error("Failed to compile the transformer code");
+      }
+      return {};
+    });
     const r: any = await run({
       operation: "update",
       endpointId: ENDPOINT,
-      code: "createRestTransformer({ handleOutput: ",
+      code: "BROKEN",
       backupTo: "backup.json",
     });
-    expect(r.error).toMatch(/does not parse/);
-    expect(api.patch).not.toHaveBeenCalled();
-    expect(fs.existsSync(path.join(dir, "backup.json"))).toBe(false);
+    expect(r.error).toMatch(/platform refused/);
+    expect(r.changed).toBe(false);
+    expect(r.rolledBack).toBe(true);
+    expect(r.backup.path).toBe("backup.json");
+    expect(stored.transformer.transformer).toBe(CODE);
+    expect(stored.transformer.transpiledTransformer).toBe(CODE);
+    expect(api.patch).toHaveBeenCalledTimes(2);
+  });
+
+  it("warns loudly when the rollback fails too", async () => {
+    api.patch.mockImplementation(async () => {
+      throw new Error("down");
+    });
+    const r: any = await run({
+      operation: "update",
+      endpointId: ENDPOINT,
+      code: "x = 1;",
+      backupTo: "backup.json",
+    });
+    expect(r.rolledBack).toBe(false);
+    expect(r._hints.warning).toMatch(/Restore the backup/);
   });
 
   it("writes the backup first, then changes the code and keeps the other fields", async () => {
@@ -123,7 +152,7 @@ describe("manage_endpoint_transformer", () => {
     expect(backup.transformer.transformer).toBe(CODE);
     const sent = (api.patch.mock.calls[0][1] as any).transformer;
     expect(sent.transformer).toBe(newCode);
-    expect(sent.transpiledTransformer).toBe(CODE); // not sent: the platform transpiles itself
+    expect(sent.transpiledTransformer).toBe(CODE); // not sent: the platform compiles itself
     expect(sent.abortOnError).toBe(false);
     expect(sent.outputTransformerEnabled).toBe(true);
     expect(r.verified).toBe(true);
