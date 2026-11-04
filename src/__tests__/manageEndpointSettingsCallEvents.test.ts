@@ -5,7 +5,7 @@ const ENDPOINT = "60d5ec49f1a2c8b1a4e0f003";
 const FLOW = "6d1f1d02-a5fb-49f2-8b6e-7246c2456097";
 const OTHER_FLOW = "8d1f1d02-a5fb-49f2-8b6e-7246c2456099";
 
-describe("manage_endpoints call events", () => {
+describe("manage_endpoint_settings call events", () => {
   let stored: any;
   let api: {
     get: jest.Mock<any>;
@@ -57,7 +57,7 @@ describe("manage_endpoints call events", () => {
   });
 
   const run = async (args: any) => {
-    const r: any = await h.handleToolCall("manage_endpoints", args);
+    const r: any = await h.handleToolCall("manage_endpoint_settings", args);
     return r?.content ? JSON.parse(r.content[0].text) : r;
   };
 

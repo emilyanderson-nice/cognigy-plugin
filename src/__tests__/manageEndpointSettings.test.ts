@@ -196,13 +196,13 @@ describe("manage_endpoint_transformer", () => {
     expect(api.patch).not.toHaveBeenCalled();
   });
 
-  it("is reachable as manage_endpoints", async () => {
+  it("is reachable as manage_endpoint_settings", async () => {
     const h = new ToolHandlers(
       api as any,
       "https://endpoint-trial.cognigy.ai",
       "https://webchat-trial.cognigy.ai",
     );
-    const r: any = await h.handleToolCall("manage_endpoints", {
+    const r: any = await h.handleToolCall("manage_endpoint_settings", {
       operation: "update_transformer",
       endpointId: ENDPOINT,
       inputTransformerEnabled: true,

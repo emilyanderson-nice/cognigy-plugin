@@ -9106,8 +9106,8 @@ export class ToolHandlers {
         case "manage_webchat":
           result = await this.handleManageWebchat(args);
           break;
-        case "manage_endpoints": {
-          const data = schemas.manageEndpointsSchema.parse(args);
+        case "manage_endpoint_settings": {
+          const data = schemas.manageEndpointSettingsSchema.parse(args);
           if (data.operation === "get_call_events") {
             result = await manageCallEvents(this.apiClient, {
               ...data,

@@ -1174,10 +1174,10 @@
       }
     },
     {
-      "name": "manage_endpoints",
+      "name": "manage_endpoint_settings",
       "description": "Change settings of an existing Endpoint (any channel with a transformer). Operations: get_transformer (switches per transformer, abortOnError, code size and hash; saveCodeTo writes the code to a file instead of returning it), update_transformer (set switches and/or replace the code from code or codeFromFile; the platform compiles it, backupTo is required when code changes because endpoints are not in a snapshot, then the endpoint is read back and verified is reported), get_call_events and update_call_events (voice call events: callCompleted, callFailed, userInputTimeout, noAnswer, recognizedDtmf; each with enabled and the flow to run). Does not create or delete endpoints: use manage_flows, manage_webchat, manage_voice_gateway and delete_resource.",
       "annotations": {
-        "title": "Manage Endpoints",
+        "title": "Manage Endpoint Settings",
         "readOnlyHint": false,
         "destructiveHint": false,
         "idempotentHint": true,

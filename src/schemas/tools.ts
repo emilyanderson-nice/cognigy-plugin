@@ -475,7 +475,7 @@ export const manageFlowsSchema = z.discriminatedUnion("operation", [
  * Settings of existing endpoints. Today: the transformer (switches and code).
  * Creating an endpoint stays with manage_flows / manage_webchat / manage_voice_gateway.
  */
-export const manageEndpointsSchema = z.discriminatedUnion("operation", [
+export const manageEndpointSettingsSchema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("get_transformer"),
     endpointId: idSchema,

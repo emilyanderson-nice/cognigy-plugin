@@ -1,5 +1,5 @@
 /**
- * manage_endpoints get_call_events / update_call_events: the voice call events
+ * manage_endpoint_settings get_call_events / update_call_events: the voice call events
  * of an endpoint (`settings.callEvents`): which flow runs when a call
  * completes, fails, times out and so on.
  *
