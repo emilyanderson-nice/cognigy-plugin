@@ -1,6 +1,6 @@
 ---
 name: voice-gateway-setup
-description: "Use when the user wants to set up a voice agent or a Voice Gateway endpoint with WebRTC for browser-based voice interaction."
+description: "Use when the user wants to set up a voice agent or a Voice Gateway endpoint with WebRTC for browser-based voice interaction, or to look at recent Voice Gateway calls and one call's timing (time to first audio, text-to-speech and speech-to-text latency)."
 ---
 
 # Voice Gateway Setup Guide
@@ -92,3 +92,14 @@ Copy the `embeddingSnippet` from the response into your HTML page. It loads the 
 2. `setup_llm` → configure LLM for the project
 3. `manage_voice_gateway { projectId, flowId }` → get `webrtcDemoUrl`
 4. Share the URL with the user
+
+## Reading Calls and Their Timing
+
+For "how did that call go" questions (slow first reply, latency, which voice or model ran), read the Voice Gateway itself. It is read-only and separate from the Cognigy.AI key:
+
+1. `list_resources { resourceType: "voice_call", days }` lists recent calls (at most 30 days). Narrow with `direction`, `answered` or `sipCallId` (the SIP Call-ID your own logs carry; a call row names no Cognigy project or session, so that id or the start time is how you match a call). Each row has a `traceId`.
+2. `get_resource { resourceType: "voice_call", id: <traceId> }` returns the timing: per spoken reply the text-to-speech time to first byte, duration, vendor, model and voice; per listening turn the speech-to-text vendor and model; the connection times; and `bargeIn`. It never returns the caller's words, numbers or request bodies.
+
+Report what the numbers show. `bargeIn.observed: false` means no barge-in span appeared in this trace, which is not proof it did not happen, so say it that way. Traces are kept for about 14 days.
+
+If the answer is "Voice Gateway is not configured for this environment", the environment's profile has no Voice Gateway URL and account API key. Do not ask for the key in chat. Give the user the command from the hint (`cognigy-setup profile add ... --voice-gateway-url <https URL> --voice-gateway-key-env <VAR>`), where the key comes from an environment variable or a hidden prompt.

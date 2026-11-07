@@ -32,6 +32,8 @@ const STRING_FIELDS = [
   "webchatBaseUrl",
   "staticFilesBaseUrl",
   "versionHint",
+  "voiceGatewayBaseUrl",
+  "voiceGatewayApiKey",
 ] as const;
 
 /** Only the known string fields, trimmed; apiBaseUrl loses one trailing slash. */
@@ -46,7 +48,9 @@ function cleanProfile(name: string, profile: RawFileProfile): RawFileProfile {
       );
     }
     let trimmed = value.trim();
-    if (key === "apiBaseUrl") trimmed = trimmed.replace(/\/$/, "");
+    if (key === "apiBaseUrl" || key === "voiceGatewayBaseUrl") {
+      trimmed = trimmed.replace(/\/$/, "");
+    }
     if (trimmed !== "" || key === "apiBaseUrl" || key === "apiKey") {
       out[key] = trimmed;
     }

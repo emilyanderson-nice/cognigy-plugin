@@ -18,6 +18,9 @@ export interface RawFileProfile {
   webchatBaseUrl?: string;
   staticFilesBaseUrl?: string;
   versionHint?: string;
+  /** Voice Gateway REST API of this environment; both fields or neither. */
+  voiceGatewayBaseUrl?: string;
+  voiceGatewayApiKey?: string;
 }
 
 export interface ProfileProblem {
@@ -37,6 +40,8 @@ const OPTIONAL_KEYS = [
   "webchatBaseUrl",
   "staticFilesBaseUrl",
   "versionHint",
+  "voiceGatewayBaseUrl",
+  "voiceGatewayApiKey",
 ] as const;
 
 const RESERVED_NAMES = RESERVED_KEYS;

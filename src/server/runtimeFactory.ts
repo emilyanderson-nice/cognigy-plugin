@@ -6,6 +6,7 @@
 import { CognigyApiClient } from "../api/client.js";
 import { ToolHandlers } from "../tools/handlers.js";
 import { logProxyConfiguration } from "../utils/proxy.js";
+import { VoiceGatewayClient } from "../voicegateway/client.js";
 import type { Profile } from "../profiles/profiles.js";
 import type { EnvironmentRuntime } from "../environments/registry.js";
 
@@ -21,7 +22,12 @@ export interface RuntimeFactoryDeps {
     endpointBaseUrl: string,
     webchatBaseUrl: string,
     staticFilesBaseUrl: string,
+    voiceGateway?: VoiceGatewayClient,
   ) => EnvironmentRuntime["handlers"];
+  createVoiceGatewayClient?: (config: {
+    baseUrl: string;
+    apiKey: string;
+  }) => VoiceGatewayClient;
   logProxy?: (apiBaseUrl: string) => void;
 }
 
@@ -32,13 +38,23 @@ export function createRuntimeFactory(
     deps.createClient ?? ((config) => new CognigyApiClient(config));
   const createHandlers =
     deps.createHandlers ??
-    ((client, endpoint, webchat, staticFiles) =>
+    ((
+      client,
+      endpoint,
+      webchat,
+      staticFiles,
+      voiceGateway?: VoiceGatewayClient,
+    ) =>
       new ToolHandlers(
         client as CognigyApiClient,
         endpoint,
         webchat,
         staticFiles,
+        voiceGateway,
       ));
+  const createVoiceGatewayClient =
+    deps.createVoiceGatewayClient ??
+    ((config) => new VoiceGatewayClient(config));
   const logProxy = deps.logProxy ?? logProxyConfiguration;
   const loggedHosts = new Set<string>();
 
@@ -52,12 +68,24 @@ export function createRuntimeFactory(
       apiKey: profile.apiKey,
       auditAttribution: deps.auditAttribution,
     });
-    const handlers = createHandlers(
+    const urls = [
       client,
       profile.endpointBaseUrl,
       profile.webchatBaseUrl,
       profile.staticFilesBaseUrl,
-    );
+    ] as const;
+    // Only an environment with Voice Gateway credentials gets a client; the
+    // others call createHandlers exactly as before.
+    const handlers =
+      profile.voiceGatewayBaseUrl && profile.voiceGatewayApiKey
+        ? createHandlers(
+            ...urls,
+            createVoiceGatewayClient({
+              baseUrl: profile.voiceGatewayBaseUrl,
+              apiKey: profile.voiceGatewayApiKey,
+            }),
+          )
+        : createHandlers(...urls);
     return { profile, client, handlers };
   };
 }

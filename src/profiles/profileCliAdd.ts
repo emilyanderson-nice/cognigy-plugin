@@ -19,6 +19,8 @@ const VALUE_FLAGS = [
   "--webchat-base-url",
   "--static-files-base-url",
   "--version-hint",
+  "--voice-gateway-url",
+  "--voice-gateway-key-env",
 ] as const;
 
 class AddFailure extends Error {}
@@ -72,6 +74,35 @@ async function resolveKey(
   return typed;
 }
 
+/**
+ * The Voice Gateway key: the named variable, or a hidden prompt when interactive.
+ * There is deliberately no --voice-gateway-key flag: a key on the command line
+ * lands in shell history.
+ */
+async function resolveVoiceGatewayKey(
+  args: ParsedArgs,
+  deps: ProfileCliDeps,
+): Promise<string> {
+  const envVar = args.values["--voice-gateway-key-env"];
+  if (envVar !== undefined) {
+    const value = deps.env[envVar]?.trim();
+    if (!value) {
+      throw new AddFailure(
+        `Environment variable ${envVar} is not set or is empty.`,
+      );
+    }
+    return value;
+  }
+  if (!deps.isTTY) {
+    throw new AddFailure(
+      "No Voice Gateway API key given: pass --voice-gateway-key-env <VAR> (or run interactively to be prompted).",
+    );
+  }
+  const typed = (await deps.askHidden("Voice Gateway API key: ")).trim();
+  if (!typed) throw new AddFailure("A Voice Gateway API key is required.");
+  return typed;
+}
+
 async function resolveUrl(
   args: ParsedArgs,
   deps: ProfileCliDeps,
@@ -102,6 +133,15 @@ async function add(args: ParsedArgs, deps: ProfileCliDeps): Promise<number> {
   if (existing && !force) throw new AddFailure(refusal(name, existing.source));
   const apiBaseUrl = await resolveUrl(args, deps);
   const apiKey = await resolveKey(args, deps);
+  const voiceGatewayBaseUrl = optional(args, "--voice-gateway-url");
+  if (!voiceGatewayBaseUrl && args.values["--voice-gateway-key-env"]) {
+    throw new AddFailure(
+      "--voice-gateway-key-env needs --voice-gateway-url (the key and the URL are set together).",
+    );
+  }
+  const voiceGatewayApiKey = voiceGatewayBaseUrl
+    ? await resolveVoiceGatewayKey(args, deps)
+    : undefined;
   const fields = {
     apiBaseUrl,
     apiKey,
@@ -109,6 +149,8 @@ async function add(args: ParsedArgs, deps: ProfileCliDeps): Promise<number> {
     webchatBaseUrl: optional(args, "--webchat-base-url"),
     staticFilesBaseUrl: optional(args, "--static-files-base-url"),
     versionHint: optional(args, "--version-hint"),
+    voiceGatewayBaseUrl,
+    voiceGatewayApiKey,
   };
   const profile = Object.fromEntries(
     Object.entries(fields).filter(([, v]) => v !== undefined),
@@ -128,6 +170,11 @@ async function add(args: ParsedArgs, deps: ProfileCliDeps): Promise<number> {
   deps.out(
     `Saved profile "${name}" (${saved ? describeProfile(saved).apiHost : hostOf(apiBaseUrl)}).\n`,
   );
+  if (voiceGatewayBaseUrl) {
+    deps.out(
+      `Voice Gateway configured for "${name}" (${hostOf(voiceGatewayBaseUrl)}).\n`,
+    );
+  }
   const beforeCount = configuredCount(before);
   const afterCount = configuredCount(after);
   if (beforeCount === 1 && afterCount >= 2) {

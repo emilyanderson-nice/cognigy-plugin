@@ -201,6 +201,14 @@ You can keep several Cognigy environments on one machine — for example a class
 
 Profiles live in `~/.cognigy-plugin/config.json` (readable only by you). Re-running the installer keeps them. You can also define them with `COGNIGY_PROFILE_<NAME>_API_BASE_URL` and `_API_KEY` environment variables. See [docs/install/multiple-environments.md](docs/install/multiple-environments.md) for the details, file protection and troubleshooting.
 
+**Voice Gateway (optional, per environment).** Reading Voice Gateway calls and traces needs a second credential, the Voice Gateway REST API URL and an account API key (a different key from the Cognigy.AI one; create it in the Voice Gateway portal under Account settings, Account API keys). Add both to the profile, `https` only; the key comes from an environment variable or a hidden prompt, never from the command line:
+
+```
+profile add v4-staging --api-base-url https://staging-v4.cognigy.ai --api-key-env MY_V4_KEY --voice-gateway-url https://api-vg-example.cognigy.ai/v1 --voice-gateway-key-env MY_VG_KEY --force
+```
+
+`--force` replaces the saved profile, so give its Cognigy key again. The URL is the Voice Gateway portal host with an `api-` prefix and `/v1` (the portal page's own `API_BASE_URL`); a trailing `/v1` is optional. As environment variables: `COGNIGY_PROFILE_<NAME>_VOICE_GATEWAY_BASE_URL` and `_VOICE_GATEWAY_API_KEY`. Both or neither; the key is hidden like the Cognigy key. The URL must be a plain `https` URL: user names, passwords, a query or a fragment in it are refused. A profile whose name ends in `voice-gateway` cannot use the variable form (its `_API_KEY` would be read as the Voice Gateway key of the shorter name); save it with `profile add` instead.
+
 **Pin a session to one environment.** Instead of naming the environment on every call, ask the assistant to call `use_environment` once per task. It pins the session to that environment, and an explicit `environment` argument on a later call still overrides the pin. Call `use_environment` alone in its own turn, not alongside other tool calls. The pin is per session and held in memory. Pinning at launch with `COGNIGY_ENVIRONMENT` or the plugin's profile setting is a standing default for every session, so unset it when you move work between tenants.
 
 ### Audit attribution
@@ -399,6 +407,23 @@ project in one call and ignores paging and date parameters, so the plugin filter
 `endDate`, `channel`, `flowName`, `minMessages`, `contactIds`) and pages the list itself, newest
 first. Endpoint tokens, contact ids and message data values are never returned, and transcripts may
 still contain personal data. Details and evidence: `docs/platform-versions/README.md`.
+
+### 11. Read Voice Gateway calls and their timing
+
+```
+Find the call with SIP Call-ID abc123@sbc.example.test from the last 3 days and
+tell me how long the first spoken reply took to start.
+```
+
+This uses `list_resources` and `get_resource` with `resourceType: 'voice_call'` (read-only, needs the
+Voice Gateway credentials above). The list gives call timing, SIP status and termination reason plus
+a `traceId` per call; a call row names no Cognigy project or session, so match it by SIP Call-ID or
+start time. `sipCallId` is returned because it is the id your own logs carry; a SIP Call-ID can contain the carrier's host name or address. `get_resource` with the `traceId` returns timing only: per spoken reply the
+text-to-speech time to first byte, duration, vendor, model and voice, per listening turn the
+speech-to-text vendor and model, and connection times. The summary is built from named timing
+fields only; it does not read the caller's words, numbers or request bodies. `bargeIn` reports only whether a barge-in or voice-activity span
+appeared; when it says no, that is unobserved, not proven absent. Voice Gateway keeps traces for about
+14 days. Details and evidence: `docs/platform-versions/README.md` (V1-V9).
 
 ## Tools
 

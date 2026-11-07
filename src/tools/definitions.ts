@@ -324,7 +324,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "list_resources",
     description:
-      "List Cognigy resources of one type, paginated, with optional server-side sort. Types: project (no projectId needed), tool (takes aiAgentId, or flowId for an LLM Prompt flow, instead of projectId), audit_event (organisation-wide, no projectId; answers \"who changed what\" via actor and eventType; Cognigy 2026.17.0+), log (read-only project logs, typically about 24 hours deep: read the default summary first, then narrow with search, logLevel, flowName, startDate/endDate or sessionId; view 'entries' for lines, msgChars up to 4000; scrubbed best-effort, may still hold personal data; the troubleshooting skill has the recipe), conversation (newest first, metadata only; read one with get_resource), and the project-scoped agent, flow, endpoint, llm_model, knowledge_store, extension, function. Endpoints show hasToken, not the URL token (revealToken: true if needed). Packages and snapshots: manage_packages, manage_snapshots. For recency questions use sort (e.g. 'lastChanged:desc', small limit).",
+      "List Cognigy resources of one type, paginated, with optional server-side sort. Types: project (no projectId needed), tool (takes aiAgentId, or flowId for an LLM Prompt flow, instead of projectId), audit_event (organisation-wide, no projectId; who changed what, via actor and eventType; Cognigy 2026.17.0+), log (read-only project logs, typically about 24 hours deep: read the default summary first, then narrow; view 'entries' for lines, msgChars up to 4000; scrubbed best-effort, may still hold personal data; the troubleshooting skill has the recipe), conversation (newest first, metadata only), voice_call (Voice Gateway recent calls, no projectId; a row's traceId goes to get_resource), and the project-scoped agent, flow, endpoint, llm_model, knowledge_store, extension, function. Endpoints show hasToken, not the URL token (revealToken: true if needed). Packages and snapshots: manage_packages, manage_snapshots. For recency use sort ('lastChanged:desc', small limit).",
     annotations: {
       title: "List Resources",
       readOnlyHint: true,
@@ -350,13 +350,14 @@ export const tools: ToolDefinition[] = [
             "tool",
             "audit_event",
             "log",
+            "voice_call",
           ],
           description: "Type of resource to list",
         },
         projectId: {
           type: "string",
           description:
-            "24-char hex project ID. Required for all types except 'project', 'tool' and 'audit_event'.",
+            "24-char hex project ID. Required for all types except 'project', 'tool', 'audit_event' and 'voice_call'.",
         },
         aiAgentId: {
           type: "string",
@@ -481,6 +482,31 @@ export const tools: ToolDefinition[] = [
           description:
             "log only, view 'entries' — return messages with URL queries or JSON bodies instead of a safe template. Still scrubbed best-effort; may contain personal data.",
         },
+        days: {
+          type: "integer",
+          minimum: 1,
+          maximum: 30,
+          description:
+            "voice_call only — calls from the last N days (1-30). Not with startDate/endDate.",
+        },
+        direction: {
+          type: "string",
+          enum: ["inbound", "outbound"],
+          description:
+            "voice_call only — inbound or outbound; applied to the calls read.",
+        },
+        answered: {
+          type: "boolean",
+          description:
+            "voice_call only — answered (true) or not (false); applied to the calls read.",
+        },
+        sipCallId: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description:
+            "voice_call only — the call with exactly this SIP Call-ID; applied to the calls read.",
+        },
         revealToken: {
           type: "boolean",
           description:
@@ -505,7 +531,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "get_resource",
     description:
-      "Get one Cognigy resource by id, as a filtered summary by default or the complete API response with raw: true. Supports every list_resources type plus session_state (session context by session id) and user, where id 'me' returns the account the API key belongs to and a 24-char hex id another user. createdBy / lastChangedBy (returned only with raw: true) are opaque user ids: compare them with 'me' rather than guessing who they are. An audit_event carries performedBy. A conversation (id = session id) returns an outline of its messages by default; view 'text' adds scrubbed text (best-effort, may hold personal data; msgChars, rawText for unmasked), expertMode adds intents, limit and skip page the messages. Endpoints leave out the URL token and endpoint URL, also with raw: true (hasToken instead; revealToken: true restores them). Use list_resources first to find ids.",
+      "Get one Cognigy resource by id, as a filtered summary by default or the complete API response with raw: true. Supports every list_resources type plus session_state (session context by session id) and user, where id 'me' returns the account the API key belongs to and a 24-char hex id another user. createdBy / lastChangedBy (raw only) are opaque user ids: compare with 'me', do not guess. An audit_event carries performedBy. A voice_call (id = the traceId from the list) returns one call's timing only, never the caller's words or numbers; raw is refused. A conversation (id = session id) returns an outline of its messages by default; view 'text' adds scrubbed text (best-effort, may hold personal data), expertMode adds intents, limit and skip page the messages. Endpoints leave out the URL token and endpoint URL, also with raw: true (hasToken instead; revealToken: true restores them).",
     annotations: {
       title: "Get Resource",
       readOnlyHint: true,
@@ -531,13 +557,14 @@ export const tools: ToolDefinition[] = [
             "function",
             "user",
             "audit_event",
+            "voice_call",
           ],
           description: "Type of resource to retrieve",
         },
         id: {
           type: "string",
           description:
-            "Resource ID (24-char hex, a session ID for conversation/session_state, or 'me' for resourceType 'user')",
+            "Resource ID (24-char hex, a session ID for conversation/session_state, 'me' for resourceType 'user', or the traceId of a row from list_resources for 'voice_call')",
         },
         projectId: {
           type: "string",
