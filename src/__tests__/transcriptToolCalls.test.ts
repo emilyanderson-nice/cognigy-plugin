@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, jest } from "@jest/globals";
 
-import { fetchRawLogLines } from "../tools/logReader.js";
+import { fetchSessionLogLines } from "../tools/logReader.js";
 import { getResourceSchema } from "../schemas/tools.js";
 import {
   collectToolCalls,
@@ -365,36 +365,26 @@ describe("pairToolCalls", () => {
   });
 });
 
-describe("fetchRawLogLines", () => {
+describe("fetchSessionLogLines", () => {
   type Get = (url: string, config?: any) => Promise<any>;
-  const page = (n: number, msg = "m") =>
+  const entries = (n: number, msg = "m", meta?: Record<string, unknown>) =>
     Array.from({ length: n }, (_, i) => ({
       timestamp: `2026-10-01T10:00:${String(i % 60).padStart(2, "0")}.000Z`,
       msg: `${msg}${i}`,
       secretField: "SECRET",
+      ...(meta ? { meta } : {}),
     }));
-  const args = {
-    projectId: PROJECT,
-    search: "[tool-call]",
-    startDate: "2026-10-01T09:59:50.000Z",
-    endDate: "2026-10-01T10:00:10.000Z",
-  };
+  const args = { projectId: PROJECT, sessionId: SESSION };
 
-  it("asks the windowed log endpoint, oldest first, and returns only timestamp and msg", async () => {
-    const get = jest.fn<Get>().mockResolvedValue({ items: page(2), total: 2 });
-    const r = await fetchRawLogLines({ get }, args);
+  it("asks the session tail with the sessionId only, and returns only timestamp and msg", async () => {
+    const get = jest
+      .fn<Get>()
+      .mockResolvedValue({ items: entries(2, "m", { sessionId: SESSION }) });
+    const r = await fetchSessionLogLines({ get }, args);
     expect(get).toHaveBeenCalledTimes(1);
     expect(get).toHaveBeenCalledWith(
-      `/v2.1/projects/${PROJECT}/logs`,
-      expect.objectContaining({
-        params: {
-          startDate: args.startDate,
-          endDate: args.endDate,
-          sort: "timestamp:asc",
-          filter: "[tool-call]",
-          limit: 100,
-        },
-      }),
+      `/v2.1/projects/${PROJECT}/logs/tail`,
+      expect.objectContaining({ params: { sessionId: SESSION } }),
     );
     expect(r).toStrictEqual({
       ok: true,
@@ -406,6 +396,35 @@ describe("fetchRawLogLines", () => {
     });
   });
 
+  it("drops an entry that names another session and keeps one that names this session or none", async () => {
+    const get = jest.fn<Get>().mockResolvedValue({
+      items: [
+        {
+          timestamp: "2026-10-01T10:00:00.000Z",
+          msg: "own",
+          meta: { sessionId: SESSION },
+        },
+        {
+          timestamp: "2026-10-01T10:00:01.000Z",
+          msg: "foreign",
+          meta: { sessionId: "someone-else" },
+        },
+        { timestamp: "2026-10-01T10:00:02.000Z", msg: "no-meta" },
+        {
+          timestamp: "2026-10-01T10:00:03.000Z",
+          msg: "meta-without-session",
+          meta: { userId: "u" },
+        },
+      ],
+    });
+    const r = await fetchSessionLogLines({ get }, args);
+    expect(r.ok && r.lines.map((l) => l.msg)).toStrictEqual([
+      "own",
+      "no-meta",
+      "meta-without-session",
+    ]);
+  });
+
   it("skips items without a string msg or timestamp", async () => {
     const get = jest.fn<Get>().mockResolvedValue({
       items: [
@@ -415,7 +434,7 @@ describe("fetchRawLogLines", () => {
         null,
       ],
     });
-    const r = await fetchRawLogLines({ get }, args);
+    const r = await fetchSessionLogLines({ get }, args);
     expect(r).toStrictEqual({
       ok: true,
       truncated: false,
@@ -423,30 +442,20 @@ describe("fetchRawLogLines", () => {
     });
   });
 
-  it("reads the next page with skip when a page is full, and flags truncation at the page cap", async () => {
-    const get = jest.fn<Get>().mockResolvedValue({ items: page(100) });
-    const r = await fetchRawLogLines({ get }, args);
-    expect(get).toHaveBeenCalledTimes(3);
-    expect(get.mock.calls[1][1].params.skip).toBe(100);
-    expect(get.mock.calls[2][1].params.skip).toBe(200);
-    expect(r.ok && r.truncated).toBe(true);
-    expect(r.ok && r.lines.length).toBe(300);
-  });
+  it("flags truncation at the 100-entry cap of the tail and not below it", async () => {
+    const full = jest.fn<Get>().mockResolvedValue({ items: entries(100) });
+    const capped = await fetchSessionLogLines({ get: full }, args);
+    expect(capped.ok && capped.truncated).toBe(true);
+    expect(full).toHaveBeenCalledTimes(1);
 
-  it("stops after a short page without flagging truncation", async () => {
-    const get = jest
-      .fn<Get>()
-      .mockResolvedValueOnce({ items: page(100) })
-      .mockResolvedValueOnce({ items: page(5) });
-    const r = await fetchRawLogLines({ get }, args);
-    expect(get).toHaveBeenCalledTimes(2);
-    expect(r.ok && r.truncated).toBe(false);
-    expect(r.ok && r.lines.length).toBe(105);
+    const short = jest.fn<Get>().mockResolvedValue({ items: entries(99) });
+    const under = await fetchSessionLogLines({ get: short }, args);
+    expect(under.ok && under.truncated).toBe(false);
   });
 
   it("returns ok false with no upstream text when the request fails", async () => {
     const get = jest.fn<Get>().mockRejectedValue(new Error("UPSTREAM-SECRET"));
-    const r = await fetchRawLogLines({ get }, args);
+    const r = await fetchSessionLogLines({ get }, args);
     expect(r).toStrictEqual({ ok: false });
   });
 });
@@ -492,10 +501,16 @@ describe("readConversation with includeToolCalls", () => {
       throw new Error(`unexpected ${url}`);
     });
 
-  const logItem = (seconds: number, ms: number, msg: string) => ({
+  const logItem = (
+    seconds: number,
+    ms: number,
+    msg: string,
+    sessionId: string = SESSION,
+  ) => ({
     timestamp: iso(seconds, ms),
     msg,
     flowId: "f",
+    meta: { sessionId },
   });
   const RETENTION =
     "Tool names come from the project log, which keeps entries only for a limited time (typically about 24 hours), and only for tools built with the tool-call Log node.";
@@ -522,21 +537,16 @@ describe("readConversation with includeToolCalls", () => {
     expect(r.hint?.action).toContain(RETENTION);
   });
 
-  it("asks the project log for the window around the markers, never by sessionId", async () => {
+  it("reads the log of this session only: one tail request, never the project-wide window", async () => {
     const get = route(conversation(), { items: [] });
     await readConversation({ get }, { id: SESSION, includeToolCalls: true });
     expect(get).toHaveBeenCalledTimes(2);
     expect(get.mock.calls[0][0]).toBe(`/v2.0/conversations/${SESSION}`);
-    expect(get.mock.calls[1][0]).toBe(`/v2.1/projects/${PROJECT}/logs`);
-    const params = get.mock.calls[1][1].params;
-    expect(params.filter).toBe("[tool-call]");
-    expect(params.sort).toBe("timestamp:asc");
-    expect(params.startDate).toBe(iso(2 - 10));
-    expect(params.endDate).toBe(iso(2 + 10));
-    expect(params).not.toHaveProperty("sessionId");
+    expect(get.mock.calls[1][0]).toBe(`/v2.1/projects/${PROJECT}/logs/tail`);
+    expect(get.mock.calls[1][1].params).toStrictEqual({ sessionId: SESSION });
   });
 
-  it("reads one slice of the log per cluster of markers, not one span for the whole conversation", async () => {
+  it("makes one tail request however far apart the tool calls are", async () => {
     const conv = {
       items: [
         row(1),
@@ -546,76 +556,64 @@ describe("readConversation with includeToolCalls", () => {
     };
     const get = route(conv, { items: [] });
     await readConversation({ get }, { id: SESSION, includeToolCalls: true });
-    expect(get).toHaveBeenCalledTimes(3);
-    expect(get.mock.calls[1][1].params.startDate).toBe(iso(2 - 10));
-    expect(get.mock.calls[1][1].params.endDate).toBe(iso(2 + 10));
-    expect(get.mock.calls[2][1].params.startDate).toBe(iso(200 - 10));
-    expect(get.mock.calls[2][1].params.endDate).toBe(iso(200 + 10));
-  });
-
-  it("merges markers whose windows touch into one slice", async () => {
-    const conv = {
-      items: [
-        row(1),
-        row(2, { inputData: MARKER }),
-        row(12, { inputData: MARKER }),
-      ],
-    };
-    const get = route(conv, { items: [] });
-    await readConversation({ get }, { id: SESSION, includeToolCalls: true });
     expect(get).toHaveBeenCalledTimes(2);
-    expect(get.mock.calls[1][1].params.startDate).toBe(iso(2 - 10));
-    expect(get.mock.calls[1][1].params.endDate).toBe(iso(12 + 10));
   });
 
-  it("pairs each marker with the line from its own slice", async () => {
-    const conv = {
+  it("never gives a tool call the name from another session's line, even one a few milliseconds from its marker", async () => {
+    const get = route(conversation(), {
       items: [
-        row(1),
-        row(2, { inputData: MARKER }),
-        row(200, { inputData: MARKER, inputId: UUID_B }),
+        logItem(
+          2,
+          11,
+          line("someone_elses_tool", "secretArg"),
+          "another-session",
+        ),
       ],
-    };
-    const get = jest
-      .fn<Get>()
-      .mockImplementation(async (url: string, cfg: any) => {
-        if (url.startsWith("/v2.0/conversations/")) return conv;
-        return String(cfg.params.startDate) === iso(2 - 10)
-          ? { items: [logItem(2, 11, line("first_tool", "a", UUID_A))] }
-          : { items: [logItem(200, 9, line("second_tool", "b", UUID_B))] };
-      });
+    });
     const r = await readConversation(
       { get },
       { id: SESSION, includeToolCalls: true },
     );
-    expect((r.body.toolCalls as any[]).map((t) => t.tool)).toStrictEqual([
-      "first_tool",
-      "second_tool",
+    expect(r.body.toolCalls).toStrictEqual([
+      {
+        messageIndex: 1,
+        timestamp: iso(2),
+        tool: null,
+        argNames: [],
+        matched: "none",
+      },
     ]);
+    expect(r.body.unmatchedToolLogs).toBe(0);
+    expect(JSON.stringify(r)).not.toContain("someone_elses_tool");
+    expect(JSON.stringify(r)).not.toContain("secretArg");
   });
 
-  it("does not fail on a tool call whose time is extreme, and says no time was readable", async () => {
+  it("still pairs by inputId when the tool call has no readable time", async () => {
     const conv = {
       items: [
         row(1),
         row(2, { inputData: MARKER, timestamp: "+275760-09-13T00:00:00.000Z" }),
       ],
     };
-    const get = route(conv);
+    const get = route(conv, {
+      items: [logItem(2, 11, line("get_order_status", "orderNumber", UUID_A))],
+    });
     const r = await readConversation(
       { get },
       { id: SESSION, includeToolCalls: true },
     );
-    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledTimes(2);
     expect(r.body.toolCalls).toStrictEqual([
-      { messageIndex: 1, tool: null, argNames: [], matched: "none" },
+      {
+        messageIndex: 1,
+        tool: "get_order_status",
+        argNames: ["orderNumber"],
+        matched: "inputId",
+      },
     ]);
-    expect(r.hint?.action).toContain(
-      "No tool call had a readable time, so the project log was not searched.",
-    );
   });
 
-  it("says some names may be missing when the log has more lines than were read", async () => {
+  it("says older names may be missing when the session log is at its 100-entry cap", async () => {
     const full = {
       items: Array.from({ length: 100 }, (_, i) => logItem(2, i, "unrelated")),
     };
@@ -624,9 +622,9 @@ describe("readConversation with includeToolCalls", () => {
       { get },
       { id: SESSION, includeToolCalls: true },
     );
-    expect(get).toHaveBeenCalledTimes(4); // conversation + 3 full pages
+    expect(get).toHaveBeenCalledTimes(2);
     expect(r.hint?.action).toContain(
-      "The project log holds more tool-call lines than were read, so some names may be missing.",
+      "The session log holds only its newest 100 entries, so names for older tool calls may be missing.",
     );
   });
 
@@ -665,7 +663,9 @@ describe("readConversation with includeToolCalls", () => {
       { get },
       { id: SESSION, projectId: OTHER_PROJECT, includeToolCalls: true },
     );
-    expect(get.mock.calls[1][0]).toBe(`/v2.1/projects/${OTHER_PROJECT}/logs`);
+    expect(get.mock.calls[1][0]).toBe(
+      `/v2.1/projects/${OTHER_PROJECT}/logs/tail`,
+    );
   });
 
   it("never returns the inputId, the raw log line or any other row field", async () => {
@@ -756,7 +756,7 @@ describe("readConversation with includeToolCalls", () => {
     );
   });
 
-  it("explains a best-effort time match", async () => {
+  it("explains a best-effort time match, which can only be among this session's own lines", async () => {
     const get = route(conversation(), {
       items: [logItem(2, 11, line("get_order_status", "orderNumber"))],
     });
@@ -788,6 +788,7 @@ describe("readConversation with includeToolCalls", () => {
     const get = route(conversation(), {
       items: [
         logItem(2, 5, "[tool-call] bad name args=[a]"),
+        logItem(2, 5, "Sent output to Endpoint"),
         logItem(2, 11, line("get_order_status", "orderNumber", UUID_A)),
       ],
     });
@@ -800,59 +801,97 @@ describe("readConversation with includeToolCalls", () => {
   });
 });
 
-describe("collectToolCalls: request and time caps", () => {
+describe("collectToolCalls: session scope", () => {
   type Get = (url: string, config?: any) => Promise<any>;
   const base = Date.UTC(2026, 9, 1, 10, 0, 0);
-  const markerRow = (i: number) => ({
+  const markerRow = (i: number, over: Record<string, unknown> = {}) => ({
     type: "output",
     projectId: PROJECT,
-    timestamp: new Date(base + i * 100_000).toISOString(), // 100 s apart: one slice each
+    timestamp: new Date(base + i * 100_000).toISOString(),
     inputData: { _cognigy: { _finishReason: "tool_calls" } },
+    ...over,
+  });
+  const logLine = (
+    i: number,
+    msg: string,
+    sessionId: string | undefined = SESSION,
+  ) => ({
+    timestamp: new Date(base + i * 100_000 + 11).toISOString(),
+    msg,
+    ...(sessionId ? { meta: { sessionId } } : {}),
   });
 
-  it("makes at most 10 log requests and says the read is partial", async () => {
+  it("makes no request without a tool call", async () => {
+    const get = jest.fn<Get>();
+    const r = await collectToolCalls({ get }, [{ type: "input" }], {
+      projectId: PROJECT,
+      sessionId: SESSION,
+    });
+    expect(get).not.toHaveBeenCalled();
+    expect(r.logRead).toBe("skipped");
+  });
+
+  it("needs a projectId, from the call or from a row", async () => {
     const get = jest.fn<Get>().mockResolvedValue({ items: [] });
-    const rows = Array.from({ length: 12 }, (_, i) => markerRow(i));
-    const r = await collectToolCalls({ get }, rows, {});
-    expect(get).toHaveBeenCalledTimes(10);
-    expect(r.truncated).toBe(true);
-    expect(r.toolCalls).toHaveLength(12);
+    const none = await collectToolCalls(
+      { get },
+      [markerRow(0, { projectId: undefined })],
+      { sessionId: SESSION },
+    );
+    expect(none.logRead).toBe("noProject");
+    expect(get).not.toHaveBeenCalled();
+
+    const fromRow = await collectToolCalls({ get }, [markerRow(0)], {
+      sessionId: SESSION,
+    });
+    expect(fromRow.logRead).toBe("ok");
+    expect(get.mock.calls[0][0]).toBe(`/v2.1/projects/${PROJECT}/logs/tail`);
   });
 
-  it("stops starting new slices after 20 seconds", async () => {
-    const get = jest.fn<Get>().mockResolvedValue({ items: [] });
-    const clock = jest
-      .fn<() => number>()
-      .mockReturnValueOnce(0)
-      .mockReturnValue(20_000);
-    const rows = [markerRow(0), markerRow(1), markerRow(2)];
-    const r = await collectToolCalls({ get }, rows, { now: clock });
-    expect(get).toHaveBeenCalledTimes(1);
+  it("refuses a projectId that is not 24 hex characters before any request", async () => {
+    const get = jest.fn<Get>();
+    const r = await collectToolCalls({ get }, [markerRow(0)], {
+      projectId: "../../etc",
+      sessionId: SESSION,
+    });
+    expect(r.logRead).toBe("noProject");
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("pairs a legacy line by time among the session's own lines only", async () => {
+    const get = jest.fn<Get>().mockResolvedValue({
+      items: [
+        logLine(0, line("own_tool", "a")),
+        logLine(0, line("foreign_tool", "b"), "other-session"),
+      ],
+    });
+    const r = await collectToolCalls({ get }, [markerRow(0)], {
+      projectId: PROJECT,
+      sessionId: SESSION,
+    });
+    expect(r.toolCalls.map((t) => [t.tool, t.matched])).toStrictEqual([
+      ["own_tool", "time"],
+    ]);
+    expect(r.unmatchedLogLines).toBe(0);
+  });
+
+  it("flags truncation when the session log is at its cap", async () => {
+    const get = jest.fn<Get>().mockResolvedValue({
+      items: Array.from({ length: 100 }, (_, i) => logLine(0, `m${i}`)),
+    });
+    const r = await collectToolCalls({ get }, [markerRow(0)], {
+      projectId: PROJECT,
+      sessionId: SESSION,
+    });
     expect(r.truncated).toBe(true);
   });
 
-  it("keeps what an earlier slice found when a later slice fails, and flags it as partial", async () => {
-    const get = jest
-      .fn<Get>()
-      .mockResolvedValueOnce({
-        items: [
-          {
-            timestamp: new Date(base + 11).toISOString(),
-            msg: line("first_tool", "a", UUID_A),
-          },
-        ],
-      })
-      .mockRejectedValueOnce(new Error("UPSTREAM-SECRET"));
-    const rows = [{ ...markerRow(0), inputId: UUID_A }, markerRow(1)];
-    const r = await collectToolCalls({ get }, rows, {});
-    expect(r.logRead).toBe("ok");
-    expect(r.truncated).toBe(true);
-    expect(r.toolCalls.map((t) => t.tool)).toStrictEqual(["first_tool", null]);
-  });
-
-  it("fails as a whole when the first slice fails", async () => {
+  it("fails as a whole, with no names, when the request fails", async () => {
     const get = jest.fn<Get>().mockRejectedValue(new Error("UPSTREAM-SECRET"));
-    const r = await collectToolCalls({ get }, [markerRow(0)], {});
+    const r = await collectToolCalls({ get }, [markerRow(0)], {
+      projectId: PROJECT,
+      sessionId: SESSION,
+    });
     expect(r.logRead).toBe("failed");
     expect(r.toolCalls[0].tool).toBeNull();
   });

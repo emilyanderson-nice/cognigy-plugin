@@ -12,7 +12,7 @@
  * and argument NAMES (allow-listed tokens) leave this module. The raw line, the
  * inputId and any argument value are never returned.
  */
-import { fetchRawLogLines } from "../logReader.js";
+import { fetchSessionLogLines } from "../logReader.js";
 import { type ConversationClient, parseInstant } from "./common.js";
 
 export type ToolCallMatch = "inputId" | "time" | "ambiguous" | "none";
@@ -46,11 +46,6 @@ export const TOOL_CALL_SEARCH = "[tool-call]";
 
 /** A log line is written within milliseconds of its marker; 2 s is generous. */
 const MAX_TIME_GAP_MS = 2000;
-/** Window around each marker when asking the log for its line. */
-const WINDOW_PAD_MS = 10_000;
-/** At most this many log requests (one per cluster of markers) and this long. */
-const MAX_WINDOWS = 10;
-const DEADLINE_MS = 20_000;
 const MAX_ARG_NAMES = 20;
 /**
  * A marker time outside this range is treated as unreadable: it cannot be a real
@@ -211,12 +206,7 @@ export function pairToolCalls(
   return { toolCalls, unmatchedLogLines: lines.length - paired.size };
 }
 
-export type ToolCallLogRead =
-  | "ok"
-  | "skipped"
-  | "failed"
-  | "noProject"
-  | "noWindow";
+export type ToolCallLogRead = "ok" | "skipped" | "failed" | "noProject";
 
 export interface ToolCallsOutcome {
   toolCalls: ToolCall[];
@@ -227,30 +217,17 @@ export interface ToolCallsOutcome {
 
 /**
  * The tool calls of a conversation: markers from `rows` (in conversation
- * order), names from the project log in the window around them. No tool call
- * means no log request.
+ * order), names from the log of THIS session. The session tail is scoped by the
+ * server, so every line read belongs to the conversation; the windowed project
+ * log is never used, because it cannot be narrowed to one session (T14) and a
+ * time match there could take another session's line. No tool call means no
+ * log request. The tail holds the newest 100 entries, so `truncated` is true
+ * when older turns may be missing.
  */
-/**
- * One window per cluster of markers: windows that touch merge into one, so a
- * long conversation is read as a few short slices of a project-wide log and
- * not as one span the 300-line read could not cover.
- */
-function windowsAround(times: number[]): { start: number; end: number }[] {
-  const windows: { start: number; end: number }[] = [];
-  for (const t of [...times].sort((a, b) => a - b)) {
-    const start = t - WINDOW_PAD_MS;
-    const end = t + WINDOW_PAD_MS;
-    const last = windows[windows.length - 1];
-    if (last && start <= last.end) last.end = Math.max(last.end, end);
-    else windows.push({ start, end });
-  }
-  return windows;
-}
-
 export async function collectToolCalls(
   client: ConversationClient,
   rows: unknown[],
-  opts: { projectId?: string; now?: () => number },
+  opts: { projectId?: string; sessionId: string },
 ): Promise<ToolCallsOutcome> {
   const markers = findToolCallMarkers(rows);
   const empty = (logRead: ToolCallLogRead): ToolCallsOutcome => ({
@@ -267,41 +244,25 @@ export async function collectToolCalls(
   const projectId = opts.projectId ?? rowProject;
   if (!projectId || !PROJECT_ID_RE.test(projectId)) return empty("noProject");
 
-  const times = markers
-    .map((m) => m.timestampMs)
-    .filter((t): t is number => t !== undefined);
-  if (times.length === 0) return empty("noWindow");
+  const fetched = await fetchSessionLogLines(client, {
+    projectId,
+    sessionId: opts.sessionId,
+  });
+  if (!fetched.ok) return empty("failed");
 
-  const now = opts.now ?? Date.now;
-  const began = now();
   const lines: LogToolLine[] = [];
-  let truncated = false;
-  const windows = windowsAround(times);
-  for (let w = 0; w < windows.length; w++) {
-    if (w >= MAX_WINDOWS || (w > 0 && now() - began >= DEADLINE_MS)) {
-      truncated = true;
-      break;
-    }
-    const fetched = await fetchRawLogLines(client, {
-      projectId,
-      search: TOOL_CALL_SEARCH,
-      startDate: new Date(windows[w].start).toISOString(),
-      endDate: new Date(windows[w].end).toISOString(),
-    });
-    if (!fetched.ok) {
-      if (w === 0) return empty("failed");
-      truncated = true; // a later slice failed: what was read is partial
-      break;
-    }
-    truncated = truncated || fetched.truncated;
-    for (const raw of fetched.lines) {
-      const parsed = parseToolCallLine(raw.msg);
-      const timestampMs = parseInstant(raw.timestamp);
-      if (parsed && timestampMs !== undefined) {
-        lines.push({ ...parsed, timestampMs });
-      }
+  for (const raw of fetched.lines) {
+    const parsed = parseToolCallLine(raw.msg);
+    const timestampMs = parseInstant(raw.timestamp);
+    if (parsed && timestampMs !== undefined) {
+      lines.push({ ...parsed, timestampMs });
     }
   }
   const { toolCalls, unmatchedLogLines } = pairToolCalls(markers, lines);
-  return { toolCalls, unmatchedLogLines, logRead: "ok", truncated };
+  return {
+    toolCalls,
+    unmatchedLogLines,
+    logRead: "ok",
+    truncated: fetched.truncated,
+  };
 }

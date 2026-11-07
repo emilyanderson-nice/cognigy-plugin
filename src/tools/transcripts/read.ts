@@ -119,17 +119,12 @@ function toolCallNotes(outcome: ToolCallsOutcome): string[] {
     case "noProject":
       notes.push("Pass projectId to look up tool names in the project log.");
       break;
-    case "noWindow":
-      notes.push(
-        "No tool call had a readable time, so the project log was not searched.",
-      );
-      break;
     default:
       break;
   }
   if (outcome.truncated) {
     notes.push(
-      "The project log holds more tool-call lines than were read, so some names may be missing.",
+      "The session log holds only its newest 100 entries, so names for older tool calls may be missing.",
     );
   }
   if (outcome.toolCalls.some((t) => t.matched === "time")) {
@@ -234,6 +229,7 @@ export async function readConversation(
   if (opts.includeToolCalls === true) {
     const outcome = await collectToolCalls(client, ordered, {
       projectId: opts.projectId,
+      sessionId: opts.id,
     });
     body.toolCalls = outcome.toolCalls;
     body.unmatchedToolLogs = outcome.unmatchedLogLines;

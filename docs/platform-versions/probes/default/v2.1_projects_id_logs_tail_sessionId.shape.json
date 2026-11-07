@@ -1,0 +1,48 @@
+{
+  "probedAt": "2026-11-07T03:28:22.666Z",
+  "profile": "default",
+  "host": "api-trial-us.cognigy.ai",
+  "declaredVersion": null,
+  "method": "GET",
+  "path": "/v2.1/projects/{id}/logs/tail",
+  "query": {
+    "sessionId": "mcp-session-789ab393-2008-4823-8a79-af0428b96ccc"
+  },
+  "status": 200,
+  "ms": 362,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "<present>",
+    "connection": "<present>",
+    "date": "<present>",
+    "vary": "<present>",
+    "x-cognigy-trace-id": "{id}3fb39536",
+    "x-cache": "<present>",
+    "via": "1.1 {id}5856ed1c.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "items": {
+      "_array": 7,
+      "_item": {
+        "timestamp": "<datetime>",
+        "_id": "<objectId>",
+        "msg": "<string:37>",
+        "meta": {
+          "userId": "<string:8>",
+          "projectName": "<string:12>",
+          "text": "<string:20>",
+          "traceId": "<string:65>",
+          "sessionId": "<string:48>"
+        },
+        "traceId": "<string:65>",
+        "type": "debug"
+      }
+    },
+    "total": "number",
+    "nextCursor": "null",
+    "previousCursor": "<string:51>"
+  }
+}
