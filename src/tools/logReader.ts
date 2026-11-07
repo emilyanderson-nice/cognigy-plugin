@@ -439,6 +439,72 @@ async function readSummary(
   };
 }
 
+export interface RawLogLine {
+  timestamp: string;
+  msg: string;
+}
+
+export type RawLogLinesResult =
+  | { ok: true; lines: RawLogLine[]; truncated: boolean }
+  | { ok: false };
+
+const RAW_LINES_PAGE_SIZE = 100;
+const RAW_LINES_MAX_PAGES = 3;
+
+/**
+ * INTERNAL. The raw `msg` of the log entries matching `search` in a window,
+ * oldest first, WITHOUT the scrubbing `readLogs` applies: a parser that wants
+ * one fixed line pattern (a tool id, a UUID) needs the text as written, and the
+ * scrub can mangle both. The caller must parse that fixed pattern and return
+ * only the tokens it allow-lists, never the line. A failed request is
+ * `{ ok: false }`; upstream error text is never carried.
+ */
+export async function fetchRawLogLines(
+  client: LogClient,
+  args: {
+    projectId: string;
+    search: string;
+    startDate: string;
+    endDate: string;
+  },
+): Promise<RawLogLinesResult> {
+  const lines: RawLogLine[] = [];
+  for (let page = 0; page < RAW_LINES_MAX_PAGES; page++) {
+    let data: unknown;
+    try {
+      data = await client.get(`/v2.1/projects/${args.projectId}/logs`, {
+        params: {
+          startDate: args.startDate,
+          endDate: args.endDate,
+          sort: "timestamp:asc",
+          filter: args.search,
+          limit: RAW_LINES_PAGE_SIZE,
+          ...(page > 0 ? { skip: page * RAW_LINES_PAGE_SIZE } : {}),
+        },
+        timeout: CALL_TIMEOUT_MS,
+      });
+    } catch {
+      return { ok: false };
+    }
+    const items = itemsOf(data);
+    for (const item of items) {
+      const entry = item as { timestamp?: unknown; msg?: unknown } | null;
+      if (
+        entry !== null &&
+        typeof entry === "object" &&
+        typeof entry.timestamp === "string" &&
+        typeof entry.msg === "string"
+      ) {
+        lines.push({ timestamp: entry.timestamp, msg: entry.msg });
+      }
+    }
+    if (items.length < RAW_LINES_PAGE_SIZE) {
+      return { ok: true, lines, truncated: false };
+    }
+  }
+  return { ok: true, lines, truncated: true };
+}
+
 export async function readLogs(
   client: LogClient,
   args: LogReadArgs,
