@@ -251,6 +251,9 @@ function filterParams(args: LogReadArgs): Record<string, unknown> {
   };
 }
 
+/** Both session-tail readers ask for the v2 log model; the default model differs. */
+const TAIL_HEADERS = { "x-cognigy-log-model-version": "v2" };
+
 async function readSession(
   client: LogClient,
   args: LogReadArgs,
@@ -268,7 +271,7 @@ async function readSession(
   try {
     data = await client.get(`/v2.1/projects/${args.projectId}/logs/tail`, {
       params: { sessionId: args.sessionId, ...filterParams(args) },
-      headers: { "x-cognigy-log-model-version": "v2" },
+      headers: TAIL_HEADERS,
       timeout: CALL_TIMEOUT_MS,
     });
   } catch (err) {
@@ -474,6 +477,7 @@ export async function fetchSessionLogLines(
   try {
     data = await client.get(`/v2.1/projects/${args.projectId}/logs/tail`, {
       params: { sessionId: args.sessionId },
+      headers: TAIL_HEADERS,
       timeout: CALL_TIMEOUT_MS,
     });
   } catch {

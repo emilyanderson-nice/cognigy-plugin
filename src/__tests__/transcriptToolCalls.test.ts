@@ -384,7 +384,10 @@ describe("fetchSessionLogLines", () => {
     expect(get).toHaveBeenCalledTimes(1);
     expect(get).toHaveBeenCalledWith(
       `/v2.1/projects/${PROJECT}/logs/tail`,
-      expect.objectContaining({ params: { sessionId: SESSION } }),
+      expect.objectContaining({
+        params: { sessionId: SESSION },
+        headers: { "x-cognigy-log-model-version": "v2" },
+      }),
     );
     expect(r).toStrictEqual({
       ok: true,
@@ -544,6 +547,9 @@ describe("readConversation with includeToolCalls", () => {
     expect(get.mock.calls[0][0]).toBe(`/v2.0/conversations/${SESSION}`);
     expect(get.mock.calls[1][0]).toBe(`/v2.1/projects/${PROJECT}/logs/tail`);
     expect(get.mock.calls[1][1].params).toStrictEqual({ sessionId: SESSION });
+    expect(get.mock.calls[1][1].headers).toStrictEqual({
+      "x-cognigy-log-model-version": "v2",
+    });
   });
 
   it("makes one tail request however far apart the tool calls are", async () => {
