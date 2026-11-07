@@ -46,7 +46,11 @@ export const TOOL_CALL_LOG_LABEL_PREFIX = "Log: tool call";
 export function buildToolCallLogMessage(toolId: string): string {
   const name = `{{${TOOL_ID_EXPR} || ${JSON.stringify(toolId)}}}`;
   const args = `{{Object.keys(${TOOL_ARGS_EXPR}).join(', ') || 'none'}}`;
-  return `[tool-call] ${name} args=[${args}]`;
+  // The inputId is shared by every row of one conversation turn, so a
+  // transcript reader pairs this line with its tool-call marker exactly. The
+  // session id is deliberately not logged: on some channels it can embed
+  // contact details.
+  return `[tool-call] ${name} args=[${args}] inputId={{input.inputId}}`;
 }
 
 /** Config for the generated Log node. */

@@ -391,7 +391,10 @@ This uses `get_resource` and `list_resources` with `resourceType: 'conversation'
 `transcripts` skill first asks whether you want one session, a set of recent conversations or an
 overview, and whether you need the words or only the shape. A single session returns an outline by
 default (who spoke, when, how long, no text); `view: 'text'` returns the message text, masked
-best-effort, and `rawText: true` returns it unmasked. The platform returns every conversation of a
+best-effort, and `rawText: true` returns it unmasked. `includeToolCalls: true` adds the tool and
+argument names of each tool call (never argument values or results), read from the project log, so
+it works for recent conversations and for tools that have the tool-call Log node. The platform
+returns every conversation of a
 project in one call and ignores paging and date parameters, so the plugin filters (`startDate`,
 `endDate`, `channel`, `flowName`, `minMessages`, `contactIds`) and pages the list itself, newest
 first. Endpoint tokens, contact ids and message data values are never returned, and transcripts may

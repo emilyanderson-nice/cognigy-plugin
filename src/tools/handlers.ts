@@ -4236,6 +4236,7 @@ export class ToolHandlers {
         view: data.view,
         expertMode: data.expertMode,
         rawText: data.rawText,
+        includeToolCalls: data.includeToolCalls,
         msgChars: data.msgChars,
         limit: data.limit,
         skip: data.skip,

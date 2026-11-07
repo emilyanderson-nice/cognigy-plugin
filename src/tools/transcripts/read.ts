@@ -7,6 +7,7 @@ import {
   scalar,
   upstreamError,
 } from "./common.js";
+import { collectToolCalls, type ToolCallsOutcome } from "./toolCalls.js";
 
 export const DEFAULT_MESSAGE_LIMIT = 50;
 export const MAX_MESSAGE_LIMIT = 100;
@@ -21,6 +22,7 @@ export interface ReadConversationOptions {
   view?: "outline" | "text";
   expertMode?: boolean;
   rawText?: boolean;
+  includeToolCalls?: boolean;
   msgChars?: number;
   limit?: number;
   skip?: number;
@@ -100,6 +102,43 @@ function buildMessage(
 
 const PII_ACTION =
   "The text may hold personal data: names and addresses are not masked. Report counts and topics rather than quoting lines, and do not copy it into files, commits or prompts.";
+
+const TOOL_CALL_RETENTION_NOTE =
+  "Tool names come from the project log, which keeps entries only for a limited time (typically about 24 hours), and only for tools built with the tool-call Log node.";
+
+/** What the caller should know about how far to trust the tool names. */
+function toolCallNotes(outcome: ToolCallsOutcome): string[] {
+  const notes: string[] = [];
+  if (outcome.toolCalls.length > 0) notes.push(TOOL_CALL_RETENTION_NOTE);
+  switch (outcome.logRead) {
+    case "failed":
+      notes.push(
+        "The project log could not be read, so tool names are not shown.",
+      );
+      break;
+    case "noProject":
+      notes.push("Pass projectId to look up tool names in the project log.");
+      break;
+    default:
+      break;
+  }
+  if (outcome.truncated) {
+    notes.push(
+      "The session log holds only its newest 100 entries, so names for older tool calls may be missing.",
+    );
+  }
+  if (outcome.toolCalls.some((t) => t.matched === "time")) {
+    notes.push(
+      'Entries marked matched "time" are a best-effort match by time.',
+    );
+  }
+  if (outcome.toolCalls.some((t) => t.matched === "ambiguous")) {
+    notes.push(
+      'Entries marked "ambiguous" had a different number of log lines than tool calls in that turn, so no name is shown.',
+    );
+  }
+  return notes;
+}
 
 export async function readConversation(
   client: ConversationClient,
@@ -187,6 +226,15 @@ export async function readConversation(
   });
 
   const actions: string[] = [];
+  if (opts.includeToolCalls === true) {
+    const outcome = await collectToolCalls(client, ordered, {
+      projectId: opts.projectId,
+      sessionId: opts.id,
+    });
+    body.toolCalls = outcome.toolCalls;
+    body.unmatchedToolLogs = outcome.unmatchedLogLines;
+    actions.push(...toolCallNotes(outcome));
+  }
   if (skip + messages.length < ordered.length) {
     actions.push(
       `More messages follow: call again with skip: ${skip + messages.length}.`,

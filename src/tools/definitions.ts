@@ -563,6 +563,11 @@ export const tools: ToolDefinition[] = [
           description:
             "conversation only, view 'text' — unmasked text; only when scrubbing hides what you need.",
         },
+        includeToolCalls: {
+          type: "boolean",
+          description:
+            "conversation only — add toolCalls: tool and argument names per tool call, read from the project log (recent conversations, tools with the tool-call Log node).",
+        },
         msgChars: {
           type: "integer",
           minimum: 100,

@@ -251,6 +251,9 @@ function filterParams(args: LogReadArgs): Record<string, unknown> {
   };
 }
 
+/** Both session-tail readers ask for the v2 log model; the default model differs. */
+const TAIL_HEADERS = { "x-cognigy-log-model-version": "v2" };
+
 async function readSession(
   client: LogClient,
   args: LogReadArgs,
@@ -268,7 +271,7 @@ async function readSession(
   try {
     data = await client.get(`/v2.1/projects/${args.projectId}/logs/tail`, {
       params: { sessionId: args.sessionId, ...filterParams(args) },
-      headers: { "x-cognigy-log-model-version": "v2" },
+      headers: TAIL_HEADERS,
       timeout: CALL_TIMEOUT_MS,
     });
   } catch (err) {
@@ -437,6 +440,72 @@ async function readSummary(
       args.limit !== undefined || args.skip !== undefined,
     ),
   };
+}
+
+export interface RawLogLine {
+  timestamp: string;
+  msg: string;
+}
+
+export type RawLogLinesResult =
+  | { ok: true; lines: RawLogLine[]; truncated: boolean }
+  | { ok: false };
+
+/** The session tail returns its newest 100 entries and ignores `limit` (L4). */
+const SESSION_TAIL_CAP = 100;
+
+/**
+ * INTERNAL. The raw `msg` of the newest log entries of ONE session, WITHOUT the
+ * scrubbing `readLogs` applies: a parser that wants one fixed line pattern (a
+ * tool id, a UUID) needs the text as written, and the scrub can mangle both.
+ * The caller must parse that fixed pattern and return only the tokens it
+ * allow-lists, never the line.
+ *
+ * Scope: the session tail filters by `sessionId` on the server. The windowed
+ * `/logs` endpoint ignores `sessionId` (a made-up id returns the same entries as
+ * none, T14), so it cannot be used to read one conversation. An entry that names
+ * a different session in `meta.sessionId` is dropped as well, so a misbehaving
+ * upstream cannot put another session's text in the result. `truncated` is true
+ * when the tail is at its cap, because older entries are then not visible.
+ * A failed request is `{ ok: false }`; upstream error text is never carried.
+ */
+export async function fetchSessionLogLines(
+  client: LogClient,
+  args: { projectId: string; sessionId: string },
+): Promise<RawLogLinesResult> {
+  let data: unknown;
+  try {
+    data = await client.get(`/v2.1/projects/${args.projectId}/logs/tail`, {
+      params: { sessionId: args.sessionId },
+      headers: TAIL_HEADERS,
+      timeout: CALL_TIMEOUT_MS,
+    });
+  } catch {
+    return { ok: false };
+  }
+  const items = itemsOf(data);
+  const lines: RawLogLine[] = [];
+  for (const item of items) {
+    const entry = item as {
+      timestamp?: unknown;
+      msg?: unknown;
+      meta?: unknown;
+    } | null;
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      typeof entry.timestamp !== "string" ||
+      typeof entry.msg !== "string"
+    ) {
+      continue;
+    }
+    const meta = entry.meta as { sessionId?: unknown } | null | undefined;
+    const named =
+      meta !== null && typeof meta === "object" ? meta.sessionId : undefined;
+    if (typeof named === "string" && named !== args.sessionId) continue;
+    lines.push({ timestamp: entry.timestamp, msg: entry.msg });
+  }
+  return { ok: true, lines, truncated: items.length >= SESSION_TAIL_CAP };
 }
 
 export async function readLogs(

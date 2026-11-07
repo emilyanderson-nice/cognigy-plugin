@@ -47,6 +47,22 @@ describe("buildToolCallLogMessage", () => {
   it("is a single line, so one call is one log entry", () => {
     expect(message).not.toContain("\n");
   });
+
+  it("ends with the inputId of the turn, so a log line ties to its conversation turn", () => {
+    // Every row of one conversation turn carries the same inputId (observed),
+    // so a transcript reader can pair a tool-call marker with this line exactly.
+    expect(message.endsWith(" inputId={{input.inputId}}")).toBe(true);
+  });
+
+  it("does not log the session id: on some channels it can embed contact details", () => {
+    expect(message).not.toContain("sessionId");
+  });
+
+  it("is exactly this CognigyScript line", () => {
+    expect(message).toBe(
+      "[tool-call] {{(input.aiAgent && input.aiAgent.toolId) || (input.llmPrompt && input.llmPrompt.toolId) || \"submit_application\"}} args=[{{Object.keys((input.aiAgent && input.aiAgent.toolArgs) || (input.llmPrompt && input.llmPrompt.toolArgs) || {}).join(', ') || 'none'}}] inputId={{input.inputId}}",
+    );
+  });
 });
 
 describe("create_tool writes a tool-call Log node", () => {
