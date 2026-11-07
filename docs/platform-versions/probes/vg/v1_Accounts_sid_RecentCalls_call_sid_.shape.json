@@ -1,0 +1,56 @@
+{
+  "probedAt": "2026-11-06T23:44:00.685Z",
+  "host": "api-vg-trial-us.cognigy.ai",
+  "method": "GET",
+  "path": "/v1/Accounts/{sid}/RecentCalls/{call_sid}",
+  "query": {},
+  "status": 200,
+  "ms": 686,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "<present>",
+    "connection": "<present>",
+    "access-control-allow-origin": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "etag": "<present>",
+    "expires": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "<present>",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "shapeOrText": {
+    "data": {
+      "alias": {},
+      "calldata": {
+        "_array": 0,
+        "_item": null
+      },
+      "hosts": {},
+      "messages": {
+        "_array": 0,
+        "_item": null
+      }
+    },
+    "keys": {
+      "_array": 0,
+      "_item": null
+    },
+    "total": "number"
+  }
+}

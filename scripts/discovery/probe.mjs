@@ -19,37 +19,16 @@
  * Reuses the plugin's own proxy handling (dist/utils/proxy.js) so requests route like the engine's do.
  * Requires `npm run build` first.
  */
-import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import axios from "axios";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const ENV_FILE =
-  [".env.local", "env.local"].map((n) => join(ROOT, n)).find(existsSync) ||
-  join(ROOT, ".env.local");
+import axios from "axios";
+import { makeRedactor, maskIds } from "./redact.mjs";
+import { ROOT, fail, loadProfile } from "./profiles.mjs";
+
 const OUT_ROOT = join(ROOT, "docs", "platform-versions", "probes");
 const RAW_DIR = process.env.PROBE_RAW_DIR || null;
 
-const SAFE_VALUE_KEYS = new Set([
-  "type",
-  "_type",
-  "status",
-  "version",
-  "apiVersion",
-  "kind",
-  "mode",
-  "state",
-  "provider",
-  "role",
-  "resourceType",
-  "nodeType",
-  "locale",
-  "code",
-  "title",
-  "next",
-  "prev",
-]);
 const SAFE_HEADERS = [
   /^content-type$/i,
   /^server$/i,
@@ -62,63 +41,6 @@ const SAFE_HEADERS = [
   /^allow$/i,
   /^api-/i,
 ];
-
-function loadEnvFileProfile(name) {
-  if (!existsSync(ENV_FILE)) return null;
-  const vars = {};
-  for (const line of readFileSync(ENV_FILE, "utf8").split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (m && !line.trim().startsWith("#"))
-      vars[m[1]] = m[2].replace(/^["']|["']$/g, "");
-  }
-  const prefix = `COGNIGY_PROFILE_${name.toUpperCase().replace(/-/g, "_")}_`;
-  const baseUrl = vars[`${prefix}API_BASE_URL`];
-  const apiKey = vars[`${prefix}API_KEY`];
-  if (!baseUrl || !apiKey) return null;
-  return {
-    name,
-    baseUrl: baseUrl.replace(/\/+$/, ""),
-    apiKey,
-    declaredVersion: vars[`${prefix}PLATFORM_VERSION`],
-  };
-}
-
-// A profile saved with cognigy-setup lives in the user's config file, not in
-// env.local. The engine's own loader reads it, so the key is never parsed or
-// printed here. Requires `npm run build`.
-async function loadSavedProfile(name) {
-  try {
-    const mod = await import(
-      pathToFileURL(join(ROOT, "dist", "profiles", "profiles.js")).href
-    );
-    const found = mod
-      .loadProfilesFromSystem()
-      .profiles.find((p) => p.name === name);
-    if (!found) return null;
-    return {
-      name,
-      baseUrl: found.apiBaseUrl.replace(/\/+$/, ""),
-      apiKey: found.apiKey,
-      declaredVersion: found.versionHint,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function loadProfile(name) {
-  const profile = loadEnvFileProfile(name) ?? (await loadSavedProfile(name));
-  if (!profile)
-    fail(
-      `profile "${name}" not found: set COGNIGY_PROFILE_<NAME>_API_BASE_URL and _API_KEY in env.local, or save it with cognigy-setup (and run npm run build)`,
-    );
-  return profile;
-}
-
-function fail(msg) {
-  console.error(`probe: ${msg}`);
-  process.exit(2);
-}
 
 // Union of two shapes: objects merge key-wise, differing leaves become "a|b" so no variant is lost.
 function mergeShapes(a, b) {
@@ -135,47 +57,6 @@ function mergeShapes(a, b) {
     return [...parts].slice(0, 8).join("|");
   }
   return a;
-}
-
-function makeRedactor(apiKey) {
-  const scrub = (s) => (s.includes(apiKey) ? "<REDACTED>" : s);
-  const classify = (s, key) => {
-    if (/^[0-9a-f]{24}$/i.test(s)) return "<objectId>";
-    if (
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
-    )
-      return "<uuid>";
-    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return "<datetime>";
-    if (/@[^\s]+\.[^\s]+/.test(s)) return "<email>";
-    if (/^https?:\/\//i.test(s)) return "<url>";
-    if (SAFE_VALUE_KEYS.has(key) && s.length <= 60) return s;
-    return `<string:${s.length}>`;
-  };
-  const shape = (v, key = "", depth = 0, isError = false) => {
-    if (v === null) return "null";
-    if (typeof v === "boolean") return "boolean";
-    if (typeof v === "number") return "number";
-    if (typeof v === "string")
-      return isError && key === "detail" && v.length <= 200
-        ? scrub(v)
-        : classify(scrub(v), key);
-    if (depth >= 8) return "<depth-limit>";
-    if (Array.isArray(v))
-      return {
-        _array: v.length,
-        _item: v.length ? shape(v[0], key, depth + 1) : null,
-      };
-    if (typeof v === "object") {
-      const out = {};
-      for (const k of Object.keys(v).slice(0, 80))
-        out[k] = shape(v[k], k, depth + 1, isError);
-      if (Object.keys(v).length > 80)
-        out._truncatedKeys = Object.keys(v).length - 80;
-      return out;
-    }
-    return typeof v;
-  };
-  return { shape, scrub };
 }
 
 async function probeOnce(profile, path, query, redactor) {
@@ -258,8 +139,6 @@ const maskQuery = (q) =>
     ]),
   );
 const pathToUrl = (p) => new URL(`file:///${p.replace(/\\/g, "/")}`).href;
-// Tenant ids (24-hex object ids) never reach disk: not in file names, not in the stored path.
-const maskIds = (s) => s.replace(/[0-9a-f]{24}/gi, "{id}");
 const slug = (path, query) =>
   maskIds(
     path +

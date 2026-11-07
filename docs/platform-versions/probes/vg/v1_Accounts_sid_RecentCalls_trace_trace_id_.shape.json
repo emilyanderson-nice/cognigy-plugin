@@ -1,0 +1,259 @@
+{
+  "probedAt": "2026-11-06T23:44:36.648Z",
+  "host": "api-vg-trial-us.cognigy.ai",
+  "method": "GET",
+  "path": "/v1/Accounts/{sid}/RecentCalls/trace/{trace_id}",
+  "query": {},
+  "status": 200,
+  "ms": 431,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "<present>",
+    "connection": "<present>",
+    "access-control-allow-origin": "<present>",
+    "cache-control": "<present>",
+    "content-security-policy": "<present>",
+    "cross-origin-opener-policy": "<present>",
+    "cross-origin-resource-policy": "<present>",
+    "date": "<present>",
+    "etag": "<present>",
+    "expires": "<present>",
+    "origin-agent-cluster": "<present>",
+    "referrer-policy": "<present>",
+    "strict-transport-security": "<present>",
+    "surrogate-control": "<present>",
+    "x-content-type-options": "<present>",
+    "x-dns-prefetch-control": "<present>",
+    "x-download-options": "<present>",
+    "x-frame-options": "<present>",
+    "x-permitted-cross-domain-policies": "<present>",
+    "x-xss-protection": "<present>",
+    "x-cache": "<present>",
+    "via": "<present>",
+    "x-amz-cf-pop": "<present>",
+    "x-amz-cf-id": "<present>"
+  },
+  "bodyKind": "json",
+  "traceSummary": {
+    "spanCount": 64,
+    "spanNames": {
+      "<name>": {
+        "count": 18,
+        "minMs": 0.3,
+        "maxMs": 5637.6
+      },
+      "call-status:completed": {
+        "count": 1,
+        "minMs": 1,
+        "maxMs": 1
+      },
+      "call-status:in-progress": {
+        "count": 1,
+        "minMs": 1.2,
+        "maxMs": 1.2
+      },
+      "call-status:trying": {
+        "count": 1,
+        "minMs": 0.9,
+        "maxMs": 0.9
+      },
+      "gather-manager": {
+        "count": 1,
+        "minMs": 42387.2,
+        "maxMs": 42387.2
+      },
+      "gather:connecting": {
+        "count": 4,
+        "minMs": 113.7,
+        "maxMs": 129.4
+      },
+      "gather:disconnected": {
+        "count": 7,
+        "minMs": 0.2,
+        "maxMs": 5289.9
+      },
+      "gather:streaming": {
+        "count": 6,
+        "minMs": 0.2,
+        "maxMs": 5523.6
+      },
+      "incoming-call": {
+        "count": 1,
+        "minMs": 42595.3,
+        "maxMs": 42595.3
+      },
+      "lookupAccountDetails": {
+        "count": 1,
+        "minMs": 6.9,
+        "maxMs": 6.9
+      },
+      "lookupApplication": {
+        "count": 1,
+        "minMs": 7.7,
+        "maxMs": 7.7
+      },
+      "performAppWebhook": {
+        "count": 1,
+        "minMs": 52.3,
+        "maxMs": 52.3
+      },
+      "tts-generation": {
+        "count": 5,
+        "minMs": 212.6,
+        "maxMs": 3207.8
+      },
+      "verb:say": {
+        "count": 6,
+        "minMs": 831.7,
+        "maxMs": 4201.2
+      },
+      "verb:sip:request": {
+        "count": 10,
+        "minMs": 37.2,
+        "maxMs": 46.7
+      }
+    },
+    "attributeKeys": {
+      "Content-Type": "stringValue",
+      "accountSid": "stringValue",
+      "apiBaseUrl": "stringValue",
+      "app.hook": "stringValue",
+      "app.tasks": "stringValue",
+      "applicationSid": "stringValue",
+      "application_sid": "stringValue",
+      "body": "stringValue",
+      "call.termination": "stringValue",
+      "callId": "stringValue",
+      "callSid": "stringValue",
+      "callStatus": "stringValue",
+      "callTerminationBy": "stringValue",
+      "callerName": "stringValue",
+      "channel": "doubleValue",
+      "direction": "stringValue",
+      "duration": "doubleValue",
+      "elevenlabs.item_id": "stringValue",
+      "elevenlabs.model_id": "stringValue",
+      "elevenlabs.optimization": "stringValue",
+      "elevenlabs.req_id": "stringValue",
+      "elevenlabs.voice_name": "stringValue",
+      "engine": "stringValue",
+      "externalCallId": "stringValue",
+      "finalStatus": "doubleValue",
+      "from": "stringValue",
+      "fsSipAddress": "stringValue",
+      "gm.confidence": "doubleValue",
+      "gm.hasFillerNoise": "boolValue",
+      "gm.input": "stringValue",
+      "gm.mode": "stringValue",
+      "gm.preConnection.audioDurationMs": "doubleValue",
+      "gm.preConnection.bufferMs": "doubleValue",
+      "gm.preConnection.completedAt": "doubleValue",
+      "gm.preConnection.durationMs": "doubleValue",
+      "gm.preConnection.enabled": "boolValue",
+      "gm.preConnection.startCalled": "boolValue",
+      "gm.preConnection.success": "boolValue",
+      "gm.preConnection.triggerTimeMs": "doubleValue",
+      "gm.preConnection.triggeredAt": "doubleValue",
+      "gm.previousMode": "stringValue",
+      "gm.sttConnectionMode": "stringValue",
+      "gm.sttStreaming.active": "boolValue",
+      "gm.sttStreaming.durationMs": "doubleValue",
+      "gm.sttStreaming.durationSeconds": "doubleValue",
+      "gm.sttStreaming.startedAt": "stringValue",
+      "gm.sttStreaming.stoppedAt": "doubleValue",
+      "gm.targetMode": "stringValue",
+      "gm.timeout": "doubleValue",
+      "gm.transcript": "stringValue",
+      "gm.wordCount": "doubleValue",
+      "http.body": "stringValue",
+      "http.statusCode": "doubleValue",
+      "internal.span.format": "stringValue",
+      "originatingSipIp": "stringValue",
+      "otel.library.name": "stringValue",
+      "otel.library.version": "stringValue",
+      "response.status_code": "doubleValue",
+      "say.type": "stringValue",
+      "service.name": "stringValue",
+      "service.version": "stringValue",
+      "sipReason": "stringValue",
+      "sipStatus": "doubleValue",
+      "stt.connecting.success": "boolValue",
+      "stt.hints": "stringValue",
+      "stt.improvement_program_opt_in": "boolValue",
+      "stt.isFallback": "boolValue",
+      "stt.label": "stringValue",
+      "stt.language": "stringValue",
+      "stt.model": "stringValue",
+      "stt.primaryLabel": "stringValue",
+      "stt.primaryVendor": "stringValue",
+      "stt.processor": "stringValue",
+      "stt.resolve": "stringValue",
+      "stt.result": "stringValue",
+      "stt.vendor": "stringValue",
+      "task.completed": "boolValue",
+      "telemetry.sdk.language": "stringValue",
+      "telemetry.sdk.name": "stringValue",
+      "telemetry.sdk.version": "stringValue",
+      "time_to_first_byte_ms": "stringValue",
+      "to": "stringValue",
+      "traceId": "stringValue",
+      "tts.cached": "boolValue",
+      "tts.characters": "doubleValue",
+      "tts.isFallback": "boolValue",
+      "tts.label": "stringValue",
+      "tts.language": "stringValue",
+      "tts.model": "stringValue",
+      "tts.precache": "boolValue",
+      "tts.primaryLabel": "stringValue",
+      "tts.primaryVendor": "stringValue",
+      "tts.processor": "stringValue",
+      "tts.streaming": "boolValue",
+      "tts.trimmed": "boolValue",
+      "tts.vendor": "stringValue",
+      "tts.voice": "stringValue",
+      "verb.summary": "stringValue",
+      "verb.text": "stringValue",
+      "voice": "stringValue"
+    }
+  },
+  "shapeOrText": {
+    "resourceSpans": {
+      "_array": 1,
+      "_item": {
+        "resource": {
+          "attributes": {
+            "_array": 1,
+            "_item": {
+              "key": "<string:12>",
+              "value": {
+                "stringValue": "<string:14>"
+              }
+            }
+          }
+        },
+        "scopeSpans": {
+          "_array": 1,
+          "_item": {
+            "scope": {},
+            "spans": {
+              "_array": 64,
+              "_item": {
+                "traceId": "<string:10>",
+                "spanId": "<string:16>",
+                "parentSpanId": "<string:16>",
+                "name": "<string:23>",
+                "startTimeUnixNano": "<string:19>",
+                "endTimeUnixNano": "<string:19>",
+                "attributes": {
+                  "_array": 23,
+                  "_item": "<depth-limit>"
+                },
+                "status": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
