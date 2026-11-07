@@ -559,6 +559,105 @@ describe("ToolHandlers v2", () => {
       );
     });
 
+    it("does not send a job-config PATCH without aiAgent when the reference cannot be resolved", async () => {
+      routeJobFlow(
+        { _id: ID.agent, name: "Agent", flowId: ID.flow },
+        {
+          [`/v2.0/flows/${ID.flow}/chart/nodes/${JOB_ID}`]: new Error(
+            "timeout",
+          ),
+        },
+      );
+      api.patch.mockResolvedValue({ _id: JOB_ID });
+
+      const result = await h.handleToolCall("update_ai_agent", {
+        aiAgentId: ID.agent,
+        jobConfig: { temperature: 0.5 },
+      });
+
+      expect(result.error).toBe(
+        "Could not resolve the agent's aiAgent reference, so the job config was not updated (an update without it would wipe the avatar).",
+      );
+      expect(result.updated).toBeUndefined();
+      expect(api.patch).not.toHaveBeenCalled();
+    });
+
+    it("still reports the agent-level update when only the job-config part is refused for a missing reference", async () => {
+      const agent = { _id: ID.agent, name: "Renamed", flowId: ID.flow };
+      routeJobFlow(agent, {
+        [`/v2.0/flows/${ID.flow}/chart/nodes/${JOB_ID}`]: new Error("timeout"),
+      });
+      api.patch.mockResolvedValue(agent);
+
+      const result = await h.handleToolCall("update_ai_agent", {
+        aiAgentId: ID.agent,
+        name: "Renamed",
+        jobConfig: { temperature: 0.5 },
+      });
+
+      expect(result.error).toBe(
+        "Could not resolve the agent's aiAgent reference, so the job config was not updated (an update without it would wipe the avatar).",
+      );
+      expect(result.updated).toEqual(["agent"]);
+      expect(api.patch).toHaveBeenCalledTimes(1);
+      expect(api.patch).not.toHaveBeenCalledWith(
+        expect.stringContaining("/chart/nodes/"),
+        expect.anything(),
+      );
+    });
+
+    it("refuses the job-config PATCH when the node read succeeds but holds no aiAgent", async () => {
+      routeJobFlow(
+        { _id: ID.agent, name: "Agent", flowId: ID.flow },
+        {
+          [`/v2.0/flows/${ID.flow}/chart/nodes/${JOB_ID}`]: {
+            _id: JOB_ID,
+            type: "aiAgentJob",
+            config: {},
+          },
+        },
+      );
+      api.patch.mockResolvedValue({ _id: JOB_ID });
+
+      const result = await h.handleToolCall("update_ai_agent", {
+        aiAgentId: ID.agent,
+        jobConfig: { temperature: 0.5 },
+      });
+
+      expect(result.error).toBe(
+        "Could not resolve the agent's aiAgent reference, so the job config was not updated (an update without it would wipe the avatar).",
+      );
+      expect(api.patch).not.toHaveBeenCalled();
+    });
+
+    it("sends the job-config PATCH when the agent record holds the reference even though the node read fails", async () => {
+      routeJobFlow(
+        {
+          _id: ID.agent,
+          referenceId: "ref-uuid",
+          name: "Agent",
+          flowId: ID.flow,
+        },
+        {
+          [`/v2.0/flows/${ID.flow}/chart/nodes/${JOB_ID}`]: new Error(
+            "timeout",
+          ),
+        },
+      );
+      api.patch.mockResolvedValue({ _id: JOB_ID });
+
+      const result = await h.handleToolCall("update_ai_agent", {
+        aiAgentId: ID.agent,
+        jobConfig: { temperature: 0.5 },
+      });
+
+      expect(result.updated).toContain("jobNode");
+      expect(api.patch).toHaveBeenCalledWith(
+        `/v2.0/flows/${ID.flow}/chart/nodes/${JOB_ID}`,
+        { config: { aiAgent: "ref-uuid", temperature: 0.5 } },
+      );
+    });
+
     it("skips the last-resort flow scan when the agent has no referenceId", async () => {
       routeJobFlow(
         { _id: ID.agent, name: "Agent", projectId: ID.project },
@@ -2511,6 +2610,133 @@ describe("ToolHandlers v2", () => {
 
     it("reuses a duplicate whose stored toolId only the per-node read shows", async () => {
       mockFlowWithStoredTool("check_balance");
+
+      const result = await h.handleToolCall("create_tool", {
+        aiAgentId: ID.agent,
+        toolType: "tool",
+        name: "Check Balance",
+        config: { toolId: "check_balance", description: "d" },
+      });
+
+      expect(result.reusedExisting).toBe(true);
+      expect(result.toolId).toBe(ID.tool);
+      expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("does not create a tool when a sibling's stored toolId cannot be read to rule out a duplicate", async () => {
+      api.get.mockImplementation(async (url: string) => {
+        if (url === `/v2.0/aiagents/${ID.agent}`) return { flowId: ID.flow };
+        if (url === `/v2.0/flows/${ID.flow}/chart/nodes`)
+          return {
+            items: [
+              { _id: ID.node, type: "aiAgentJob" },
+              {
+                _id: ID.tool,
+                type: "aiAgentJobTool",
+                parentId: ID.node,
+                label: "Tool",
+                config: DEFAULT_TOOL_CONFIG,
+              },
+            ],
+          };
+        if (url === `/v2.0/flows/${ID.flow}/chart/nodes/${ID.tool}`)
+          throw new Error("timeout");
+        return {};
+      });
+      api.post.mockResolvedValue({ _id: ID.node2 });
+
+      const result = await h.handleToolCall("create_tool", {
+        aiAgentId: ID.agent,
+        toolType: "tool",
+        name: "Check Balance",
+        config: { toolId: "check_balance", description: "d" },
+      });
+
+      expect(result.error).toBe(
+        'Could not verify that toolId "check_balance" is not already in use: the stored config of 1 sibling tool could not be read. Nothing was created.',
+      );
+      expect(result.reusedExisting).toBeUndefined();
+      expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("counts every unreadable sibling in the refusal and uses the plural wording", async () => {
+      const OTHER = "other-tool-id-00000000001";
+      api.get.mockImplementation(async (url: string) => {
+        if (url === `/v2.0/aiagents/${ID.agent}`) return { flowId: ID.flow };
+        if (url === `/v2.0/flows/${ID.flow}/chart/nodes`)
+          return {
+            items: [
+              { _id: ID.node, type: "aiAgentJob" },
+              {
+                _id: OTHER,
+                type: "aiAgentJobTool",
+                parentId: ID.node,
+                label: "Tool",
+                config: DEFAULT_TOOL_CONFIG,
+              },
+              {
+                _id: ID.tool,
+                type: "aiAgentJobTool",
+                parentId: ID.node,
+                label: "Tool",
+                config: DEFAULT_TOOL_CONFIG,
+              },
+            ],
+          };
+        if (url.includes("/chart/nodes/")) throw new Error("timeout");
+        return {};
+      });
+
+      const result = await h.handleToolCall("create_tool", {
+        aiAgentId: ID.agent,
+        toolType: "tool",
+        name: "Check Balance",
+        config: { toolId: "check_balance", description: "d" },
+      });
+
+      expect(result.error).toBe(
+        'Could not verify that toolId "check_balance" is not already in use: the stored config of 2 sibling tools could not be read. Nothing was created.',
+      );
+      expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("still reuses a duplicate that a readable sibling shows, even if another sibling's read failed", async () => {
+      const OTHER = "other-tool-id-00000000001";
+      api.get.mockImplementation(async (url: string) => {
+        if (url === `/v2.0/aiagents/${ID.agent}`) return { flowId: ID.flow };
+        if (url === `/v2.0/flows/${ID.flow}/chart/nodes`)
+          return {
+            items: [
+              { _id: ID.node, type: "aiAgentJob" },
+              {
+                _id: OTHER,
+                type: "aiAgentJobTool",
+                parentId: ID.node,
+                label: "Tool",
+                config: DEFAULT_TOOL_CONFIG,
+              },
+              {
+                _id: ID.tool,
+                type: "aiAgentJobTool",
+                parentId: ID.node,
+                label: "Tool",
+                config: DEFAULT_TOOL_CONFIG,
+              },
+            ],
+          };
+        if (url === `/v2.0/flows/${ID.flow}/chart/nodes/${OTHER}`)
+          throw new Error("timeout");
+        if (url === `/v2.0/flows/${ID.flow}/chart/nodes/${ID.tool}`)
+          return {
+            _id: ID.tool,
+            type: "aiAgentJobTool",
+            config: {
+              toolId: "check_balance",
+              description: "Checks a balance",
+            },
+          };
+        return {};
+      });
 
       const result = await h.handleToolCall("create_tool", {
         aiAgentId: ID.agent,

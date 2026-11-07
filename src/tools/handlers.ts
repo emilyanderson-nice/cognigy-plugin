@@ -915,15 +915,17 @@ function nodeParentId(node: any): string | undefined {
 /**
  * The stored `config` of each node, in order. The `/chart/nodes` index's
  * `config` holds the node type's DEFAULTS (every aiAgentJobTool reads toolId
- * "unlock_account"), so only the per-node read is real; a failed read yields
- * {} rather than a default. Batches of 5 keep a node-heavy flow clear of 429s.
+ * "unlock_account"), so only the per-node read is real. A failed read is
+ * `null`, so a caller whose decision depends on the stored value (a duplicate
+ * check before a write, the aiAgent reference of a job patch) can tell
+ * "unreadable" from "empty". Batches of 5 keep a node-heavy flow clear of 429s.
  */
-async function readNodeConfigs(
+async function readNodeConfigsOrNull(
   apiClient: CognigyApiClient,
   flowId: string,
   nodes: any[],
-): Promise<Record<string, any>[]> {
-  const configs: Record<string, any>[] = [];
+): Promise<(Record<string, any> | null)[]> {
+  const configs: (Record<string, any> | null)[] = [];
   for (let i = 0; i < nodes.length; i += 5) {
     configs.push(
       ...(await Promise.all(
@@ -934,13 +936,24 @@ async function readNodeConfigs(
             );
             return full?.config ?? {};
           } catch {
-            return {};
+            return null;
           }
         }),
       )),
     );
   }
   return configs;
+}
+
+/** For display and listing: a failed read yields {} rather than a default. */
+async function readNodeConfigs(
+  apiClient: CognigyApiClient,
+  flowId: string,
+  nodes: any[],
+): Promise<Record<string, any>[]> {
+  return (await readNodeConfigsOrNull(apiClient, flowId, nodes)).map(
+    (c) => c ?? {},
+  );
 }
 
 /**
@@ -3142,10 +3155,27 @@ export class ToolHandlers {
             const aiAgent =
               resolved.agent?.referenceId ??
               (
-                await readNodeConfigs(this.apiClient, resolved.flowId, [
+                await readNodeConfigsOrNull(this.apiClient, resolved.flowId, [
                   jobNode,
                 ])
-              )[0].aiAgent;
+              )[0]?.aiAgent;
+            // A job patch without aiAgent makes the backend recompute the
+            // preview as a bare string and wipes the avatar, so refuse it.
+            if (needsJobPatch && aiAgent === undefined) {
+              return withHints(
+                {
+                  error:
+                    "Could not resolve the agent's aiAgent reference, so the job config was not updated (an update without it would wipe the avatar).",
+                  ...(updatedParts.length > 0
+                    ? { updated: [...updatedParts] }
+                    : {}),
+                },
+                {
+                  action:
+                    "Retry the update. If the read keeps failing, check the job node with manage_flow_nodes get.",
+                },
+              );
+            }
             const nodeConfigPatch: Record<string, any> = { aiAgent };
             if (needsJobPatch) {
               if (jobConfig!.llmProviderReferenceId !== undefined)
@@ -5182,13 +5212,27 @@ export class ToolHandlers {
           node.label === requestedToolId || node.name === requestedToolId,
       );
       if (!duplicateTool && siblingTools.length > 0) {
-        const configs = await readNodeConfigs(
+        const configs = await readNodeConfigsOrNull(
           this.apiClient,
           flowId,
           siblingTools,
         );
         duplicateTool =
-          siblingTools[configs.findIndex((c) => c.toolId === requestedToolId)];
+          siblingTools[configs.findIndex((c) => c?.toolId === requestedToolId)];
+        // An unreadable sibling could be the duplicate. This check gates a
+        // write, so "could not look" must not read as "nothing there".
+        const unreadable = configs.filter((c) => c === null).length;
+        if (!duplicateTool && unreadable > 0) {
+          return withHints(
+            {
+              error: `Could not verify that toolId "${requestedToolId}" is not already in use: the stored config of ${unreadable} sibling tool${unreadable === 1 ? "" : "s"} could not be read. Nothing was created.`,
+            },
+            {
+              action:
+                "Retry create_tool. If the read keeps failing, list the agent's tools with list_resources before creating one.",
+            },
+          );
+        }
       }
 
       // Reusing is only right when the existing node is the same kind of
