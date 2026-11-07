@@ -1227,6 +1227,89 @@ export const tools: ToolDefinition[] = [
     },
   },
 
+  {
+    name: "manage_endpoint_settings",
+    description:
+      "Change settings of an Endpoint: get/update_transformer (switches, abortOnError, code; a code change needs backupTo) and get/update_call_events (voice endpoints: callCompleted, callFailed, userInputTimeout, noAnswer, recognizedDtmf). Does not create or delete endpoints.",
+    annotations: {
+      title: "Manage Endpoint Settings",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: [
+            "get_transformer",
+            "update_transformer",
+            "get_call_events",
+            "update_call_events",
+          ],
+          description: "Which operation to perform",
+        },
+        endpointId: {
+          type: "string",
+          description: "24-char hex endpoint ID.",
+        },
+        saveCodeTo: {
+          type: "string",
+          description: "File that receives the code.",
+        },
+        code: {
+          type: "string",
+          description: "New code; the platform compiles it.",
+        },
+        codeFromFile: {
+          type: "string",
+          description: "File with the new code.",
+        },
+        backupTo: {
+          type: "string",
+          description:
+            "File that receives the current values first. Required when code changes.",
+        },
+        overwrite: {
+          type: "boolean",
+          description: "Replace an existing file.",
+        },
+        events: {
+          type: "object",
+          description:
+            "update_call_events: events to change, each { enabled?, flowId? (referenceId UUID) }.",
+        },
+        abortOnError: {
+          type: "boolean",
+          description: "Abort on transformer error.",
+        },
+        inputTransformerEnabled: {
+          type: "boolean",
+          description: "input on/off.",
+        },
+        outputTransformerEnabled: {
+          type: "boolean",
+          description: "output on/off.",
+        },
+        finalPingTransformerEnabled: {
+          type: "boolean",
+          description: "final ping on/off.",
+        },
+        notifyTransformerEnabled: {
+          type: "boolean",
+          description: "notify on/off.",
+        },
+        injectTransformerEnabled: {
+          type: "boolean",
+          description: "inject on/off.",
+        },
+      },
+      required: ["operation", "endpointId"],
+    },
+  },
+
   // 12. manage_flow_nodes
   {
     name: "manage_flow_nodes",

@@ -1174,6 +1174,88 @@
       }
     },
     {
+      "name": "manage_endpoint_settings",
+      "description": "Change settings of an Endpoint: get/update_transformer (switches, abortOnError, code; a code change needs backupTo) and get/update_call_events (voice endpoints: callCompleted, callFailed, userInputTimeout, noAnswer, recognizedDtmf). Does not create or delete endpoints.",
+      "annotations": {
+        "title": "Manage Endpoint Settings",
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "get_transformer",
+              "update_transformer",
+              "get_call_events",
+              "update_call_events"
+            ],
+            "description": "Which operation to perform"
+          },
+          "endpointId": {
+            "type": "string",
+            "description": "24-char hex endpoint ID."
+          },
+          "saveCodeTo": {
+            "type": "string",
+            "description": "File that receives the code."
+          },
+          "code": {
+            "type": "string",
+            "description": "New code; the platform compiles it."
+          },
+          "codeFromFile": {
+            "type": "string",
+            "description": "File with the new code."
+          },
+          "backupTo": {
+            "type": "string",
+            "description": "File that receives the current values first. Required when code changes."
+          },
+          "overwrite": {
+            "type": "boolean",
+            "description": "Replace an existing file."
+          },
+          "events": {
+            "type": "object",
+            "description": "update_call_events: events to change, each { enabled?, flowId? (referenceId UUID) }."
+          },
+          "abortOnError": {
+            "type": "boolean",
+            "description": "Abort on transformer error."
+          },
+          "inputTransformerEnabled": {
+            "type": "boolean",
+            "description": "input on/off."
+          },
+          "outputTransformerEnabled": {
+            "type": "boolean",
+            "description": "output on/off."
+          },
+          "finalPingTransformerEnabled": {
+            "type": "boolean",
+            "description": "final ping on/off."
+          },
+          "notifyTransformerEnabled": {
+            "type": "boolean",
+            "description": "notify on/off."
+          },
+          "injectTransformerEnabled": {
+            "type": "boolean",
+            "description": "inject on/off."
+          }
+        },
+        "required": [
+          "operation",
+          "endpointId"
+        ]
+      }
+    },
+    {
       "name": "manage_flow_nodes",
       "description": "Manage the logic nodes inside a Cognigy flow and render the flow as a diagram. Operations: list (id, referenceId, type, label, parentId, isDisabled when true, ordered children and next; no config; a partial list says truncated), get (one node with config; fields and saveTo pull large fields out, saveTo into a file instead of the reply), create (nodeType + config, placed by parentNodeId and mode), update (partial config or label; cases for switch/lookup nodes; configFromFiles loads large values from files), compare (a node field against a file: equality, sizes, hashes, never content), delete, render (read-only ascii tree plus mermaid string). Nodes belong inside a tool branch: create the tool first and pass parentNodeId = toolNodeId with mode 'appendChild'; never add standalone nodes before the AI Agent Job Node. The exception is llmPrompt, created only when the user asks for one by name. Node types, config schemas, file rules and Go To referenceIds are in the flow-nodes skill.",
       "annotations": {

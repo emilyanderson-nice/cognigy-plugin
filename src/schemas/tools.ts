@@ -471,6 +471,62 @@ export const manageFlowsSchema = z.discriminatedUnion("operation", [
   }),
 ]);
 
+/**
+ * Settings of existing endpoints. Today: the transformer (switches and code).
+ * Creating an endpoint stays with manage_flows / manage_webchat / manage_voice_gateway.
+ */
+export const manageEndpointSettingsSchema = z.discriminatedUnion("operation", [
+  z.object({
+    operation: z.literal("get_transformer"),
+    endpointId: idSchema,
+    saveCodeTo: z.string().min(1).optional(),
+    overwrite: z.boolean().optional(),
+  }),
+  z.object({
+    operation: z.literal("update_transformer"),
+    endpointId: idSchema,
+    abortOnError: z.boolean().optional(),
+    inputTransformerEnabled: z.boolean().optional(),
+    outputTransformerEnabled: z.boolean().optional(),
+    finalPingTransformerEnabled: z.boolean().optional(),
+    notifyTransformerEnabled: z.boolean().optional(),
+    injectTransformerEnabled: z.boolean().optional(),
+    code: z.string().min(1).optional(),
+    codeFromFile: z.string().min(1).optional(),
+    backupTo: z.string().min(1).optional(),
+    overwrite: z.boolean().optional(),
+  }),
+  z.object({
+    operation: z.literal("get_call_events"),
+    endpointId: idSchema,
+  }),
+  z.object({
+    operation: z.literal("update_call_events"),
+    endpointId: idSchema,
+    events: z.object(
+      Object.fromEntries(
+        [
+          "callCompleted",
+          "callFailed",
+          "userInputTimeout",
+          "noAnswer",
+          "recognizedDtmf",
+        ].map((name) => [
+          name,
+          z
+            .object({
+              enabled: z.boolean().optional(),
+              flowId: z.string().uuid().optional(),
+            })
+            .optional(),
+        ]),
+      ) as Record<string, z.ZodOptional<z.ZodObject<any>>>,
+    ),
+    backupTo: z.string().min(1).optional(),
+    overwrite: z.boolean().optional(),
+  }),
+]);
+
 export const deleteResourceSchema = z
   .object({
     resourceType: z.enum([
