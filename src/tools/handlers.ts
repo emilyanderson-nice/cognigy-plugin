@@ -169,6 +169,11 @@ import {
 import { readLogs } from "./logReader.js";
 import { listConversations } from "./transcripts/list.js";
 import { readConversation } from "./transcripts/read.js";
+import {
+  getVoiceCall,
+  listVoiceCalls,
+  type VoiceGatewayContext,
+} from "../voicegateway/calls.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1527,7 +1532,20 @@ export class ToolHandlers {
     private endpointBaseUrl: string,
     private webchatBaseUrl: string = "",
     private staticFilesBaseUrl: string = "",
+    /** Voice Gateway REST client of this environment; absent without credentials. */
+    private voiceGateway?: VoiceGatewayContext["vg"],
   ) {}
+
+  /** The account id is read once per environment (one handlers instance each). */
+  private readonly voiceGatewayAccount: { sid?: string } = {};
+
+  private voiceContext(): VoiceGatewayContext {
+    return {
+      cognigy: this.apiClient,
+      vg: this.voiceGateway,
+      accountCache: this.voiceGatewayAccount,
+    };
+  }
 
   private sanitizeArgs(args: Record<string, any>): Record<string, any> {
     const result: Record<string, any> = {};
@@ -3912,6 +3930,7 @@ export class ToolHandlers {
       resourceType !== "project" &&
       resourceType !== "tool" &&
       resourceType !== "audit_event" &&
+      resourceType !== "voice_call" &&
       !projectId
     ) {
       return withHints(
@@ -3923,6 +3942,17 @@ export class ToolHandlers {
       );
     }
     if (resourceType === "log") return this.listLogs(data);
+    if (resourceType === "voice_call") {
+      const result = await listVoiceCalls(this.voiceContext(), {
+        days: data.days,
+        direction: data.direction,
+        answered: data.answered,
+        sipCallId: data.sipCallId,
+        limit,
+        skip,
+      });
+      return withHints(result.body, result.hint ?? {});
+    }
     if (resourceType === "conversation") {
       const result = await listConversations(this.apiClient, {
         projectId,
@@ -4207,6 +4237,11 @@ export class ToolHandlers {
   async handleGetResource(args: any): Promise<any> {
     const data = schemas.getResourceSchema.parse(args);
     const { resourceType, id, raw } = data;
+
+    if (resourceType === "voice_call") {
+      const result = await getVoiceCall(this.voiceContext(), { id });
+      return withHints(result.body, result.hint ?? {});
+    }
 
     const endpointMap: Record<string, string> = {
       agent: `/v2.0/aiagents/${id}`,

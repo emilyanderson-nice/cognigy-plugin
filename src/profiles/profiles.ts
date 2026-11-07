@@ -47,6 +47,10 @@ export interface Profile {
   webchatBaseUrl: string;
   staticFilesBaseUrl: string;
   versionHint?: string;
+  /** Voice Gateway REST API of this environment (https); set together with the key. */
+  voiceGatewayBaseUrl?: string;
+  /** Voice Gateway account API key: hidden from JSON, logs and inspect like apiKey. */
+  voiceGatewayApiKey?: string;
   source: ProfileSource;
 }
 
@@ -67,6 +71,12 @@ export interface LoadProfilesOptions {
 
 const ENV_PROFILE_RE =
   /^COGNIGY_PROFILE_(.+)_(API_BASE_URL|API_KEY|ENDPOINT_BASE_URL|WEBCHAT_BASE_URL|STATIC_FILES_BASE_URL|PLATFORM_VERSION)$/i;
+/**
+ * Tried first: NAME_VOICE_GATEWAY_API_KEY also ends in API_KEY, and the greedy
+ * name of the general pattern would take NAME_VOICE_GATEWAY as the profile.
+ */
+const VG_ENV_PROFILE_RE =
+  /^COGNIGY_PROFILE_(.+)_(VOICE_GATEWAY_BASE_URL|VOICE_GATEWAY_API_KEY)$/i;
 
 export interface RawFields {
   apiBaseUrl?: string;
@@ -75,6 +85,8 @@ export interface RawFields {
   webchatBaseUrl?: string;
   staticFilesBaseUrl?: string;
   versionHint?: string;
+  voiceGatewayBaseUrl?: string;
+  voiceGatewayApiKey?: string;
   /** Where each URL value came from; only used to word validation errors. */
   origins?: FieldOrigins;
 }
@@ -88,6 +100,8 @@ const ENV_FIELD: Record<string, ValueField> = {
   WEBCHAT_BASE_URL: "webchatBaseUrl",
   STATIC_FILES_BASE_URL: "staticFilesBaseUrl",
   PLATFORM_VERSION: "versionHint",
+  VOICE_GATEWAY_BASE_URL: "voiceGatewayBaseUrl",
+  VOICE_GATEWAY_API_KEY: "voiceGatewayApiKey",
 };
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -110,7 +124,30 @@ function assertUrl(field: string, value: string): void {
   }
 }
 
-/** Keeps the key readable as `.apiKey` but out of JSON, logs and inspect. */
+/**
+ * An https URL with no credentials, query or fragment. The Voice Gateway key
+ * travels in a bearer header: userinfo in the URL would make the HTTP client send
+ * basic auth in its place, and a query would swallow the path appended to it.
+ */
+function isPlainHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keeps the keys readable as `.apiKey` / `.voiceGatewayApiKey` but out of JSON,
+ * logs and inspect.
+ */
 function protectKey(profile: Profile): Profile {
   const hidden = (value: unknown) => ({
     value,
@@ -118,8 +155,20 @@ function protectKey(profile: Profile): Profile {
     writable: true,
     configurable: true,
   });
-  const { apiKey, ...visible } = profile;
+  const { apiKey, voiceGatewayApiKey, ...visible } = profile;
   Object.defineProperty(profile, "apiKey", hidden(apiKey));
+  const redacted: Record<string, unknown> = {
+    ...visible,
+    apiKey: "[REDACTED]",
+  };
+  if (voiceGatewayApiKey !== undefined) {
+    Object.defineProperty(
+      profile,
+      "voiceGatewayApiKey",
+      hidden(voiceGatewayApiKey),
+    );
+    redacted.voiceGatewayApiKey = "[REDACTED]";
+  }
   Object.defineProperty(
     profile,
     "toJSON",
@@ -128,7 +177,7 @@ function protectKey(profile: Profile): Profile {
   Object.defineProperty(
     profile,
     inspect.custom,
-    hidden(() => inspect({ ...visible, apiKey: "[REDACTED]" })),
+    hidden(() => inspect(redacted)),
   );
   return profile;
 }
@@ -168,6 +217,18 @@ export function validateProfileFields(
       );
     }
   }
+  if (raw.voiceGatewayBaseUrl || raw.voiceGatewayApiKey) {
+    if (!raw.voiceGatewayBaseUrl || !raw.voiceGatewayApiKey) {
+      throw new ProfileConfigError(
+        `Profile "${name}": voiceGatewayBaseUrl and voiceGatewayApiKey must be set together.`,
+      );
+    }
+    if (!isPlainHttpsUrl(raw.voiceGatewayBaseUrl)) {
+      throw new ProfileConfigError(
+        `Profile "${name}": voiceGatewayBaseUrl must be an https URL without credentials, a query or a fragment.`,
+      );
+    }
+  }
 }
 
 function build(name: string, raw: RawFields, source: ProfileSource): Profile {
@@ -182,6 +243,12 @@ function build(name: string, raw: RawFields, source: ProfileSource): Profile {
     staticFilesBaseUrl:
       raw.staticFilesBaseUrl || deriveStaticFilesBaseUrl(apiBaseUrl),
     ...(raw.versionHint ? { versionHint: raw.versionHint } : {}),
+    ...(raw.voiceGatewayBaseUrl && raw.voiceGatewayApiKey
+      ? {
+          voiceGatewayBaseUrl: raw.voiceGatewayBaseUrl.replace(/\/+$/, ""),
+          voiceGatewayApiKey: raw.voiceGatewayApiKey,
+        }
+      : {}),
     source,
   });
 }
@@ -228,7 +295,7 @@ function envProfiles(env: NodeJS.ProcessEnv): {
   const problems: ProfileProblem[] = [];
   const definitions = new Set<string>();
   for (const [key, value] of Object.entries(env)) {
-    const m = ENV_PROFILE_RE.exec(key);
+    const m = VG_ENV_PROFILE_RE.exec(key) ?? ENV_PROFILE_RE.exec(key);
     const v = val(value);
     if (!m || !v) continue;
     const name = normalizeName(m[1]);
@@ -390,6 +457,7 @@ export function describeProfile(p: Profile): {
   endpointHost: string;
   source: ProfileSource;
   versionHint?: string;
+  voiceGatewayHost?: string;
 } {
   return {
     name: p.name,
@@ -397,6 +465,9 @@ export function describeProfile(p: Profile): {
     endpointHost: hostOf(p.endpointBaseUrl),
     source: p.source,
     ...(p.versionHint ? { versionHint: p.versionHint } : {}),
+    ...(p.voiceGatewayBaseUrl
+      ? { voiceGatewayHost: hostOf(p.voiceGatewayBaseUrl) }
+      : {}),
   };
 }
 

@@ -84,7 +84,7 @@ printf '%s' "$line"
 
 If the same name is defined twice, the environment-variable definition wins over the config file. A config-file profile named `default` replaces the legacy flat keys from the config file, but never `COGNIGY_API_*` environment variables; this also applies when only one of the URL or key is set in the environment and the other is read from the config file.
 
-Optional per-profile settings: `_ENDPOINT_BASE_URL`, `_WEBCHAT_BASE_URL`, `_STATIC_FILES_BASE_URL` (derived from the API host when omitted) and `_PLATFORM_VERSION`, an informational hint only. The platform release is detected from the environment itself (`profile test` prints it); later releases will use it to choose behaviour.
+Optional per-profile settings: `_ENDPOINT_BASE_URL`, `_WEBCHAT_BASE_URL`, `_STATIC_FILES_BASE_URL` (derived from the API host when omitted) `_PLATFORM_VERSION`, an informational hint only, and the pair `_VOICE_GATEWAY_BASE_URL` (https) and `_VOICE_GATEWAY_API_KEY` for reading Voice Gateway calls (both or neither; `profile add --voice-gateway-url` and `--voice-gateway-key-env` save them). The URL must be plain `https` (no user name, password, query or fragment). A profile name that ends in `voice-gateway` cannot use these variables, because `<NAME>_VOICE_GATEWAY_API_KEY` is read as the Voice Gateway key of profile `<NAME>`. The platform release is detected from the environment itself (`profile test` prints it); later releases will use it to choose behaviour.
 
 ## How the key file is protected
 

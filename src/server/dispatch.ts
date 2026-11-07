@@ -303,9 +303,16 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
           code?: unknown;
           traceId?: unknown;
         };
-        const redact = (v: unknown) =>
-          typeof v === "string" ? redactKey(v, profile.apiKey) : v;
-        const message = redactKey(String(e?.message ?? error), profile.apiKey);
+        // Both secrets of the environment: the Cognigy.AI key and, when set, the
+        // Voice Gateway key. The Voice Gateway client already throws fixed text;
+        // this is the second line of defence.
+        const strip = (s: string) =>
+          redactKey(
+            redactKey(s, profile.apiKey),
+            profile.voiceGatewayApiKey ?? "",
+          );
+        const redact = (v: unknown) => (typeof v === "string" ? strip(v) : v);
+        const message = strip(String(e?.message ?? error));
         logger.error("Tool execution error", {
           tool: name,
           environment: profile.name,

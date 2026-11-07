@@ -66,6 +66,9 @@ const cacheKey = (p: Profile): string =>
     p.endpointBaseUrl,
     p.webchatBaseUrl,
     p.staticFilesBaseUrl,
+    // Voice Gateway credentials: adding or rotating them must rebuild the runtime.
+    p.voiceGatewayBaseUrl ?? null,
+    p.voiceGatewayApiKey ?? null,
   ]);
 
 export function createEnvironmentRegistry(

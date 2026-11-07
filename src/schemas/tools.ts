@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SIP_CALL_ID_RE } from "../voicegateway/patterns.js";
 
 const idSchema = z.string().regex(/^[a-f0-9]{24}$/, "Must be a 24-char hex ID");
 
@@ -301,6 +302,20 @@ export const LOG_LEVELS = [
   "trace",
 ] as const;
 
+const VOICE_CALL_ONLY_LIST_KEYS = [
+  "days",
+  "direction",
+  "answered",
+  "sipCallId",
+] as const;
+const VOICE_CALL_IGNORED_LIST_KEYS = [
+  "startDate",
+  "endDate",
+  "sort",
+  "channel",
+  "flowName",
+] as const;
+
 // Tool 5: list_resources
 export const listResourcesSchema = z
   .object({
@@ -317,6 +332,7 @@ export const listResourcesSchema = z
       "tool",
       "audit_event",
       "log",
+      "voice_call",
     ]),
     projectId: idSchema.optional(),
     aiAgentId: idSchema.optional(),
@@ -348,6 +364,12 @@ export const listResourcesSchema = z
     actor: z.array(z.enum(AUDIT_ACTORS)).nonempty().optional(),
     eventType: z.array(z.enum(AUDIT_EVENT_TYPES)).nonempty().optional(),
     user: z.string().min(1).optional(),
+    // voice_call only: the Voice Gateway recent-calls list. `days` is sent to the
+    // platform; the other three are applied to the rows read.
+    days: z.number().int().min(1).max(30).optional(),
+    direction: z.enum(["inbound", "outbound"]).optional(),
+    answered: z.boolean().optional(),
+    sipCallId: z.string().min(1).max(128).regex(SIP_CALL_ID_RE).optional(),
     // endpoint only: include the URL token and URL (a credential).
     revealToken: z.boolean().optional(),
     sort: z
@@ -374,6 +396,31 @@ export const listResourcesSchema = z
         ctx.addIssue({
           code: "custom",
           message: `${key} applies only to resourceType 'conversation'.`,
+          path: [key],
+        });
+      }
+    }
+  })
+  .superRefine((d, ctx) => {
+    if (d.resourceType !== "voice_call") {
+      for (const key of VOICE_CALL_ONLY_LIST_KEYS) {
+        if (d[key] !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${key} applies only to resourceType 'voice_call'.`,
+            path: [key],
+          });
+        }
+      }
+      return;
+    }
+    // The Voice Gateway list takes `days` only: a date range or a sort would be
+    // ignored silently and return the wrong calls.
+    for (const key of VOICE_CALL_IGNORED_LIST_KEYS) {
+      if (d[key] !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${key} does not apply to resourceType 'voice_call'; use days.`,
           path: [key],
         });
       }
@@ -406,6 +453,7 @@ export const getResourceSchema = z
       "function",
       "user",
       "audit_event",
+      "voice_call",
     ]),
     id: z.string().min(1),
     projectId: idSchema.optional(),
@@ -423,6 +471,11 @@ export const getResourceSchema = z
   .refine((d) => !d.revealToken || d.resourceType === "endpoint", {
     message: REVEAL_TOKEN_MESSAGE,
     path: ["revealToken"],
+  })
+  .refine((d) => !(d.resourceType === "voice_call" && d.raw === true), {
+    message:
+      "raw does not apply to resourceType 'voice_call'; the trace is summarised on purpose.",
+    path: ["raw"],
   })
   .superRefine((d, ctx) => {
     const reason =

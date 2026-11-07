@@ -21,6 +21,8 @@ export interface ProfileCliDeps {
         webchatBaseUrl?: string;
         staticFilesBaseUrl?: string;
         versionHint?: string;
+        voiceGatewayBaseUrl?: string;
+        voiceGatewayApiKey?: string;
       },
       options?: { path?: string },
     ): { created: boolean };
