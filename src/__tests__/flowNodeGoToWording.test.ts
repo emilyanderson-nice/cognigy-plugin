@@ -44,7 +44,7 @@ const topNote =
 const chartBullet =
   claudeMd
     .split(/\r?\n/)
-    .find((l) => l.includes("`GET /chart/nodes` returns no `config`")) ?? "";
+    .find((l) => l.includes("`GET /chart/nodes` returns no ordering")) ?? "";
 
 // \bverified\b does not match "unverified".
 const VERIFIED = /\bverified\b/;
@@ -206,7 +206,7 @@ describe("Go To / Execute Flow wording (C5)", () => {
       assertThat(chartBullet !== "", {
         what: "flow-chart bullet lookup",
         why: "the bullet starting with the GET /chart/nodes gotcha carries the Go To claim",
-        expected: "a line containing '`GET /chart/nodes` returns no `config`'",
+        expected: "a line containing '`GET /chart/nodes` returns no ordering'",
         actual: "not found",
         guidance: "keep that bullet in .claude/CLAUDE.md",
       });
